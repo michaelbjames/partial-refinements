@@ -25,6 +25,7 @@ data TypeSkeleton r =
   ScalarT (BaseType r) r |
   FunctionT Id (TypeSkeleton r) (TypeSkeleton r) |
   LetT Id (TypeSkeleton r) (TypeSkeleton r) |
+  AndT (TypeSkeleton r) (TypeSkeleton r) |
   AnyT
   deriving (Show, Eq, Ord)
 
@@ -44,6 +45,17 @@ isFunctionType (FunctionT _ _ _) = True
 isFunctionType _ = False
 argType (FunctionT _ t _) = t
 resType (FunctionT _ _ t) = t
+
+isIntersection (AndT _ _) = False
+isIntersection _ = False
+
+containsIntersection (AndT _ _) = True
+containsIntersection (FunctionT _ arg res) = containsIntersection arg || containsIntersection res
+containsIntersection (LetT _ binding bound) = containsIntersection binding || containsIntersection bound
+containsIntersection _ = False
+
+intersectionToList (AndT lty rty) = (intersectionToList lty) ++ (intersectionToList rty)
+intersectionToList x = [x]
 
 hasAny AnyT = True
 hasAny (ScalarT baseT _) = baseHasAny baseT
@@ -309,7 +321,7 @@ typeApplySolution _ AnyT = AnyT
 typeFromSchema :: RSchema -> RType
 typeFromSchema (Monotype t) = t
 typeFromSchema (ForallT _ t) = typeFromSchema t
-typeFromSchema (ForallP _ t) = typeFromSchema t 
+typeFromSchema (ForallP _ t) = typeFromSchema t
 
 allRefinementsOf :: RSchema -> [Formula]
 allRefinementsOf sch = allRefinementsOf' $ typeFromSchema sch
