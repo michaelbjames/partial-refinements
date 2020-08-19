@@ -255,6 +255,7 @@ prettyTypeAt n t = condHlParens (n' <= n) (
     AnyT -> text "_"
     FunctionT x t1 t2 -> text x <> operator ":" <> prettyTypeAt n' t1 <+> operator "->" <+> prettyTypeAt 0 t2
     LetT x t1 t2 -> text "LET" <+> text x <> operator ":" <> prettyTypeAt n' t1 <+> operator "IN" <+> prettyTypeAt 0 t2
+    AndT t1 t2 -> hlParens (pretty t1) <+> operator "^" <+> hlParens (pretty t2)
   )
   where
     n' = typePower t
@@ -390,10 +391,10 @@ instance Pretty BareDeclaration where
   pretty (InlineDecl name args body) = keyword "inline" <+> text name <+> hsep (map text args) <+> operator "=" <+> pretty body
 
 prettyMeasureDefaults args = punctuateEnd (operator "->") $ map formatPair args
-  where 
-    formatPair (v, s) = text v <+> operator ":" <+> pretty s 
-    punctuateEnd op [] = empty 
-    punctuateEnd op [d] = d <+> op 
+  where
+    formatPair (v, s) = text v <+> operator ":" <+> pretty s
+    punctuateEnd op [] = empty
+    punctuateEnd op [d] = d <+> op
     punctuateEnd op (d:ds) = d <+> op <+> punctuateEnd op ds
 
 instance Pretty a => Pretty (Pos a) where

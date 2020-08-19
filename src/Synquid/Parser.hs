@@ -128,8 +128,8 @@ parseConstructorSig = do
 
 parseMeasureConstantArgs :: Parser MeasureDefaults
 parseMeasureConstantArgs = many argWithName
-  where 
-    argWithName = do 
+  where
+    argWithName = do
       name <- parseIdentifier
       reservedOp ":"
       sort <- parseSort
@@ -200,7 +200,17 @@ parseForall = do
   return $ ForallP sig sch
 
 parseType :: Parser RType
-parseType = withPos (choice [try parseFunctionTypeWithArg, parseFunctionTypeMb] <?> "type")
+parseType = withPos (choice
+    [ try parseIntersectionType
+    , try parseFunctionTypeWithArg
+    , parseFunctionTypeMb
+    ] <?> "type")
+
+parseTypeNoIntersection :: Parser RType
+parseTypeNoIntersection = withPos (choice
+                          [ try parseFunctionTypeWithArg
+                          , parseFunctionTypeMb
+                          ] <?> "type")
 
 -- | Parse top-level type that starts with an argument name, and thus must be a function type
 parseFunctionTypeWithArg = do
@@ -222,6 +232,11 @@ parseFunctionTypeMb = do
       reservedOp "->"
       returnType <- parseType
       return $ FunctionT ("arg" ++ show (arity returnType)) argType returnType
+
+parseIntersectionType = do
+  t1 <- parseTypeNoIntersection
+  reservedOp "^"
+  AndT t1 <$> parseType
 
 parseTypeAtom :: Parser RType
 parseTypeAtom = choice [

@@ -118,8 +118,8 @@ runExplorer :: MonadHorn s => ExplorerParams -> TypingParams -> Reconstructor s 
 runExplorer eParams tParams topLevel initTS go = do
   (ress, (PersistentState _ _ errs)) <- runStateT (observeManyT 1 $ runReaderT (evalStateT go initExplorerState) (eParams, tParams, topLevel)) (PersistentState Map.empty Map.empty [])
   case ress of
-    [] -> 
-      case errs of 
+    [] ->
+      case errs of
         [] -> return $ Left impossible
         (e:_) -> return $ Left e
     (res : _) -> return $ Right res
@@ -143,6 +143,8 @@ generateI env t@(ScalarT _ _) = do
   d <- asks . view $ _1 . matchDepth
   maPossible <- runInSolver $ hasPotentialScrutinees env -- Are there any potential scrutinees in scope?
   if maEnabled && d > 0 && maPossible then generateMaybeMatchIf env t else generateMaybeIf env t
+
+
 
 -- | Generate a possibly conditional term type @t@, depending on whether a condition is abduced
 generateMaybeIf :: MonadHorn s => Environment -> RType -> Explorer s RProgram

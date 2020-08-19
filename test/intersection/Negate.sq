@@ -1,0 +1,8 @@
+type Neg = {Int | _v < 0}
+type Pos = {Int | _v > 0}
+
+times :: i: Int -> j: Int -> {Int | _v == (i * j)}
+negOne :: {Int | _v == (-1)}
+
+negate :: (Neg -> Pos) ^ (Pos -> Neg)
+negate = \x . (times x negOne)

@@ -126,6 +126,9 @@ reconstructI' env t (PLet x iDef@(Program (PFun _ _) _) iBody) = do -- lambda-le
   return $ ctx pBody
 reconstructI' env t@(LetT x tDef tBody) impl =
   reconstructI' (addVariable x tDef env) tBody impl
+reconstructI' env t@(AndT l r) impl = do
+  reconstructI' env l impl
+  reconstructI' env r impl
 reconstructI' env t@(FunctionT _ tArg tRes) impl = case impl of
   PFun y impl -> do
     let ctx p = Program (PFun y p) t
@@ -233,13 +236,18 @@ reconstructE' env typ (PSymbol name) =
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
     Just sch -> do
       t <- symbolType env name sch
-      let p = Program (PSymbol name) t
-      symbolUseCount %= Map.insertWith (+) name 1
-      case Map.lookup name (env ^. shapeConstraints) of
-        Nothing -> return ()
-        Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False ""
-      checkE env typ p
-      return p
+      let ts = intersectionToList t
+      -- t could be an intersection, loop over choicesdo
+      let choices = (flip map) ts $ \t -> do
+            let p = Program (PSymbol name) t
+            symbolUseCount %= Map.insertWith (+) name 1
+            case Map.lookup name (env ^. shapeConstraints) of
+              Nothing -> return ()
+              Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False ""
+            checkE env typ p
+            -- stop looping over interseciton choices?
+            return p
+      msum choices
 reconstructE' env typ (PApp iFun iArg) = do
   x <- freshVar env "x"
   pFun <- inContext (\p -> Program (PApp p uHole) typ) $ reconstructE env (FunctionT x AnyT typ) iFun

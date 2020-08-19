@@ -139,6 +139,7 @@ extractQGenFromType positive env val vars t = extractQGenFromType' positive t
       in concatMap (instantiateTypeQualifier env val vars) fmls ++ extractFromBase baseT
     extractQGenFromType' False  (FunctionT _ tArg tRes) = extractQGenFromType' True tArg ++ extractQGenFromType' False tRes
     extractQGenFromType' True   (FunctionT _ tArg tRes) = extractQGenFromType' True tRes
+    extractQGenFromType' x (AndT t1 t2) = extractQGenFromType' x t1 ++ extractQGenFromType' x t2
 
     -- Extract type qualifiers from a predicate argument of a datatype:
     -- if the predicate has parameters, turn it into a type qualifier where the last parameter is replaced with _v
