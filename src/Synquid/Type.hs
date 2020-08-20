@@ -228,6 +228,7 @@ typeVarsOf t@(ScalarT baseT r) = case baseT of
   _ -> Set.empty
 typeVarsOf (FunctionT _ tArg tRes) = typeVarsOf tArg `Set.union` typeVarsOf tRes
 typeVarsOf (LetT _ tDef tBody) = typeVarsOf tDef `Set.union` typeVarsOf tBody
+typeVarsOf (AndT l r) = typeVarsOf l `Set.union` typeVarsOf r
 typeVarsOf _ = Set.empty
 
 {- Refinement types -}
