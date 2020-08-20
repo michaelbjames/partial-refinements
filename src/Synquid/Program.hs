@@ -157,7 +157,7 @@ fmlToUProgram (Ite gf f1 f2) = Program (PIf gp p1 p2) AnyT
     gp = fmlToUProgram gf
     p1 = fmlToUProgram f1
     p2 = fmlToUProgram f2
-fmlToUProgram (Cons _ x fs) = curriedApp fn fs 
+fmlToUProgram (Cons _ x fs) = curriedApp fn fs
   where
     fn = Program (PSymbol x) AnyT
     curriedApp :: RProgram -> [Formula] -> RProgram
@@ -179,6 +179,7 @@ renameAsImpl isBound = renameAsImpl' Map.empty
   where
     renameAsImpl' subst (Program (PFun y pRes) _) (FunctionT x tArg tRes) = case tArg of
       ScalarT baseT fml -> FunctionT y (substituteInType isBound subst tArg) (renameAsImpl' (Map.insert x (Var (toSort baseT) y) subst) pRes tRes)
+      AndT _ _ -> error "illegal AndT usage"
       _ -> FunctionT y (substituteInType isBound subst tArg) (renameAsImpl' subst pRes tRes)
     renameAsImpl' subst  _ t = substituteInType isBound subst t
 
@@ -462,6 +463,7 @@ refineTop _ (ScalarT IntT _) = ScalarT IntT ftrue
 refineTop _ (ScalarT BoolT _) = ScalarT BoolT ftrue
 refineTop _ (ScalarT (TypeVarT vSubst a) _) = ScalarT (TypeVarT vSubst a) ftrue
 refineTop env (FunctionT x tArg tFun) = FunctionT x (refineBot env tArg) (refineTop env tFun)
+refineTop _ (AndT _ _) = error "We should not see an AndT being used in subtype relations."
 
 -- | Insert strongest refinement
 refineBot :: Environment -> SType -> RType
@@ -575,13 +577,13 @@ predPolymorphic (x:xs) ps name inSorts outSort f = ForallP x (predPolymorphic xs
 
 -- Generate non-polymorphic core of schema
 genSkeleton :: Id -> [Id] -> [(Maybe Id, Sort)] -> Sort -> Formula -> SchemaSkeleton Formula
-genSkeleton name preds inSorts outSort post = Monotype $ uncurry 0 inSorts 
+genSkeleton name preds inSorts outSort post = Monotype $ uncurry 0 inSorts
   where
     uncurry n (x:xs) = FunctionT (fromMaybe ("arg" ++ show n) (fst x)) (ScalarT (toType (snd x)) ftrue) (uncurry (n + 1) xs)
     uncurry _ [] = ScalarT outType post
     toType s = case s of
       (DataS name args) -> DatatypeT name (map fromSort args) pforms
-      _ -> (baseTypeOf . fromSort) s 
+      _ -> (baseTypeOf . fromSort) s
     outType = (baseTypeOf . fromSort) outSort
     pforms = fmap predform preds
     predform x = Pred AnyS x []

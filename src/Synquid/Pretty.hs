@@ -231,6 +231,7 @@ instance Pretty (BaseType Formula) where
 prettySType :: SType -> Doc
 prettySType (ScalarT base _) = pretty base
 prettySType (FunctionT _ t1 t2) = hlParens (pretty t1 <+> operator "->" <+> pretty t2)
+prettySType (AndT l r) = hlParens (pretty l <+> operator "^" <+> pretty r)
 prettySType AnyT = text "_"
 
 instance Pretty SType where

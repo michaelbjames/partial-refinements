@@ -232,6 +232,7 @@ reconstructE env t (Program p t') = do
   t'' <- checkAnnotation env t t' p
   reconstructE' env t'' p
 
+reconstructE' _ (AndT _ _) _ = error "and E-term cannot have an intersection"
 reconstructE' env typ PHole = do
   d <- asks . view $ _1 . eGuessDepth
   generateEUpTo env typ d
@@ -239,19 +240,34 @@ reconstructE' env typ (PSymbol name) =
   case lookupSymbol name (arity typ) (hasSet typ) env of
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
     Just sch -> do
+      -- let shapes = expandMbList $ intersectionToList <$> symbolShape
+      writeLog 3 $ text "reconstructE' Symbol"
+      -- writeLog 3 $ text "shapeConstraint" <+> (pretty shapes)
+      writeLog 3 $ text "schema:" <+> (pretty sch)
       t <- symbolType env name sch
+      writeLog 3 $ text "symbol type:" <+> (pretty t)
       let ts = intersectionToList t
-      -- t could be an intersection, loop over choicesdo
-      let choices = (flip map) ts $ \t -> do
+      let nameShape = Map.lookup name (env ^. shapeConstraints)
+      let ss = expandMbList $ intersectionToList <$> nameShape
+      -- t could be an intersection, loop over choices
+      let choices = (flip map) (zip ts ss) $ \(t, s) -> do
             let p = Program (PSymbol name) t
             symbolUseCount %= Map.insertWith (+) name 1
-            case Map.lookup name (env ^. shapeConstraints) of
+            -- if the shape was an intersection, they should all be the same.
+            case s of
               Nothing -> return ()
               Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False ""
             checkE env typ p
-            -- stop looping over interseciton choices?
             return p
       msum choices
+  where
+    expandMbList :: Maybe [a] -> [Maybe a]
+    expandMbList Nothing = [Nothing]
+    expandMbList (Just y) = map Just y
+
+    normalizeIsect (AndT l r) = if l /= r then error "shapes not equal!" else normalizeIsect l
+    normalizeIsect t = t
+
 reconstructE' env typ (PApp iFun iArg) = do
   x <- freshVar env "x"
   pFun <- inContext (\p -> Program (PApp p uHole) typ) $ reconstructE env (FunctionT x AnyT typ) iFun
