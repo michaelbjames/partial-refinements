@@ -131,8 +131,12 @@ reconstructI' env t (PLet x iDef@(Program (PFun _ _) _) iBody) = do -- lambda-le
 reconstructI' env t@(LetT x tDef tBody) impl =
   reconstructI' (addVariable x tDef env) tBody impl
 reconstructI' env t@(AndT l r) impl = do
+  writeLog 3 $ text "reconstructI' AndT Left branch:" <+> (pretty l)
   reconstructI' env l impl
-  reconstructI' env r impl
+  writeLog 3 $ text "reconstructI' AndT Right branch:" <+> (pretty r)
+  res <- reconstructI' env r impl
+  writeLog 3 $ text "reconstructI' AndT complete"
+  return res
 reconstructI' env t@(FunctionT _ tArg tRes) impl = case impl of
   PFun y impl -> do
     let ctx p = Program (PFun y p) t
@@ -241,12 +245,12 @@ reconstructE' env typ (PSymbol name) =
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
     Just sch -> do
       writeLog 3 $ text "schema:" <+> (pretty sch)
-      t <- symbolType env name sch
-      writeLog 3 $ text "symbol type:" <+> (pretty t)
-      let ts = intersectionToList t
+      t' <- symbolType env name sch
+      writeLog 3 $ text "symbol type:" <+> (pretty t')
+      let ts = intersectionToList t'
       let nameShape = Map.lookup name (env ^. shapeConstraints)
       let ss = unsequence $ intersectionToList <$> nameShape
-      writeLog 3 $ text "nameShape:" <+> (pretty ss)
+      writeLog 3 $ text "nameShape:" <+> (text $ show ss)
       -- t could be an intersection, loop over choices
       let choices = (flip map) (zip ts ss) $ \(t, s) -> do
             let p = Program (PSymbol name) t

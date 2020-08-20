@@ -95,6 +95,7 @@ typeIsData _ = False
 arity :: TypeSkeleton r -> Int
 arity (FunctionT _ _ t) = 1 + arity t
 arity (LetT _ _ t) = arity t
+arity (AndT l _) = arity l -- these should be the same though.
 arity _ = 0
 
 -- TODO: make sure the AnyT case is OK

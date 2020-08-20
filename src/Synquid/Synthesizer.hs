@@ -216,6 +216,7 @@ extractPredQGenFromType useAllArgs env actualParams actualVars t = extractPredQG
       in extractFromRefinement fml ++ concatMap extractFromPArg pArgs ++ concatMap extractPredQGenFromType' tArgs
     extractPredQGenFromType' (ScalarT _ fml) = extractFromRefinement fml
     extractPredQGenFromType' (FunctionT _ tArg tRes) = extractPredQGenFromType' tArg ++ extractPredQGenFromType' tRes
+    extractPredQGenFromType' (AndT l r) = extractPredQGenFromType' l ++ extractPredQGenFromType' r
 
 allPredApps :: Environment -> [Formula] -> Int -> [Formula]
 allPredApps _ actuals 0 = actuals
