@@ -7,17 +7,126 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Cons x xs -> 1 + len xs
 
 filter :: <p :: a -> Bool> . (
-    pred: (x: a -> {Bool | _v == p x}) ->
-    xs: List a ->
-    List {a | p _v}
-    ) ^ (
-    pred: (x: a -> {Bool | _v == p x}) ->
-    xs: List {a | p _v} ->
-    {List a | _v == xs}
-    )
+    (
+    pred: (x: a -> {Bool | _v == p x}) -> xs: List a -> List {a | p _v}
+    ) ^
+    (
+    pred: (x: a -> {Bool | _v == p x}) -> xs: List {a | p _v} -> {List a | _v == xs}
+    ))
 filter = \pred. \xs.
   match xs with
     Nil -> Nil
     Cons y ys -> if pred y
       then Cons y (filter pred ys)
       else (filter pred ys)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- <p :: a -> Bool> . ((pred: (x: a -> {Bool | _v == p x}) -> xs: List a -> List {a | p _v}) ^ (pred: (x: a -> {Bool | _v == p x}) -> xs: List {a | p _v} -> {List a | _v == xs}))
+-- filter :: <p :: a -> Bool> . ((pred: (x: a -> {Bool | _v == p x}) -> xs: List a -> List {a | p _v} ^ (\\pred: (x: a -> {Bool | _v == p x}) -> xs: List {a | p _v} -> {List a | _v == xs}))
+
+-- foo = Right
+--   (ForallP
+--     (PredSig { predSigName     = "p"
+--              , predSigArgSorts = [VarS "a"]
+--              , predSigResSort  = BoolS
+--              }
+--     )
+--     (Monotype
+--       (AndT
+--         (FunctionT
+--           "pred"
+--           (FunctionT
+--             "x"
+--             (ScalarT (TypeVarT (fromList []) "a") (BoolLit True))
+--             (ScalarT
+--               BoolT
+--               (Binary Eq (Var AnyS "_v") (Pred AnyS "p" [Var AnyS "x"]))
+--             )
+--           )
+--           (FunctionT
+--             "xs"
+--             (ScalarT
+--               (DatatypeT "List"
+--                          [ScalarT (TypeVarT (fromList []) "a") (BoolLit True)]
+--                          []
+--               )
+--               (BoolLit True)
+--             )
+--             (ScalarT
+--               (DatatypeT
+--                 "List"
+--                 [ ScalarT (TypeVarT (fromList []) "a")
+--                           (Pred AnyS "p" [Var AnyS "_v"])
+--                 ]
+--                 []
+--               )
+--               (BoolLit True)
+--             )
+--           )
+--         )
+--         (FunctionT
+--           "pred"
+--           (FunctionT
+--             "x"
+--             (ScalarT (TypeVarT (fromList []) "a") (BoolLit True))
+--             (ScalarT
+--               BoolT
+--               (Binary Eq (Var AnyS "_v") (Pred AnyS "p" [Var AnyS "x"]))
+--             )
+--           )
+--           (FunctionT
+--             "xs"
+--             (ScalarT
+--               (DatatypeT
+--                 "List"
+--                 [ ScalarT (TypeVarT (fromList []) "a")
+--                           (Pred AnyS "p" [Var AnyS "_v"])
+--                 ]
+--                 []
+--               )
+--               (BoolLit True)
+--             )
+--             (ScalarT
+--               (DatatypeT "List"
+--                          [ScalarT (TypeVarT (fromList []) "a") (BoolLit True)]
+--                          []
+--               )
+--               (Binary Eq (Var AnyS "_v") (Var AnyS "xs"))
+--             )
+--           )
+--         )
+--       )
+--     )
+--   )
