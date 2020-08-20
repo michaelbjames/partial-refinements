@@ -144,8 +144,6 @@ generateI env t@(ScalarT _ _) = do
   maPossible <- runInSolver $ hasPotentialScrutinees env -- Are there any potential scrutinees in scope?
   if maEnabled && d > 0 && maPossible then generateMaybeMatchIf env t else generateMaybeIf env t
 
-
-
 -- | Generate a possibly conditional term type @t@, depending on whether a condition is abduced
 generateMaybeIf :: MonadHorn s => Environment -> RType -> Explorer s RProgram
 generateMaybeIf env t = ifte generateThen (uncurry3 $ generateElse env t) (generateMatch env t) -- If at least one solution without a match exists, go with it and continue with the else branch; otherwise try to match

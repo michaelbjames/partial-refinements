@@ -240,15 +240,13 @@ reconstructE' env typ (PSymbol name) =
   case lookupSymbol name (arity typ) (hasSet typ) env of
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
     Just sch -> do
-      -- let shapes = expandMbList $ intersectionToList <$> symbolShape
-      writeLog 3 $ text "reconstructE' Symbol"
-      -- writeLog 3 $ text "shapeConstraint" <+> (pretty shapes)
       writeLog 3 $ text "schema:" <+> (pretty sch)
       t <- symbolType env name sch
       writeLog 3 $ text "symbol type:" <+> (pretty t)
       let ts = intersectionToList t
       let nameShape = Map.lookup name (env ^. shapeConstraints)
-      let ss = expandMbList $ intersectionToList <$> nameShape
+      let ss = unsequence $ intersectionToList <$> nameShape
+      writeLog 3 $ text "nameShape:" <+> (pretty ss)
       -- t could be an intersection, loop over choices
       let choices = (flip map) (zip ts ss) $ \(t, s) -> do
             let p = Program (PSymbol name) t
@@ -261,12 +259,9 @@ reconstructE' env typ (PSymbol name) =
             return p
       msum choices
   where
-    expandMbList :: Maybe [a] -> [Maybe a]
-    expandMbList Nothing = [Nothing]
-    expandMbList (Just y) = map Just y
-
-    normalizeIsect (AndT l r) = if l /= r then error "shapes not equal!" else normalizeIsect l
-    normalizeIsect t = t
+    unsequence :: Maybe [a] -> [Maybe a]
+    unsequence Nothing = [Nothing]
+    unsequence (Just y) = map Just y
 
 reconstructE' env typ (PApp iFun iArg) = do
   x <- freshVar env "x"
