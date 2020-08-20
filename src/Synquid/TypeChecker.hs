@@ -40,22 +40,26 @@ reconstruct eParams tParams goal = do
 reconstructTopLevel :: MonadHorn s => Goal -> Explorer s RProgram
 reconstructTopLevel (Goal funName env (ForallT a sch) impl depth pos s) = reconstructTopLevel (Goal funName (addTypeVar a env) sch impl depth pos s)
 reconstructTopLevel (Goal funName env (ForallP sig sch) impl depth pos s) = reconstructTopLevel (Goal funName (addBoundPredicate sig env) sch impl depth pos s)
-reconstructTopLevel (Goal funName env (Monotype typ@(FunctionT _ _ _)) impl depth _ synth) = local (set (_1 . auxDepth) depth) reconstructFix
-  where
-    reconstructFix = do
-      let typ' = renameAsImpl (isBound env) impl typ
-      recCalls <- runInSolver (currentAssignment typ') >>= recursiveCalls synth
-      polymorphic <- asks . view $ _1 . polyRecursion
-      predPolymorphic <- asks . view $ _1 . predPolyRecursion
-      let tvs = env ^. boundTypeVars
-      let pvs = env ^. boundPredicates
-      let predGeneralized sch = if predPolymorphic then foldr ForallP sch pvs else sch -- Version of @t'@ generalized in bound predicate variables of the enclosing function
-      let typeGeneralized sch = if polymorphic then foldr ForallT sch tvs else sch -- Version of @t'@ generalized in bound type variables of the enclosing function
-      let env' = foldr (\(f, t) -> addPolyVariable f (typeGeneralized . predGeneralized . Monotype $ t) . (shapeConstraints %~ Map.insert f (shape typ'))) env recCalls
-      let ctx p = if null recCalls then p else Program (PFix (map fst recCalls) p) typ'
-      p <- inContext ctx  $ reconstructI env' typ' impl
-      return $ ctx p
+reconstructTopLevel g@(Goal funName env (Monotype typ@(FunctionT _ _ _)) impl depth _ synth) = local (set (_1 . auxDepth) depth) (reconstructFix g)
+reconstructTopLevel g@(Goal funName env (Monotype typ@(AndT l r)) impl depth _ synth) = local (set (_1 . auxDepth) depth) (reconstructFix g)
+reconstructTopLevel (Goal _ env (Monotype t) impl depth _ _) = local (set (_1 . auxDepth) depth) $ reconstructI env t impl
 
+reconstructFix :: MonadHorn s => Goal -> Explorer s RProgram
+reconstructFix (Goal funName env (Monotype typ) impl depth _ synth) = do
+  let typ' = renameAsImpl (isBound env) impl typ
+  recCalls <- runInSolver (currentAssignment typ') >>= recursiveCalls synth
+  polymorphic <- asks . view $ _1 . polyRecursion
+  predPolymorphic <- asks . view $ _1 . predPolyRecursion
+  let tvs = env ^. boundTypeVars
+  let pvs = env ^. boundPredicates
+  let predGeneralized sch = if predPolymorphic then foldr ForallP sch pvs else sch -- Version of @t'@ generalized in bound predicate variables of the enclosing function
+  let typeGeneralized sch = if polymorphic then foldr ForallT sch tvs else sch -- Version of @t'@ generalized in bound type variables of the enclosing function
+  let env' = foldr (\(f, t) -> addPolyVariable f (typeGeneralized . predGeneralized . Monotype $ t) . (shapeConstraints %~ Map.insert f (shape typ'))) env recCalls
+  let ctx p = if null recCalls then p else Program (PFix (map fst recCalls) p) typ'
+  p <- inContext ctx  $ reconstructI env' typ' impl
+  return $ ctx p
+
+  where
     -- | 'recursiveCalls' @t@: name-type pairs for recursive calls to a function with type @t@ (0 or 1)
     recursiveCalls False t = return [(funName, t)]
     recursiveCalls _ t = do
@@ -84,6 +88,7 @@ reconstructTopLevel (Goal funName env (Monotype typ@(FunctionT _ _ _)) impl dept
             else if fml == ffalse
                   then return (FunctionT y (addRefinement tArg argLt) tRes', True)
                   else return (FunctionT y (addRefinement tArg (argLe `andClean` (fml `orClean` argLt))) tRes', True) -- TODO: this version in incomplete (does not allow later tuple values to go up), but is much faster
+    recursiveTypeTuple (AndT _ _) fml = error "Unhandled AndT case"
     recursiveTypeTuple t _ = return (t, False)
 
     -- | 'recursiveTypeFirst' @t fml@: type of the recursive call to a function of type @t@ when only the first recursible argument decreases
@@ -93,6 +98,7 @@ reconstructTopLevel (Goal funName env (Monotype typ@(FunctionT _ _ _)) impl dept
         Just (argLt, _) -> do
           y <- freshVar env "x"
           return $ FunctionT y (addRefinement tArg argLt) (renameVar (isBound env) x y tArg tRes)
+    recursiveTypeFirst (AndT _ _) = error "Unhandled AndT case"
     recursiveTypeFirst t = return t
 
     -- | If argument is recursible, return its strict and non-strict termination refinements, otherwise @Nothing@
@@ -106,8 +112,6 @@ reconstructTopLevel (Goal funName env (Monotype typ@(FunctionT _ _ _)) impl dept
                     in Just ( metric (Var argSort valueVarName) |>=| IntLit 0  |&| metric (Var argSort valueVarName) |<| metric (Var argSort argName),
                               metric (Var argSort valueVarName) |>=| IntLit 0  |&| metric (Var argSort valueVarName) |<=| metric (Var argSort argName))
     terminationRefinement _ _ = Nothing
-
-reconstructTopLevel (Goal _ env (Monotype t) impl depth _ _) = local (set (_1 . auxDepth) depth) $ reconstructI env t impl
 
 -- | 'reconstructI' @env t impl@ :: reconstruct unknown types and terms in a judgment @env@ |- @impl@ :: @t@ where @impl@ is a (possibly) introduction term
 -- (top-down phase of bidirectional reconstruction)
