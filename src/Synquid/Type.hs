@@ -199,6 +199,7 @@ typeSubstitute subst (ScalarT baseT r) = addRefinement substituteBase (sortSubst
       _ -> ScalarT baseT ftrue
 typeSubstitute subst (FunctionT x tArg tRes) = FunctionT x (typeSubstitute subst tArg) (typeSubstitute subst tRes)
 typeSubstitute subst (LetT x tDef tBody) = LetT x (typeSubstitute subst tDef) (typeSubstitute subst tBody)
+typeSubstitute subst (AndT l r) = AndT (typeSubstitute subst l) (typeSubstitute subst r)
 typeSubstitute _ AnyT = AnyT
 
 noncaptureTypeSubst :: [Id] -> [RType] -> RType -> RType
@@ -218,6 +219,7 @@ typeSubstitutePred pSubst t = let tsp = typeSubstitutePred pSubst
     ScalarT baseT fml -> ScalarT baseT (substitutePredicate pSubst fml)
     FunctionT x tArg tRes -> FunctionT x (tsp tArg) (tsp tRes)
     LetT x tDef tBody -> FunctionT x (tsp tDef) (tsp tBody)
+    AndT l r -> AndT (tsp l) (tsp r)
     AnyT -> AnyT
 
 -- | 'typeVarsOf' @t@ : all type variables in @t@
@@ -253,6 +255,7 @@ shape (ScalarT BoolT _) = ScalarT BoolT ()
 shape (ScalarT (TypeVarT _ a) _) = ScalarT (TypeVarT Map.empty a) ()
 shape (FunctionT x tArg tFun) = FunctionT x (shape tArg) (shape tFun)
 shape (LetT _ _ t) = shape t
+shape (AndT l r) = AndT (shape l) (shape r)
 shape AnyT = AnyT
 
 -- | Conjoin refinement to a type
@@ -294,12 +297,14 @@ substituteInType isBound subst (LetT x tDef tBody) =
   if Map.member x subst
     then error $ unwords ["Attempt to substitute variable", x, "bound in a contextual type"]
     else LetT x (substituteInType isBound subst tDef) (substituteInType isBound subst tBody)
+substituteInType isBound subst (AndT l r) = AndT (substituteInType isBound subst l) (substituteInType isBound subst r)
 substituteInType isBound subst AnyT = AnyT
 
 -- | 'renameVar' @old new t typ@: rename all occurrences of @old@ in @typ@ into @new@ of type @t@
 renameVar :: (Id -> Bool) -> Id -> Id -> RType -> RType -> RType
 renameVar isBound old new (ScalarT b _)     t = substituteInType isBound (Map.singleton old (Var (toSort b) new)) t
 renameVar isBound old new (LetT _ _ tBody)  t = renameVar isBound old new tBody t
+renameVar isBound old new (AndT _ _) t = error "Unhandled AndT Case"
 renameVar _ _ _ _                           t = t -- function arguments cannot occur in types (and AnyT is assumed to be function)
 
 -- | Intersection of two types (assuming the types were already checked for consistency)
