@@ -1,0 +1,59 @@
+-- Remove adjacent duplicates
+
+eq :: x: a -> y: a -> {Bool | _v == (x == y)}
+neq :: x: a -> y: a -> {Bool | _v == (x != y)}
+
+data PList a <p :: a -> PList a -> Bool> where
+	Nil :: PList a <p>
+	Cons :: x: a -> xs: {PList a <p> | p x _v} -> PList a <p>
+
+termination measure len :: PList a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+measure elems :: PList a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs
+
+measure heads :: PList a -> Set a where
+  Nil -> []
+  Cons x xs -> [x]
+
+type List a = PList a <{True}>
+type CList a = PList a <{!(_0 in heads _1)}>
+
+-- compress_1 :: xs: List a -> {CList a | elems _v == elems xs}
+-- compress_1 = ??
+
+-- compress_2 :: xs: List a -> {List a | ((xs == (Nil)) ==> (_v == (Nil)))}
+-- compress_2 = ??
+
+-- Error:
+--   Cannot match shape 'Bool'
+--   with shape '_'
+--   when checking neq ::
+--   X1:_ -> X0:_ -> _ in
+--   \xs .
+--     match neq ?? ?? with
+-- compress_int :: xs: List Int -> {List Int |
+--     (xs == Nil ==> (_v == Nil)) &&
+--     (xs == (Cons 1 Nil) ==> (_v == (Cons 1 Nil))) &&
+--     (xs == (Cons 1 (Cons 1 Nil)) ==> (_v == (Cons 1 Nil))) &&
+--     (xs == (Cons 1 (Cons 1 (Cons 2 Nil))) ==> (_v == (Cons 1 (Cons 2 Nil))))
+--     }
+-- compress_int = ??
+
+-- Unimplemented; and with overlapping specifications.
+-- compress_int_syntactic :: (xs: List {Int | _v == 1} -> {List Int| _v == (Cons 1 Nil)}) ^ (
+--     (xs: List Int -> List Int)
+--     )
+-- compress_int_syntactic = \xs .
+--   match xs with
+--     Nil -> Nil
+--     Cons x3 x4 ->
+--       match compress_int_syntactic x4 with
+--         Nil -> Cons x3 Nil
+--         Cons x10 x11 ->
+--           if x3 == x10
+--             then compress_int_syntactic x4
+--             else Cons x3 (Cons x10 x11)
