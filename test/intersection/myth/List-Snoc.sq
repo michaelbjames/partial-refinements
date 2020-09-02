@@ -8,10 +8,6 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs
 
-measure elems :: List a -> Set a where
-  Nil -> []
-  Cons x xs -> [x] + elems xs
-
 -- This works
 -- snoc :: (x: a -> xs: List a -> List a) ^
 -- 		(x: a -> xs: {List a | _v == Nil} -> {List a | _v == (Cons x Nil)}) ^
@@ -20,9 +16,8 @@ measure elems :: List a -> Set a where
 -- This does not.
 snoc :: xs: List Int -> x: Int -> {List Int |
 	((x == 0 && xs == Nil) ==> (_v == (Cons 0 Nil))) &&
-	((x == 0 && xs == (Cons 1 Nil) )==> (_v == (Cons 1 (Cons 0 Nil)))) &&
-	((x == 0 && xs == (Cons 2 (Cons 1 Nil)))==> (_v == (Cons 2 (Cons 1 (Cons 0 Nil))))) &&
-	True
+	((x == 0 && xs == (Cons 1 Nil) )==> (_v == (Cons 1 (Cons 0 Nil))))
+	-- ((x == 0 && xs == (Cons 2 (Cons 1 Nil)))==> (_v == (Cons 2 (Cons 1 (Cons 0 Nil)))))
 	}
 snoc = \xs. \x.
 	match xs with

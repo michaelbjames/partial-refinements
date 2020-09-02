@@ -16,8 +16,7 @@ termination measure len :: List a -> {Int | _v >= 0} where
 sum :: xs: List Int -> {Int |
 		(xs == Nil) ==> (_v == 0) &&
 		(xs == (Cons 1 Nil)) ==> (_v == 1) &&
-		(xs == (Cons 4 (Cons 1 Nil))) ==> (_v == 5) &&
-		True}
+		(xs == (Cons 4 (Cons 1 Nil))) ==> (_v == 5)}
 sum = \xs.
 	match xs with
 		Nil -> 0
