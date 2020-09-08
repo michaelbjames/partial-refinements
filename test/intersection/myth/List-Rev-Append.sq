@@ -10,20 +10,20 @@ termination measure len :: List a -> {Int | _v >= 0} where
 
 append :: xs: List a -> ys: List a -> {List a | len _v == len xs + len ys}
 
-list_rev_append :: l1:List Nat -> l2:List Nat -> { List Nat |
+list_rev_append :: l1:List Nat -> { List Nat |
    (l1 == Nil ==> _v == Nil) &&
    (l1 == (Cons 0 Nil) ==> _v == (Cons 0 Nil)) &&
    (l1 == (Cons 1 Nil) ==> _v == (Cons 1 Nil)) &&
-  --  (l1 == (Cons 0 (Cons 1 Nil)) ==> _v == (Cons 1 (Cons 0 Nil))) &&
-  --  (l1 == (Cons 0 (Cons 1 (Cons 2 Nil))) ==> _v == (Cons 2 (Cons 1 (Cons 0 Nil)))) &&
+   (l1 == (Cons 0 (Cons 1 Nil)) ==> _v == (Cons 1 (Cons 0 Nil))) &&
+   (l1 == (Cons 0 (Cons 1 (Cons 2 Nil))) ==> _v == (Cons 2 (Cons 1 (Cons 0 Nil)))) &&
    True
 }
 
--- list_rev_append :: (xs:List Nat -> ys:List Nat -> List Nat) ^ ()
-list_rev_append = \xs. \ys.
+-- list_rev_append :: (xs:List Nat -> List Nat) ^ ()
+list_rev_append = \xs.
   match xs with
     Nil -> Nil
-    Cons z zs -> append (list_rev_append zs ys) (Cons z Nil)
+    Cons z zs -> append (list_rev_append zs) (Cons z Nil)
 
 -- Terminated due to timeout of 120 seconds
 

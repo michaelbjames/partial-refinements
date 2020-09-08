@@ -19,14 +19,14 @@ measure heads :: PList a -> Set a where
   Nil -> []
   Cons x xs -> [x]
 
+measure size :: Set a -> {Int | _v >= 0} where
+
 type List a = PList a <{True}>
 type CList a = PList a <{!(_0 in heads _1)}>
 
 -- compress_1 :: xs: List a -> {CList a | elems _v == elems xs}
 -- compress_1 = ??
 
--- compress_2 :: xs: List a -> {List a | ((xs == (Nil)) ==> (_v == (Nil)))}
--- compress_2 = ??
 
 -- Error:
 --   Cannot match shape 'Bool'
@@ -35,6 +35,7 @@ type CList a = PList a <{!(_0 in heads _1)}>
 --   X1:_ -> X0:_ -> _ in
 --   \xs .
 --     match neq ?? ?? with
+-- Implication: Should check
 -- compress_int :: xs: List Int -> {List Int |
 --     (xs == Nil ==> (_v == Nil)) &&
 --     (xs == (Cons 1 Nil) ==> (_v == (Cons 1 Nil))) &&
@@ -44,9 +45,8 @@ type CList a = PList a <{!(_0 in heads _1)}>
 -- compress_int = ??
 
 -- Unimplemented; and with overlapping specifications.
--- compress_int_syntactic :: (xs: List {Int | _v == 1} -> {List Int| _v == (Cons 1 Nil)}) ^ (
---     (xs: List Int -> List Int)
---     )
+compress_int_syntactic :: (xs: List {Int | _v == 1} -> {List Int| _v == (Cons 1 Nil)}) ^
+  (xs: List Int -> List Int)
 -- compress_int_syntactic = \xs .
 --   match xs with
 --     Nil -> Nil

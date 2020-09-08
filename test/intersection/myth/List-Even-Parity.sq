@@ -3,22 +3,45 @@ data Boolean where
   F :: Boolean
 
 data BooleanList where
-  Nil :: BooleanList
-  Cons :: Boolean -> BooleanList -> BooleanList
+  NilB :: BooleanList
+  ConsB :: Boolean -> BooleanList -> BooleanList
 
-termination measure len :: BooleanList -> {Int | _v >= 0} where
+termination measure lenB :: BooleanList -> {Int | _v >= 0} where
+  NilB -> 0
+  ConsB x xs -> 1 + lenB xs
+
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs
 
-list_even_parity :: xs:BooleanList -> { Boolean |
+-- list_even_parity :: xs:List Bool -> { Bool |
+--    (xs == Nil ==> _v == T) &&
+--    (xs == (Cons F Nil) ==> _v == T) &&
+--    (xs == (Cons T Nil) ==> _v == F) &&
+--    (xs == (Cons F (Cons F Nil)) ==> _v == T) &&
+--    (xs == (Cons F (Cons T Nil)) ==> _v == F) &&
+--    (xs == (Cons T (Cons F Nil)) ==> _v == F) &&
+--    (xs == (Cons T (Cons T Nil)) ==> _v == T) &&
+--    True
+-- }
 
-   (xs == Nil ==> _v == T) &&
-   (xs == (Cons F Nil) ==> _v == T) &&
-   (xs == (Cons T Nil) ==> _v == F) &&
-   (xs == (Cons F (Cons F Nil)) ==> _v == T) &&
-   (xs == (Cons F (Cons T Nil)) ==> _v == F) &&
-   (xs == (Cons T (Cons F Nil)) ==> _v == F) &&
-   (xs == (Cons T (Cons T Nil)) ==> _v == T) &&
-   True
-
-}
+-- This has the parametric refinement bug--should work with a monomorphic boollist
+list_even_parity :: (xs: List {Bool | _v == False} -> {Bool | _v == True}) ^
+  (xs: {List {Bool | _v == True}| len _v == 2} -> {Bool | _v == True}) ^
+  (xs: {List {Bool | _v == True}| len _v == 3} -> {Bool | _v == False}) ^
+  (xs: {List Bool | len _v == 0} -> {Bool | _v == True}) ^
+  (xs: {List Bool | _v == (Cons True (Cons False Nil))} -> {Bool | _v == False}) ^
+  (xs: {List Bool | _v == (Cons False Nil)} -> {Bool | _v == True})
+-- list_even_parity :: List Bool -> Bool
+list_even_parity = \xs.
+  match xs with
+    Nil -> True
+    Cons y ys -> if y
+      then (if list_even_parity ys
+        then False
+        else True)
+      else list_even_parity ys

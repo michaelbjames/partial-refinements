@@ -33,3 +33,8 @@ list_inc :: xs:List Nat -> { List Nat |
 
 }
 list_inc = ??
+
+list_inc_2 :: (xs: List Int -> List Int) ^
+  (xs:List {Int | _v == 1} -> List {Int | _v == 2}) ^
+  (xs:{List Int | len _v == 1} -> {List Int | len _v == 1})
+list_inc_2 = \x. map (\y. y + 1) x

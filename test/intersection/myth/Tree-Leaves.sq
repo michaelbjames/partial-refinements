@@ -14,11 +14,19 @@ termination measure size :: Tree a -> {Int | _v >= 0} where
   Empty -> 0
   Node x l r -> size l + size r + 1
 
+
 measure telems :: Tree a -> Set a where
   Empty -> []
   Node x l r -> telems l + telems r + [x]
 
+
+type Nat = {Int | _v >= 0}
+
+-- Used in Myth
 append :: xs: List a -> ys: List a -> {List a | len _v == len xs + len ys}
+
+-- Escher Extra Components
+isLeaf :: t: Tree a -> {Bool | _v == (size t == 1)}
 
 -- Implication needing recursion seems to fail.
 -- leaves :: t: Tree Int -> {List Int |
@@ -28,12 +36,20 @@ append :: xs: List a -> ys: List a -> {List a | len _v == len xs + len ys}
 -- 	((t == (Node 1 (Node 2 Empty Empty) (Node 3 Empty Empty))) ==> (_v == (Cons 2 (Cons 3 Nil)))) &&
 -- 	True
 -- 	}
-leaves = \t.
+-- leaves :: t: Tree a -> List a
+-- leaves :: (t: {Tree a | size t == 1} -> {List a | len _v == 1}) ^
+-- Not sufficient below:
+-- leaves :: t: Tree Int -> {List Int |
+-- 	((t == Empty) ==> (_v == Nil)) &&
+-- 	((size t == 1) ==> (len _v == 1)) &&
+-- 	((size t == 2) ==> (len _v == 1))
+-- 	}
+collect_leaves :: (t: Tree Int -> List {Int | _v in telems t}) ^
+	(t: {Tree Int| size _v == 1} -> {List Int | len _v == 1})
+collect_leaves = \t.
 	match t with
 		Empty -> Nil
-		Node x l r -> if (l == r && r == Empty)
+		Node x l r -> if (isLeaf t)
 			then Cons x Nil
-			else append (leaves l) (leaves r)
+			else append (collect_leaves l) (collect_leaves r)
 
-
--- join??
