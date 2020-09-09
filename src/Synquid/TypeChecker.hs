@@ -88,7 +88,10 @@ reconstructFix (Goal funName env (Monotype typ) impl depth _ synth) = do
             else if fml == ffalse
                   then return (FunctionT y (addRefinement tArg argLt) tRes', True)
                   else return (FunctionT y (addRefinement tArg (argLe `andClean` (fml `orClean` argLt))) tRes', True) -- TODO: this version in incomplete (does not allow later tuple values to go up), but is much faster
-    recursiveTypeTuple (AndT _ _) fml = error "Unhandled AndT case"
+    recursiveTypeTuple (AndT l r) fml = do
+      (l', seenLastLeft) <- recursiveTypeTuple l fml
+      (r', seenLastRight) <- recursiveTypeTuple r fml
+      return $ (AndT l' r', seenLastLeft || seenLastRight)
     recursiveTypeTuple t _ = return (t, False)
 
     -- | 'recursiveTypeFirst' @t fml@: type of the recursive call to a function of type @t@ when only the first recursible argument decreases
@@ -98,7 +101,10 @@ reconstructFix (Goal funName env (Monotype typ) impl depth _ synth) = do
         Just (argLt, _) -> do
           y <- freshVar env "x"
           return $ FunctionT y (addRefinement tArg argLt) (renameVar (isBound env) x y tArg tRes)
-    recursiveTypeFirst (AndT _ _) = error "Unhandled AndT case"
+    recursiveTypeFirst (AndT l r) = do
+      l' <- recursiveTypeFirst l
+      r' <- recursiveTypeFirst r
+      return $ AndT l' r'
     recursiveTypeFirst t = return t
 
     -- | If argument is recursible, return its strict and non-strict termination refinements, otherwise @Nothing@
