@@ -140,7 +140,8 @@ reconstructI' env t@(AndT l r) impl = do
   writeLog 3 $ text "reconstructI' AndT Left branch:" <+> (pretty l)
   left <- reconstructI' env l impl
   logItFrom "reconstructI'" $ text "reconstructI' AndT Left program:" <+> (pretty left)
-  reconstructI' env r (content (eraseTypes left))
+  left' <- flip insertAuxSolutions left <$> use solvedAuxGoals 
+  reconstructI' env r (content (eraseTypes left'))
   logItFrom "reconstructI'" $ text "reconstructI' AndT Left checks against Right:" <+> (pretty left)
   -- right <- reconstructI' env r impl
   -- logItFrom "reconstructI'" $ text "reconstructI' AndT Right program:" <+> (pretty right)
