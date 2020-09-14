@@ -114,14 +114,18 @@ type Explorer s = StateT ExplorerState (
 data Reconstructor s = Reconstructor (Goal -> Explorer s RProgram)
 
 -- | 'runExplorer' @eParams tParams initTS go@ : execute exploration @go@ with explorer parameters @eParams@, typing parameters @tParams@ in typing state @initTS@
-runExplorer :: MonadHorn s => ExplorerParams -> TypingParams -> Reconstructor s -> TypingState -> Explorer s a -> s (Either ErrorMessage a)
+runExplorer :: (Pretty a, MonadHorn s) => ExplorerParams -> TypingParams -> Reconstructor s -> TypingState -> Explorer s a -> s (Either ErrorMessage a)
 runExplorer eParams tParams topLevel initTS go = do
   (ress, (PersistentState _ _ errs)) <- runStateT (observeManyT 1 $ runReaderT (evalStateT go initExplorerState) (eParams, tParams, topLevel)) (PersistentState Map.empty Map.empty [])
   case ress of
     [] ->
       case errs of
         [] -> return $ Left impossible
-        (e:_) -> return $ Left e
+        -- all logged errors are in es. The error for the last program tried is the head.
+        (e:es) -> let
+          epstr = fromMaybe "None" ((show . pretty) <$> listToMaybe es)
+          printstr = "prior error:\n" ++ epstr
+          in trace printstr $ return $ Left e
     (res : _) -> return $ Right res
   where
     initExplorerState = ExplorerState initTS [] Map.empty Map.empty Map.empty Map.empty
@@ -138,10 +142,35 @@ generateI env t@(FunctionT x tArg tRes) = do
   let ctx = \p -> Program (PFun x p) t
   pBody <- inContext ctx $ generateI (unfoldAllVariables $ addVariable x tArg $ env) tRes
   return $ ctx pBody
+generateI env t@(AndT l r) = do
+  error "woah now."
+  logItFrom "generateI" (text "enter generateI for term" <+> pretty t)
+  -- ifte (generateI env l)
+  --   (\pl -> do
+  --     logItFrom "generateI" (text "got term for left of intersect:" <+> pretty pl)
+  --     ifte (generateI env r)
+  --       (\pr -> do
+  --         logItFrom "generateI" (text "got term for right of intersect:" <+> pretty pr)
+  --         guard (pl == pr)
+  --         return pl)
+  --       (mzero))
+  --   (mzero)
+  pl <- generateI env l
+  logItFrom "generateI" (text "got term for left of intersect:" <+> pretty pl)
+  once $ checkE env r pl
+  logItFrom "generateI" (text "Left term typechecks against right!" <+> pretty pl)
+  pr <- generateI env r
+  logItFrom "generateI" (text "got term for right of intersect:" <+> pretty pr)
+  if pl /= pr
+    then do
+      logItFrom "generateI" (text "left-right terms not equal" </> text " L=" <+> pretty pl </> text "R=" <+> pretty pr)
+      mzero
+    else return pl
 generateI env t@(ScalarT _ _) = do
   maEnabled <- asks . view $ _1 . abduceScrutinees -- Is match abduction enabled?
   d <- asks . view $ _1 . matchDepth
   maPossible <- runInSolver $ hasPotentialScrutinees env -- Are there any potential scrutinees in scope?
+  logItFrom "generateI-ScalarT" $ text "are there scrutinees?"
   if maEnabled && d > 0 && maPossible then generateMaybeMatchIf env t else generateMaybeIf env t
 
 -- | Generate a possibly conditional term type @t@, depending on whether a condition is abduced
@@ -357,7 +386,9 @@ generateE env typ = do
 
 -- | 'generateEUpTo' @env typ d@ : explore all applications of type shape @shape typ@ in environment @env@ of depth up to @d@
 generateEUpTo :: MonadHorn s => Environment -> RType -> Int -> Explorer s RProgram
-generateEUpTo env typ d = msum $ map (generateEAt env typ) [0..d]
+generateEUpTo env typ d =
+  mplus (msum $ map (generateEAt env typ) [0..d]) $
+        (throwErrorWithDescription (text "no more programs."))
 
 -- | 'generateEAt' @env typ d@ : explore all applications of type shape @shape typ@ in environment @env@ of depth exactly to @d@
 generateEAt :: MonadHorn s => Environment -> RType -> Int -> Explorer s RProgram
@@ -376,17 +407,17 @@ generateEAt env typ d = do
       startMemo <- getMemo
       case Map.lookup memoKey startMemo of
         Just results -> do -- Found memoized results: fetch
-          writeLog 3 (text "Fetching for:" <+> pretty memoKey $+$
+          logItFrom "generateEAt" (text "Fetching for:" <+> pretty memoKey $+$
                       text "Result:" $+$ vsep (map (\(p, _) -> pretty p) results))
           msum $ map applyMemoized results
         Nothing -> do -- Nothing found: enumerate and memoize
-          writeLog 3 (text "Nothing found for:" <+> pretty memoKey)
+          logItFrom "generateEAt" (text "Nothing found for:" <+> pretty memoKey)
           p <- enumerateAt env typ d
 
           memo <- getMemo
           finalState <- get
           let memo' = Map.insertWith (flip (++)) memoKey [(p, finalState)] memo
-          writeLog 3 (text "Memoizing for:" <+> pretty memoKey <+> pretty p <+> text "::" <+> pretty (typeOf p))
+          logItFrom "generateEAt" (text "Memoizing for:" <+> pretty memoKey <+> pretty p <+> text "::" <+> pretty (typeOf p))
 
           putMemo memo'
 
@@ -411,13 +442,16 @@ checkE env typ p@(Program pTerm pTyp) = do
   incremental <- asks . view $ _1 . incrementalChecking -- Is incremental type checking of E-terms enabled?
   consistency <- asks . view $ _1 . consistencyChecking -- Is consistency checking enabled?
 
-  when (incremental || arity typ == 0) (addConstraint $ Subtype env pTyp typ False "") -- Add subtyping check, unless it's a function type and incremental checking is diasbled
-  when (consistency && arity typ > 0) (addConstraint $ Subtype env pTyp typ True "") -- Add consistency constraint for function types
+  when (incremental || arity typ == 0) ((logItFrom "checkE" (text "incremental added")) >> (addConstraint $ Subtype env pTyp typ False "")) -- Add subtyping check, unless it's a function type and incremental checking is diasbled
+  when (consistency && arity typ > 0) ((logItFrom "checkE" (text "consistency added")) >> (addConstraint $ Subtype env pTyp typ True "")) -- Add consistency constraint for function types
   fTyp <- runInSolver $ finalizeType typ
+  logItFrom "checkE" (text "finalized type: " <+> pretty fTyp)
   pos <- asks . view $ _1 . sourcePos
   typingState . errorContext .= (pos, text "when checking" </> pretty p </> text "::" </> pretty fTyp </> text "in" $+$ pretty (ctx p))
   runInSolver solveTypeConstraints
   typingState . errorContext .= (noPos, empty)
+  writeLog 2 $ text "Checking OK:" <+> pretty p <+> text "::" <+> pretty fTyp <+> text "in" $+$ pretty (ctx (untyped PHole))
+
 
 enumerateAt :: MonadHorn s => Environment -> RType -> Int -> Explorer s RProgram
 enumerateAt env typ 0 = do
@@ -431,13 +465,23 @@ enumerateAt env typ 0 = do
     pickSymbol (name, sch) = do
       when (Set.member name (env ^. letBound)) mzero
       t <- symbolType env name sch
-      let p = Program (PSymbol name) t
-      writeLog 2 $ text "Trying" <+> pretty p
-      symbolUseCount %= Map.insertWith (+) name 1
-      case Map.lookup name (env ^. shapeConstraints) of
-        Nothing -> return ()
-        Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False ""
-      return p
+      let ts = intersectionToList t
+      let nameShape = Map.lookup name (env ^. shapeConstraints)
+      let shapes = unsequence $ intersectionToList <$> nameShape
+      let choices = (flip map) (zip ts shapes) $ \(t, s) -> do
+            let p = Program (PSymbol name) t
+            writeLog 2 $ text "Trying" <+> pretty p
+            symbolUseCount %= Map.insertWith (+) name 1
+            -- if the shape was an intersection, they should all be the same.
+            case s of
+              Nothing -> return ()
+              Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False ""
+            return p
+      msum choices
+
+    unsequence :: Maybe [a] -> [Maybe a]
+    unsequence Nothing = [Nothing]
+    unsequence (Just y) = map Just y
 
 enumerateAt env typ d = do
   let maxArity = fst $ Map.findMax (env ^. symbols)
@@ -474,7 +518,7 @@ enumerateAt env typ d = do
 generateError :: MonadHorn s => Environment -> Explorer s RProgram
 generateError env = do
   ctx <- asks . view $ _1. context
-  writeLog 2 $ text "Checking" <+> pretty (show errorProgram) <+> text "in" $+$ pretty (ctx errorProgram)
+  writeLog 2 $ text "Checking Error Program" <+> pretty errorProgram <+> text "in" $+$ pretty (ctx errorProgram)
   tass <- use (typingState . typeAssignment)
   let env' = typeSubstituteEnv tass env
   addConstraint $ Subtype env (int $ conjunction $ Set.fromList $ map trivial (allScalars env')) (int ffalse) False ""
@@ -544,7 +588,9 @@ runInSolver f = do
   tState <- use typingState
   res <- lift . lift . lift . lift $ runTCSolver tParams tState f
   case res of
-    Left err -> throwError err
+    Left err -> do
+      logItFrom "runInSolver" $ text "Type Checker returned error:"
+      throwError err
     Right (res, st) -> do
       typingState .= st
       return res
@@ -618,7 +664,7 @@ symbolType env _ sch = freshInstance sch
 
 -- | Perform an exploration, and once it succeeds, do not backtrack it
 cut :: MonadHorn s => Explorer s a -> Explorer s a
-cut = once
+cut = id
 
 -- | Synthesize auxiliary goals accumulated in @auxGoals@ and store the result in @solvedAuxGoals@
 generateAuxGoals :: MonadHorn s => Explorer s ()
@@ -647,3 +693,6 @@ generateAuxGoals = do
 writeLog level msg = do
   maxLevel <- asks . view $ _1 . explorerLogLevel
   if level <= maxLevel then traceShow (plain msg) $ return () else return ()
+
+logItFrom fnName msg = do
+  writeLog 1 $ brackets (text fnName) <+> msg

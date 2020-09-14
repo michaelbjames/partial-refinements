@@ -7,15 +7,14 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Cons x xs -> 1 + len xs
 
 filter :: <p :: a -> Bool> . (
-    (
-    pred: (x: a -> {Bool | _v == p x}) -> xs: List a -> List {a | p _v}
-    ) ^
-    (
-    pred: (x: a -> {Bool | _v == p x}) -> xs: List {a | p _v} -> {List a | _v == xs}
-    ))
+    (pred: (x: a -> {Bool | _v == p x}) -> xs: List a -> List {a | p _v})
+    ^
+    (pred: (x: a -> {Bool | _v == p x}) -> xs: List {a | p _v} -> {List a | _v == xs})
+    )
+-- filter = ??
 filter = \pred. \xs.
   match xs with
     Nil -> Nil
     Cons y ys -> if pred y
-      then Cons y (filter pred ys)
-      else (filter pred ys)
+      then Cons y ?? -- woah, this didn't get generated??
+      else Nil -- error -- (filter pred ys)

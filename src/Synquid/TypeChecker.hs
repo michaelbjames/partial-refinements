@@ -138,11 +138,17 @@ reconstructI' env t@(LetT x tDef tBody) impl =
   reconstructI' (addVariable x tDef env) tBody impl
 reconstructI' env t@(AndT l r) impl = do
   writeLog 3 $ text "reconstructI' AndT Left branch:" <+> (pretty l)
-  reconstructI' env l impl
-  writeLog 3 $ text "reconstructI' AndT Right branch:" <+> (pretty r)
-  res <- reconstructI' env r impl
-  writeLog 3 $ text "reconstructI' AndT complete"
-  return res
+  left <- reconstructI' env l impl
+  logItFrom "reconstructI'" $ text "reconstructI' AndT Left program:" <+> (pretty left)
+  reconstructI' env r (content (eraseTypes left))
+  logItFrom "reconstructI'" $ text "reconstructI' AndT Left checks against Right:" <+> (pretty left)
+  -- right <- reconstructI' env r impl
+  -- logItFrom "reconstructI'" $ text "reconstructI' AndT Right program:" <+> (pretty right)
+  -- if ((eraseTypes left) == (eraseTypes right))
+  --   then return ()
+  --   else logItFrom "reconstructI'" (text "programs not equal") >> mzero
+  writeLog 2 $ text "reconstructI' AndT complete"
+  return left
 reconstructI' env t@(FunctionT _ tArg tRes) impl = case impl of
   PFun y impl -> do
     let ctx p = Program (PFun y p) t
@@ -217,7 +223,7 @@ reconstructI' env t@(ScalarT _ _) impl = case impl of
                           _ -> throwErrorWithDescription $ text "Not in scope: data constructor" </> squotes (text consName)
     checkCases _ [] = return []
 
-reconstructCase env scrVar pScrutinee t (Case consName args iBody) consT = cut $ do
+reconstructCase env scrVar pScrutinee t (Case consName args iBody) consT = do
   runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
   consT' <- runInSolver $ currentAssignment consT
   (syms, ass) <- caseSymbols env scrVar args consT'
@@ -255,10 +261,10 @@ reconstructE' env typ (PSymbol name) =
       writeLog 3 $ text "symbol type:" <+> (pretty t')
       let ts = intersectionToList t'
       let nameShape = Map.lookup name (env ^. shapeConstraints)
-      let ss = unsequence $ intersectionToList <$> nameShape
-      writeLog 3 $ text "nameShape:" <+> (text $ show ss)
+      let shapes = unsequence $ intersectionToList <$> nameShape
+      writeLog 3 $ text "nameShape:" <+> (text $ show shapes)
       -- t could be an intersection, loop over choices
-      let choices = (flip map) (zip ts ss) $ \(t, s) -> do
+      let choices = (flip map) (zip ts shapes) $ \(t, s) -> do
             let p = Program (PSymbol name) t
             symbolUseCount %= Map.insertWith (+) name 1
             -- if the shape was an intersection, they should all be the same.

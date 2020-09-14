@@ -305,7 +305,7 @@ substituteInType isBound subst AnyT = AnyT
 renameVar :: (Id -> Bool) -> Id -> Id -> RType -> RType -> RType
 renameVar isBound old new (ScalarT b _)     t = substituteInType isBound (Map.singleton old (Var (toSort b) new)) t
 renameVar isBound old new (LetT _ _ tBody)  t = renameVar isBound old new tBody t
-renameVar isBound old new (AndT _ _) t = error "Unhandled AndT Case"
+renameVar isBound old new (AndT _ _) t = error "Unhandled AndT Case: renameVar"
 renameVar _ _ _ _                           t = t -- function arguments cannot occur in types (and AnyT is assumed to be function)
 
 -- | Intersection of two types (assuming the types were already checked for consistency)

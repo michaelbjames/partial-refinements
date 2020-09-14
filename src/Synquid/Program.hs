@@ -67,9 +67,12 @@ isHole _ = False
 eraseTypes :: RProgram -> UProgram
 eraseTypes = fmap (const AnyT)
 
+symbolName :: Program t -> Id
 symbolName (Program (PSymbol name) _) = name
 symbolList (Program (PSymbol name) _) = [name]
 symbolList (Program (PApp fun arg) _) = symbolList fun ++ symbolList arg
+symbolList p@(Program (_) _) = error ("symbolList: " ++ show p)
+
 
 symbolsOf (Program p _) = case p of
   PSymbol name -> Set.singleton name
@@ -474,6 +477,7 @@ refineBot _ (ScalarT IntT _) = ScalarT IntT ffalse
 refineBot _ (ScalarT BoolT _) = ScalarT BoolT ffalse
 refineBot _ (ScalarT (TypeVarT vSubst a) _) = ScalarT (TypeVarT vSubst a) ffalse
 refineBot env (FunctionT x tArg tFun) = FunctionT x (refineTop env tArg) (refineBot env tFun)
+refineBot _ (AndT _ _) = error "refineBot: unhandled AndT"
 
 {- Input language declarations -}
 

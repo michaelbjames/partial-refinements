@@ -132,7 +132,8 @@ solveTypeConstraints = do
   generateAllHornClauses
 
   solveHornClauses
-  checkTypeConsistency
+  -- There are no checks that the user DIDNT disable this.
+  -- checkTypeConsistency
 
   hornClauses .= []
   consistencyChecks .= []
@@ -563,8 +564,8 @@ freshVar env prefix = do
 -- | 'somewhatFreshVar' @env prefix sort@ : A variable of sort @sort@ not bound in @env@
 -- Exists to generate fresh variables for multi-argument measures without making all of the constructor axiom instantiation code monadic
 somewhatFreshVar :: Environment -> String -> Sort -> Formula
-somewhatFreshVar env prefix s = Var s name 
-  where 
+somewhatFreshVar env prefix s = Var s name
+  where
     name = unbound 0 (prefix ++ show 0)
     unbound n v = if Map.member v (allSymbols env)
                     then unbound (n + 1) (v ++ show n)
@@ -648,7 +649,7 @@ instantiateConsAxioms env mVal fml = let inst = instantiateConsAxioms env mVal i
     SetLit _ elems -> Set.unions (map inst elems)
     Pred _ p args -> Set.unions $ map inst args
     _ -> Set.empty
-  where    
+  where
     measureAxiom resS ctor args (mname, MeasureDef inSort _ defs constantArgs _) =
       let
         MeasureCase _ vars body = head $ filter (\(MeasureCase c _ _) -> c == ctor) defs
@@ -656,7 +657,7 @@ instantiateConsAxioms env mVal fml = let inst = instantiateConsAxioms env mVal i
         sArgs = sortArgsOf resS -- actual sort argument in the constructor application
         body' = noncaptureSortSubstFml sParams sArgs body -- measure definition with actual sorts for all subexpressions
         newValue = fromMaybe (Cons resS ctor args) mVal
-        subst = Map.fromList $ (valueVarName, newValue) : zip vars args 
+        subst = Map.fromList $ (valueVarName, newValue) : zip vars args
         -- Body of measure with constructor application (newValue) substituted for _v:
         vSubstBody = substitute subst body'
       in foldr (\(x,s) fml -> All (Var s x) fml) vSubstBody constantArgs -- quantify over all the extra arguments of the measure
