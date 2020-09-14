@@ -69,8 +69,11 @@ eraseTypes = fmap (const AnyT)
 
 symbolName :: Program t -> Id
 symbolName (Program (PSymbol name) _) = name
+
 symbolList (Program (PSymbol name) _) = [name]
 symbolList (Program (PApp fun arg) _) = symbolList fun ++ symbolList arg
+symbolList (Program (PLet x def body) _) = symbolList body
+symbolList (Program PHole _) = []
 symbolList p@(Program (_) _) = error ("symbolList: " ++ show p)
 
 

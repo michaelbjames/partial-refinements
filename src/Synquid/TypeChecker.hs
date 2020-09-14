@@ -139,10 +139,18 @@ reconstructI' env t@(LetT x tDef tBody) impl =
 reconstructI' env t@(AndT l r) impl = do
   writeLog 3 $ text "reconstructI' AndT Left branch:" <+> (pretty l)
   left <- reconstructI' env l impl
-  logItFrom "reconstructI'" $ text "reconstructI' AndT Left program:" <+> (pretty left)
   left' <- flip insertAuxSolutions left <$> use solvedAuxGoals 
+  logItFrom "reconstructI'" $ text "reconstructI' AndT Left program:" <+> (pretty left')
   reconstructI' env r (content (eraseTypes left'))
   logItFrom "reconstructI'" $ text "reconstructI' AndT Left checks against Right:" <+> (pretty left)
+  {-
+  writeLog 3 $ text "reconstructI' AndT right branch:" <+> (pretty r)
+  right <- reconstructI' env r impl
+  right' <- flip insertAuxSolutions right <$> use solvedAuxGoals 
+  logItFrom "reconstructI'" $ text "reconstructI' AndT Right program:" <+> (pretty right')
+  reconstructI' env l (content (eraseTypes right'))
+  logItFrom "reconstructI'" $ text "reconstructI' AndT Right checks against left:" <+> (pretty right')
+  -}
   -- right <- reconstructI' env r impl
   -- logItFrom "reconstructI'" $ text "reconstructI' AndT Right program:" <+> (pretty right)
   -- if ((eraseTypes left) == (eraseTypes right))

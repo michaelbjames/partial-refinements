@@ -109,6 +109,7 @@ lastType (FunctionT _ _ tRes) = lastType tRes
 lastType (LetT _ _ t) = lastType t
 lastType t = t
 
+allArgTypes (AndT l r) = allArgTypes l
 allArgTypes (FunctionT x tArg tRes) = tArg : (allArgTypes tRes)
 allArgTypes (LetT _ _ t) = allArgTypes t
 allArgTypes _ = []
