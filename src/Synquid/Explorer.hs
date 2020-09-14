@@ -194,9 +194,11 @@ generateElse env t cond condUnknown pThen = if cond == ftrue
     cUnknown <- Unknown Map.empty <$> freshId "C"
     runInSolver $ addFixedUnknown (unknownName cUnknown) (Set.singleton $ fnot cond) -- Create a fixed-valuation unknown to assume @!cond@
     pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) $ generateI (addAssumption cUnknown env) t
-    ifM (tryEliminateBranching pElse (runInSolver $ setUnknownRecheck (unknownName cUnknown) Set.empty (Set.singleton condUnknown)))
+    return $ Program (PIf pCond pThen pElse) t
+    {- ifM (tryEliminateBranching pElse (runInSolver $ setUnknownRecheck (unknownName cUnknown) Set.empty (Set.singleton condUnknown)))
       (return pElse)
       (return $ Program (PIf pCond pThen pElse) t)
+    -}
 
 tryEliminateBranching branch recheck =
   if isHole branch
