@@ -1,0 +1,40 @@
+data PList a <p :: a -> PList a -> Bool> where
+	Nil :: PList a <p>
+	Cons :: x: a -> xs: {PList a <p> | p x _v} -> PList a <p>
+
+termination measure len :: PList a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+measure elems :: PList a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs
+
+
+data PTree a <p :: a -> PTree a -> PTree a -> Bool> where
+	Empty :: PTree a <p>
+	Node :: x: a -> l: PTree a <p> -> r: {PTree a <p> | p x l _v} -> PTree a <p>
+
+termination measure size :: PTree a -> {Int | _v >= 0} where
+  Empty -> 0
+  Node x l r -> size l + size r + 1
+
+measure telems :: PTree a -> Set a where
+  Empty -> []
+  Node x l r -> telems l + telems r + [x]
+
+type Nat = {Int | _v >= 0}
+type List a = PList a <{True}>
+type Tree a = PTree a <{True}>
+
+
+-- Used in Myth
+append :: xs: List a -> ys: List a -> {List a | len _v == len xs + len ys}
+
+tree_inorder :: <p :: a -> PTree a -> PTree a -> Bool>.
+	(t: Tree a -> {List a| len _v == size t})
+tree_inorder = \t.
+	match t with
+		Empty -> Nil
+		Node x l r -> append (tree_inorder l) (Cons x (tree_inorder r))
+
