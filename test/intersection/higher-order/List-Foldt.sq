@@ -1,0 +1,30 @@
+data OList a <p :: Int -> a -> Bool> where
+  Nil :: OList a <p>
+  Cons :: x: {a | p 0 _v} -> xs: OList a <{p (_0 + 1) _1}> -> OList a <p>
+
+termination measure len :: OList a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+type List a = OList a <{True}>
+
+-- Not strong enough...
+pairs :: ((a -> a -> a) -> xs:{List a | len _v > 1} -> {List a | len _v < len xs}) ^
+         ((a -> a -> a) -> xs:{List a | len _v <= 1} -> {List a | _v == xs})
+pairs = \f. \xs.
+  match xs with
+    Nil -> Nil
+    Cons y ys ->
+      match ys with
+        Nil -> Cons y Nil
+        Cons z zs -> Cons (f y z) (pairs f zs)
+
+
+-- foldl :: <p Int -> a -> Bool> . (f: (b -> a -> b) -> b -> OList <p> a -> b) ^
+--   (f: (acc:b -> a -> {b|_v == acc}) -> seed: b -> List <p> a -> {b | _v == seed}) ^
+--   (f: (acc:Int -> x:a -> {Int | _v == p acc x}) -> seed: {Int | _v == 0} -> xs: List a -> {Int | _v == len xs}) ^
+--   (f: (acc:{b|True} -> x:{a|True} -> {b|True}))
+-- foldl = \f. \seed. \xs.
+--   match xs with
+--     Nil -> seed
+--     Cons y ys -> foldl f (f seed y) ys
