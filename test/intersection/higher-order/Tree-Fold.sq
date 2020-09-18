@@ -1,3 +1,60 @@
+data BinaryTree a where
+	Empty :: BinaryTree a
+	Node :: x: a -> l: BinaryTree a -> r: BinaryTree a -> BinaryTree a
+
+termination measure size :: BinaryTree a -> {Int | _v >= 0} where
+  Empty -> 0
+  Node x l r -> size l + size r + 1
+
+measure telems :: BinaryTree a -> Set a where
+  Empty -> []
+  Node x l r -> telems l + telems r + [x]
+
+{-
+I believe this spec must produce this function. However we cannot type check
+this right now. We have mixed sorts, and these in particular are making
+functions instantiations of type variables (ie.
+(a -> BinaryTree a | size _v >= 1) in place of "c" )
+-}
+
+
+
+foldBinaryTree :: (nodeFun: (a -> c -> b) ->
+                   childFun: (b -> b -> c) ->
+                   b ->
+                   BinaryTree a ->
+                   b
+                  ) ^
+                  -- This polymorphic example should reconstruct the binary tree
+                  -- if the function is implemented correctly. Here's how:
+                  -- The node-function completes reconstructing the tree
+                  (nodeFun: (a -> (a -> {BinaryTree a | size _v >= 1}) -> BinaryTree a) ->
+                   -- childFun should combine a left/right into a function to
+                   -- make a subtree
+                   childFun: (l:BinaryTree a -> r:BinaryTree a -> (a -> {BinaryTree a | size _v >= 1})) ->
+                   -- Base needs to be empty to force output == input
+                   base:{BinaryTree a| size _v == 0} ->
+                   input:BinaryTree a ->
+                   {BinaryTree a | _v == input})
+foldBinaryTree = \nodeFun. \childFun. \base. \trs.
+  match trs with
+    Empty -> base
+    Node label left right ->
+      nodeFun
+        label
+        (childFun
+          (foldBinaryTree nodeFun childFun base left)
+          (foldBinaryTree nodeFun childFun base right))
+
+
+{-
+Below is my attempt at an n-ary tree's fold.
+We would need either:
+  - mutual recursion
+  - structural termination checking
+to get this to work, since we need to mix trees and lists.
+-}
+
 -- data List a where
 --   Nil :: List a
 --   Cons :: x: a -> xs: List a -> List a
@@ -32,7 +89,6 @@
 --   Cons tree cousins -> 1 + (treeSize tree) + (treeLen cousins)
 
 
-
 -- We need a termination measure for List (Tree a).
 -- foldTree :: (nodeFun: (a -> b -> b) ->
 --              listFun: (b -> b -> b) ->
@@ -50,41 +106,4 @@
 --         Cons _ _ -> listFun (foldTree nodeFun listFun base (Cons tree Nil)) (foldTree nodeFun listFun base cousins)
 
 
-data BinaryTree a where
-	Empty :: BinaryTree a
-	Node :: x: a -> l: BinaryTree a -> r: BinaryTree a -> BinaryTree a
-
-termination measure size :: BinaryTree a -> {Int | _v >= 0} where
-  Empty -> 0
-  Node x l r -> size l + size r + 1
-
-measure telems :: BinaryTree a -> Set a where
-  Empty -> []
-  Node x l r -> telems l + telems r + [x]
-
-foldBinaryTree :: (nodeFun: (a -> c -> b) ->
-                   childFun: (b -> b -> c) ->
-                   b ->
-                   BinaryTree a ->
-                   b) ^
-                  -- This polymorphic example should reconstruct the binary tree
-                  -- if the function is implemented correctly. Here's how:
-                  -- The node-function completes reconstructing the tree
-                  (nodeFun: (a -> (a -> BinaryTree a | size _v >= 1) -> BinaryTree a) ->
-                   -- childFun should combine a left/right into a function to
-                   -- make a subtree
-                   childFun: (l:BinaryTree a -> r:BinaryTree a -> (a -> {BinaryTree a | size _v >= 1})) ->
-                   -- Base needs to be empty to force output == input
-                   base:{BinaryTree a| size _v == 0} ->
-                   input:BinaryTree a ->
-                   {BinaryTree a | _v == input})
-foldBinaryTree = \nodeFun. \childFun. \base. \trs.
-  match trs with
-    Empty -> base
-    Node label left right ->
-      nodeFun
-        label
-        (childFun
-          (foldBinaryTree nodeFun childFun base left)
-          (foldBinaryTree nodeFun childFun base right))
 
