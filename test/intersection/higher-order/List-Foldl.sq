@@ -28,32 +28,46 @@ match xs with
 -}
 
 
-data OList a <p :: Int -> a -> Bool> where
-  ONil :: OList a <p>
-  OCons :: x: {a | p 0 _v} -> xs: OList a <{p (_0 + 1) _1}> -> OList a <p>
+-- data OList a <p :: Int -> a -> Bool> where
+--   Nil :: OList a <p>
+--   Cons :: x: {a | p 0 _v} -> xs: OList a <{p (_0 + 1) _1}> -> OList a <p>
 
-termination measure len :: OList a -> {Int | _v >= 0} where
-  ONil -> 0
-  OCons x xs -> 1 + len xs
+-- termination measure len :: OList a -> {Int | _v >= 0} where
+--   Nil -> 0
+--   Cons x xs -> 1 + len xs
 
 -- use minus for a concrete non-communicative operation
 -- myth requires tables for HOF defs
-foldl :: <p :: Int -> a -> Bool> . (f: (b -> a -> b) -> b -> OList a <p> -> b) ^
-  (f: (acc:b -> a -> {b|_v == acc}) -> seed: b -> List a -> {b | _v == seed}) ^
-  (f: (acc:Int -> x:a -> {Int | _v == acc && p acc x}) -> seed: {Int | _v == 0} -> xs: List a -> {Int | _v == len xs})
-foldl = \f. \seed. \xs.
-  match xs with
-    ONil -> seed
-    OCons y ys -> foldl f (f seed y) ys
-
-type List a = OList a <{True}>
-
--- foldl2 :: ((b -> a -> b) -> b -> List a -> b) ^
---           (f: (a:Int -> b:Int -> {Int | _v == a - b}) ->
---             {Int | _v == 0} ->
---             {List Int | _v == (OCons 1 (OCons 2 ONil)} ->
---               {Int | _v == (-3)})
--- foldl2 = \f. \seed. \xs.
+-- shape mismatch b/Int
+-- foldl :: <p :: Int -> a -> Bool> . (f: (b -> a -> b) -> b -> OList a <p> -> b) ^
+--   (f: (acc:b -> a -> {b|_v == acc}) -> seed: b -> List a -> {b | _v == seed}) ^
+--   (f: (acc:Int -> x:a -> {Int | _v == acc && p acc x}) -> seed: {Int | _v == 0} -> xs: OList a <p> -> {Int | _v == len xs})
+-- foldl = \f. \seed. \xs.
 --   match xs with
---     ONil -> seed
---     OCons y ys -> foldl2 f (f seed y) ys
+--     Nil -> seed
+--     Cons y ys -> foldl f (f seed y) ys
+
+-- type List a = OList a <{True}>
+
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+-- Does not check:
+-- shape mismatch: b / Int.
+-- b gets instantiated to different types.
+foldl2 :: (f:(acc:b -> x:a -> b) -> base:b -> xs:List a -> b) ^
+          (f:(acc:Int -> x:Int -> {Int | _v == acc - x}) ->  -- f does subtraction
+            base:Int ->
+            xs:List Int ->
+            {Int | ((base == 3 && xs == (Cons 2 (Cons 1 Nil))) ==> (_v == 0)) &&
+                   ((base == 1 && xs == (Cons 1 Nil))          ==> (_v == 0)) &&
+                   ((base == 0 && xs == Nil)                   ==> (_v == 0))}) -- concrete, trace-complete examples
+foldl2 = \f. \base. \xs.
+  match xs with
+    Nil -> base
+    Cons y ys -> foldl2 f (f base y) ys

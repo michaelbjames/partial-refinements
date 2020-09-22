@@ -1,0 +1,16 @@
+data BinaryTree a where
+	Empty :: BinaryTree a
+	Node :: x: a -> l: BinaryTree a -> r: BinaryTree a -> BinaryTree a
+
+termination measure size :: BinaryTree a -> {Int | _v >= 0} where
+  Empty -> 0
+  Node x l r -> size l + size r + 1
+
+measure telems :: BinaryTree a -> Set a where
+  Empty -> []
+  Node x l r -> telems l + telems r + [x]
+
+
+-- Works.
+treeMap :: (a -> b) -> input:BinaryTree a -> {BinaryTree b | size input == size _v}
+treeMap = ??

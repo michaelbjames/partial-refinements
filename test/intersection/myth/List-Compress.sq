@@ -19,8 +19,6 @@ measure heads :: PList a -> Set a where
   Nil -> []
   Cons x xs -> [x]
 
-measure size :: Set a -> {Int | _v >= 0} where
-
 type List a = PList a <{True}>
 type CList a = PList a <{!(_0 in heads _1)}>
 
@@ -29,31 +27,41 @@ type CList a = PList a <{!(_0 in heads _1)}>
 
 
 -- Error:
---   Cannot match shape 'Bool'
---   with shape '_'
---   when checking neq ::
---   X1:_ -> X0:_ -> _ in
---   \xs .
---     match neq ?? ?? with
--- Implication: Should check
+-- Cannot find sufficiently strong refinements
+-- when checking Cons x3 Nil
 -- compress_int :: xs: List Int -> {List Int |
 --     (xs == Nil ==> (_v == Nil)) &&
 --     (xs == (Cons 1 Nil) ==> (_v == (Cons 1 Nil))) &&
 --     (xs == (Cons 1 (Cons 1 Nil)) ==> (_v == (Cons 1 Nil))) &&
---     (xs == (Cons 1 (Cons 1 (Cons 2 Nil))) ==> (_v == (Cons 1 (Cons 2 Nil))))
+--     (xs == (Cons 2 (Cons 1 (Cons 1 Nil))) ==> (_v == (Cons 2 (Cons 1 Nil)))) &&
+--     True
 --     }
--- compress_int = ??
-
--- Unimplemented; and with overlapping specifications.
-compress_int_syntactic :: (xs: List {Int | _v == 1} -> {List Int| _v == (Cons 1 Nil)}) ^
-  (xs: List Int -> List Int)
--- compress_int_syntactic = \xs .
+-- compress_int = \xs .
 --   match xs with
 --     Nil -> Nil
 --     Cons x3 x4 ->
---       match compress_int_syntactic x4 with
+--       match compress_int x4 with
 --         Nil -> Cons x3 Nil
 --         Cons x10 x11 ->
 --           if x3 == x10
---             then compress_int_syntactic x4
+--             then compress_int x4
 --             else Cons x3 (Cons x10 x11)
+
+-- Error:
+-- Cannot find sufficiently strong refinements
+--   when checking
+--   compress_int_syntactic x4 ::
+--   {PList Int <True>|_v == (Cons 1 (Nil))}
+compress_int_syntactic :: (xs: {List {Int | _v == 1} | len _v > 0} -> {List Int| _v == (Cons 1 Nil)}) ^
+  (xs: {List Int | len _v == 0} -> {List Int | _v == Nil}) ^
+  (xs: List Int -> {List Int | len _v <= len xs})
+compress_int_syntactic = \xs .
+  match xs with
+    Nil -> Nil
+    Cons x3 x4 ->
+      match compress_int_syntactic x4 with
+        Nil -> Cons x3 Nil
+        Cons x10 x11 ->
+          if x3 == x10
+            then compress_int_syntactic x4
+            else Cons x3 (Cons x10 x11)
