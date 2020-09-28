@@ -7,8 +7,8 @@ import Synquid.Logic
 import Synquid.Type
 import Synquid.Program
 import Synquid.SolverMonad
-import Synquid.Util
-import Synquid.Pretty
+import Synquid.Util ( bothM, debug, ifM, partitionM, Id )
+import Synquid.Pretty ( text, Pretty(pretty), ($+$), (<+>) )
 import Z3.Monad hiding (Z3Env, newEnv, Sort)
 import qualified Z3.Base as Z3
 
@@ -66,37 +66,85 @@ type Z3State = StateT Z3Data IO
 instance MonadSMT Z3State where
   initSolver env = do
     -- Disable MBQI:
+    setASTPrintMode Z3_PRINT_SMTLIB_FULL
     params <- mkParams
     symb <- mkStringSymbol "mbqi"
     paramsSetBool params symb False
+    pstring <- paramsToString params
+    debug 2 (text "[SMT params]: " <+> (text $ pstring)) (return ())
     solverSetParams params
+    std <- uses storedDatatypes id
 
+    debug 2 (text "[SMT symbols]: " <+> (pretty $ Map.toList $ allSymbols env)) (return ())
+    debug 2 (text "[SMT datatypes]: " <+> (pretty $ show $ env ^. datatypes)) (return ())
+    debug 2 (text "[SMT stored datatypes]: " <+> (pretty $ show $ std)) (return ())
     convertDatatypes (allSymbols env) (Map.toList $ env ^. datatypes)
 
     boolAux <- withAuxSolver mkBoolSort
     boolSortAux .= Just boolAux
 
   isSat fml = do
-      res <- local $ (fmlToAST >=> assert) fml >> check
+      res <- local $ (fmlToAST >=> assert') fml >> check
 
       case res of
         Unsat -> debug 2 (text "SMT CHECK" <+> pretty fml <+> text "UNSAT") $ return False
         Sat -> debug 2 (text "SMT CHECK" <+> pretty fml <+> text "SAT") $ return True
         -- _ -> error $ unwords ["isValid: Z3 returned Unknown for", show fml]
         _ -> debug 2 (text "SMT CHECK" <+> pretty fml <+> text "UNKNOWN treating as SAT") $ return True
+      where
+        assert' ast = do
+            s <- astToString ast
+            debug 2 (text "[SMTLIB]:" <+> text s) $ assert ast
 
   allUnsatCores = getAllMUSs
 
 convertDatatypes :: Map Id RSchema -> [(Id, DatatypeDef)] -> Z3State ()
-convertDatatypes _ [] = return ()
+convertDatatypes symbols ((dtName, def):rest) = do
+  let ctorNames = def ^. constructors
+  mapM convertCtor ctorNames
+  -- function resT cName argTypes -- for each constructor
+  return ()
+  where
+
+    convertCtor cName = do
+      return ()
+
+    -- The occurs check asserts:
+    -- forall (x_1 :: S_1, x_2 :: S_2, ...).
+    --        ((Ctor x_1 x_2...) != x_1) &&
+    --        ((Ctor x_1 x_2...) != x_2) && ...
+    mkOccursCheck :: Id -> [Sort] -> Z3State ()
+    mkOccursCheck ctorName argSorts = error "unimplemented"
+
+    -- The confusion check: two datatypes are equal iff they are
+    -- constructed exactly the same way. We only need one part of the
+    -- implication, since the theory of uninterpreted functions already have
+    -- part, the "congruence check".
+    -- forall (a_1, b_1, a_2, b_2, ...).
+    --      (Ctor a_1 a_2 ...) == (Ctor b_1 b_2 ...) ==>
+    --      (a_1 == b_1 && a_2 == b_2 && ...)
+    mkConfusionCheck :: Id -> [Sort] -> Z3State ()
+    mkConfusionCheck ctorName argSorts = error "unimplemented"
+
+    -- The junk check ensures all instances of the datatype are ONLY created
+    -- from one constructor at a time.
+    -- forall retSort.
+    --      (exists argSorts. Ctor argSotrs == retSort) XOR
+    --      (emptyCtor == retSort) XOR ...
+    mkJunkCheck :: Sort -> [(Id, [Sort])] -> Z3State ()
+    mkJunkCheck retS ctors = error "unimplemented"
+
+convertDatatypes _ [] = trace "no symbols" $ return ()
 convertDatatypes symbols ((dtName, DatatypeDef [] _ _ ctors@(_:_) _):rest) = do
   ifM (uses storedDatatypes (Set.member dtName))
-    (return ()) -- This datatype has already been processed as a dependency
+    (trace "already processed" $ return ()) -- This datatype has already been processed as a dependency
     (do
       dtSymb <- mkStringSymbol dtName
-      z3ctors <- mapM convertCtor ctors      
+      z3ctors <- mapM convertCtor ctors
       z3dt <- mkDatatype dtSymb z3ctors
-      sorts %= Map.insert dataSort z3dt
+      s <- sortToString z3dt
+      trace ("[SMTLIB - sort]: " ++ s)
+        (sorts %= Map.insert dataSort z3dt)
       storedDatatypes %= Set.insert dtName)
   convertDatatypes symbols rest
   where
@@ -148,9 +196,9 @@ toZ3Sort s = do
         BoolS -> mkBoolSort
         IntS -> mkIntSort
         -- VarS name -> mkStringSymbol name >>= mkUninterpretedSort
-        VarS name -> mkIntSort
+        VarS name -> trace ("[toZ3Sort - VarS]: " ++ name ++ " - Int") $ mkIntSort
         -- DataS name args -> mkStringSymbol name >>= mkUninterpretedSort
-        DataS name args -> mkIntSort
+        DataS name args -> trace ("[toZ3Sort - DataS]: " ++ name ++ show args ++ " - Int") $ mkIntSort
         SetS el -> toZ3Sort el >>= mkSetSort
         AnyS -> mkIntSort
       sorts %= Map.insert s z3s
@@ -194,7 +242,7 @@ fmlToAST = toAST . simplify
     simplify expr = case expr of
       SetLit el xs -> SetLit el (map simplify xs)
       Unary op e -> Unary op (simplify e)
-      Binary op e1 e2 -> 
+      Binary op e1 e2 ->
         let e1' = simplify e1
             e2' = simplify e2
         in case sortOf e1' of
@@ -203,7 +251,7 @@ fmlToAST = toAST . simplify
                         Ge -> e2' |=>| e1'
                         Lt -> fnot e1' |&| e2'
                         Gt -> fnot e2' |&| e1'
-                        _  -> Binary op e1' e2' 
+                        _  -> Binary op e1' e2'
              _ -> Binary op e1' e2'
       Ite e0 e1 e2 -> Ite (simplify e0) (simplify e1) (simplify e2)
       Pred s name args -> Pred s name (map simplify args)
@@ -308,20 +356,21 @@ toAST expr = case expr of
           argSorts <- mapM toZ3Sort argTypes
           resSort <- toZ3Sort resT
           decl <- mkFuncDecl symb argSorts resSort
+          declstr <- funcDeclToString decl
           functions %= Map.insert name' decl
           -- return $ traceShow (text "DECLARE" <+> text name <+> pretty argTypes <+> pretty resT) decl
-          return decl
+          trace ("[SMT Function Decl]: " ++ declstr) $ return decl
 
-    constructor resT cName argTypes =
+    constructor resT cName argTypes = trace ("[SMT Constructor]: " ++ unwords [show resT, cName, show argTypes]) $
       case resT of
-        DataS dtName [] ->
+        DataS dtName [] -> -- monomorphic
           ifM (uses storedDatatypes (Set.member dtName))
             (do
               z3dt <- toZ3Sort resT
               decls <- getDatatypeSortConstructors z3dt
               findDecl cName decls)
             (function resT cName argTypes)
-        _ -> function resT cName argTypes
+        _ -> function resT cName argTypes -- polymorphic
 
     findDecl cName decls = do
       declNames <- mapM (\d -> getDeclName d >>= getSymbolString) decls
@@ -345,7 +394,7 @@ getAllMUSs assumption mustHave fmls = do
   let allFmls = mustHave : fmls
   (controlLits, controlLitsAux) <- unzip <$> mapM getControlLits allFmls
 
-  -- traceShow (text "getAllMUSs" $+$ text "assumption:" <+> pretty assumption $+$ text "must have:" <+> pretty mustHave $+$ text "fmls:" <+> pretty fmls) $ return ()
+  traceShow (text "getAllMUSs" $+$ text "assumption:" <+> pretty assumption $+$ text "must have:" <+> pretty mustHave $+$ text "fmls:" <+> pretty fmls) $ return ()
   fmlToAST assumption >>= assert
   condAssumptions <- mapM fmlToAST allFmls >>= zipWithM mkImplies controlLits
   mapM_ assert $ condAssumptions
