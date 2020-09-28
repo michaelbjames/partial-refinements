@@ -101,20 +101,36 @@ instance MonadSMT Z3State where
 convertDatatypes :: Map Id RSchema -> [(Id, DatatypeDef)] -> Z3State ()
 convertDatatypes symbols ((dtName, def):rest) = do
   let ctorNames = def ^. constructors
-  mapM convertCtor ctorNames
+  -- mapM convertCtor ctorNames
   -- function resT cName argTypes -- for each constructor
+  -- assert $ mkCtorChecks undefined undefined
   return ()
   where
 
-    convertCtor cName = do
-      return ()
+    mkCtorChecks :: Z3.Sort -> [(FuncDecl, [Z3.Sort])] -> Z3State AST
+    mkCtorChecks resS ctors = do
+      occurs <- mapM (uncurry mkOccursCheck) ctors
+      confusions <- mapM (uncurry mkConfusionCheck) ctors
+      junk <- mkJunkCheck resS ctors
+      mkAnd (occurs ++ confusions ++ [junk])
 
     -- The occurs check asserts:
     -- forall (x_1 :: S_1, x_2 :: S_2, ...).
     --        ((Ctor x_1 x_2...) != x_1) &&
     --        ((Ctor x_1 x_2...) != x_2) && ...
-    mkOccursCheck :: Id -> [Sort] -> Z3State ()
-    mkOccursCheck ctorName argSorts = error "unimplemented"
+    -- Order of argSorts MUST align with required order of ctorName
+    mkOccursCheck :: FuncDecl -> [Z3.Sort] -> Z3State AST
+    mkOccursCheck ctor argSorts = do
+      ctx <- getContext
+      let debruijns = zip (reverse [0..(length argSorts - 1)]) argSorts
+      symbols <- mapM mkStringSymbol $ (map (\(i,_) -> "i" ++ show i)) debruijns
+      boundVars <- mapM (uncurry mkBound) (debruijns)
+      let eachVar vars = map (\v -> (v, vars)) vars
+      let ctorVarCheck var vars = mkNot =<< mkEq var =<< (mkApp ctor vars)
+      body <- mkAnd =<< (mapM (\(var, vars) -> ctorVarCheck var vars) $ eachVar boundVars)
+      ast <- mkForall [] symbols argSorts body
+      astStr <- astToString ast
+      debug 2 (text "[SMTLIB - occurs check]:" <+> text astStr) $ return ast
 
     -- The confusion check: two datatypes are equal iff they are
     -- constructed exactly the same way. We only need one part of the
@@ -123,16 +139,46 @@ convertDatatypes symbols ((dtName, def):rest) = do
     -- forall (a_1, b_1, a_2, b_2, ...).
     --      (Ctor a_1 a_2 ...) == (Ctor b_1 b_2 ...) ==>
     --      (a_1 == b_1 && a_2 == b_2 && ...)
-    mkConfusionCheck :: Id -> [Sort] -> Z3State ()
-    mkConfusionCheck ctorName argSorts = error "unimplemented"
+    mkConfusionCheck :: FuncDecl -> [Z3.Sort] -> Z3State AST
+    mkConfusionCheck ctor argSorts = do
+      let stutterSorts = foldr (\x acc -> x:x:acc) [] argSorts
+      let debruijns = zip (reverse [0..(length stutterSorts - 1)]) stutterSorts
+      symbols <- mapM mkStringSymbol $ (map (\(i,_) -> "i" ++ show i)) debruijns
+      boundVars <- mapM (\(i, srt) -> ((,) i) <$> mkBound i srt ) (debruijns)
+      let set1 = map snd $ filter ((==) 0 . (mod) 2 . fst) boundVars
+      let set2 = map snd $ filter ((==) 1 . (mod) 2 . fst) boundVars
+      app1 <- mkApp ctor set1
+      app2 <- mkApp ctor set2
+      eqConstraints <- mapM (uncurry mkEq) (zip set1 set2)
+      body <- liftA2 (,) (mkEq app1 app2) (mkAnd eqConstraints) >>= uncurry mkImplies
+      ast <- mkForall [] symbols argSorts body
+      astStr <- astToString ast
+      debug 2 (text "[SMTLIB - confusion check]:" <+> text astStr) $ return ast
 
     -- The junk check ensures all instances of the datatype are ONLY created
     -- from one constructor at a time.
     -- forall retSort.
     --      (exists argSorts. Ctor argSotrs == retSort) XOR
     --      (emptyCtor == retSort) XOR ...
-    mkJunkCheck :: Sort -> [(Id, [Sort])] -> Z3State ()
-    mkJunkCheck retS ctors = error "unimplemented"
+    mkJunkCheck :: Z3.Sort -> [(FuncDecl, [Z3.Sort])] -> Z3State AST
+    mkJunkCheck retS ctors = do
+      sortSymbol <- mkStringSymbol "topSort"
+      sortSymbolAst <- mkBound 0 retS
+      body <- exactlyOne =<< mapM (uncurry $ mkCtorCheck sortSymbolAst) ctors
+      ast <- mkForall [] [sortSymbol] [retS] body
+      astStr <- astToString ast
+      debug 2 (text "[SMTLIB - confusion check]:" <+> text astStr) $ return ast
+      where
+        mkCtorCheck sortSymbolAst fdecl [] = do
+          ctor <- mkApp fdecl []
+          mkEq sortSymbolAst ctor
+        mkCtorCheck sortSymbolAst fdecl argSorts = do
+          let debruijns = zip (reverse [0..(length argSorts - 1)]) argSorts
+          symbols <- mapM mkStringSymbol $ (map (\(i,_) -> "i" ++ show i)) debruijns
+          boundVars <- mapM (uncurry mkBound) (debruijns)
+          ctor <- mkApp fdecl boundVars
+          body <- mkEq sortSymbolAst ctor
+          mkExists [] symbols argSorts body
 
 convertDatatypes _ [] = trace "no symbols" $ return ()
 convertDatatypes symbols ((dtName, DatatypeDef [] _ _ ctors@(_:_) _):rest) = do
@@ -172,6 +218,15 @@ convertDatatypes symbols ((dtName, DatatypeDef [] _ _ ctors@(_:_) _):rest) = do
       return (z3FName, z3FSort, 0)
 
 convertDatatypes symbols (_:rest) = convertDatatypes symbols rest -- Polymorphic datatype, do not convert
+
+exactlyOne :: [AST] -> Z3State AST
+exactlyOne xs = do
+  let pairwiseCombos = [(t1,t2) | (t1,t2) <- liftA2 (,) xs xs, t1 /= t2]
+  noPairBothTrue <- forM pairwiseCombos $ \(t1, t2) -> do
+    t1' <- mkNot t1
+    t2' <- mkNot t2
+    mkOr [t1',t2']
+  mkAnd (xs ++ noPairBothTrue)
 
 -- | Get the literal in the auxiliary solver that corresponds to a given literal in the main solver
 litToAux :: AST -> Z3State AST
