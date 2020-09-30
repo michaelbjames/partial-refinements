@@ -7,7 +7,7 @@ import Synquid.Logic
 import Synquid.Type
 import Synquid.Program
 import Synquid.SolverMonad
-import Synquid.Util ( bothM, debug, ifM, partitionM, Id )
+import Synquid.Util ( bothM, debug, ifM, partitionM, Id , appFst, appSnd)
 import Synquid.Pretty ( text, Pretty(pretty), ($+$), (<+>) )
 import Z3.Monad hiding (Z3Env, newEnv, Sort)
 import qualified Z3.Base as Z3
@@ -18,6 +18,7 @@ import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
+import Data.Function (fix)
 import qualified Data.Bimap as Bimap
 import Data.Bimap (Bimap)
 
@@ -28,6 +29,7 @@ import Control.Applicative
 import Control.Lens hiding (both)
 
 import Debug.Trace
+import GHC.Stack (HasCallStack)
 
 -- | Z3 state while building constraints
 data Z3Data = Z3Data {
@@ -99,31 +101,68 @@ instance MonadSMT Z3State where
   allUnsatCores = getAllMUSs
 
 convertDatatypes :: Map Id RSchema -> [(Id, DatatypeDef)] -> Z3State ()
-convertDatatypes symbols ((dtName, def):rest) = do
-  let ctorNames = def ^. constructors
-  -- mapM convertCtor ctorNames
-  -- function resT cName argTypes -- for each constructor
-  -- assert $ mkCtorChecks undefined undefined
-  return ()
+convertDatatypes symbols ((dtName, def):rest) | dtName /= "DSet" = do
+  convertDatatype symbols dtName def
+  convertDatatypes symbols rest
   where
 
+    convertDatatype :: Map Id RSchema -> Id -> DatatypeDef -> Z3State ()
+    convertDatatype symbols dtName def = do
+      let ctorNames = def ^. constructors
+      let ctorTypes = map (\(f,s) -> (f, fromJust s)) $ filter (isJust . snd) $
+                    map (\ctorName -> (ctorName, Map.lookup ctorName symbols)) ctorNames
+      let ctorNameSorts = map (appSnd constructorToSorts) ctorTypes
+      ctorZ3Sorts <- forM ctorNameSorts $ \(name, (argSorts, retS)) -> do
+          func <- function retS name argSorts
+          z3Args <- mapM toZ3Sort argSorts
+          z3Ret <- toZ3Sort retS
+          return (func, z3Args, z3Ret)
+      let (_,_,retSort) = if length ctorZ3Sorts == 0
+          then error (unwords ["Datatype", dtName, "has no constructors??"])
+          else head ctorZ3Sorts
+
+      axioms <- mkCtorChecks retSort (map (\(name, args, _) -> (name, args)) ctorZ3Sorts)
+      assert axioms
+
+    constructorToZ3Sorts :: RSchema -> Z3State ([Z3.Sort], Z3.Sort)
+    constructorToZ3Sorts schema = do
+      let (args, ret) = constructorToSorts schema
+      z3Args <- mapM toZ3Sort args
+      z3Ret <- toZ3Sort ret
+      return (z3Args, z3Ret)
+
+    -- If I can get our sorts, then I can use the _sorts environment var to get
+    -- z3 sorts.
+    constructorToSorts :: RSchema -> ([Sort],Sort)
+    constructorToSorts schema = let
+      mono = toMonotype schema
+      args = map (errorWhen isFunctionType) $ allArgTypes mono
+      foArgs = [arg | arg <- args, not $ isFunctionType arg]
+      argSorts = map (toSort . baseTypeOf) foArgs
+      retBT = baseTypeOf $ errorWhen isFunctionType $ lastType mono
+      retS = toSort retBT
+      in
+        (argSorts, retS)
+      where
+        errorWhen pred x = if pred x then error ("predicate true on: " ++ show x) else x
+
     mkCtorChecks :: Z3.Sort -> [(FuncDecl, [Z3.Sort])] -> Z3State AST
-    mkCtorChecks resS ctors = do
+    mkCtorChecks resS ctors =  do
       occurs <- mapM (uncurry mkOccursCheck) ctors
       confusions <- mapM (uncurry mkConfusionCheck) ctors
       junk <- mkJunkCheck resS ctors
-      mkAnd (occurs ++ confusions ++ [junk])
+      mkAnd $ occurs ++ confusions ++ [junk]
 
     -- The occurs check asserts:
     -- forall (x_1 :: S_1, x_2 :: S_2, ...).
     --        ((Ctor x_1 x_2...) != x_1) &&
     --        ((Ctor x_1 x_2...) != x_2) && ...
     -- Order of argSorts MUST align with required order of ctorName
-    mkOccursCheck :: FuncDecl -> [Z3.Sort] -> Z3State AST
+    mkOccursCheck :: HasCallStack => FuncDecl -> [Z3.Sort] -> Z3State AST
+    mkOccursCheck ctor [] = mkTrue
     mkOccursCheck ctor argSorts = do
-      ctx <- getContext
       let debruijns = zip (reverse [0..(length argSorts - 1)]) argSorts
-      symbols <- mapM mkStringSymbol $ (map (\(i,_) -> "i" ++ show i)) debruijns
+      symbols <- mapM mkStringSymbol $ (map (\(i,_) -> "vari" ++ show i)) debruijns
       boundVars <- mapM (uncurry mkBound) (debruijns)
       let eachVar vars = map (\v -> (v, vars)) vars
       let ctorVarCheck var vars = mkNot =<< mkEq var =<< (mkApp ctor vars)
@@ -140,18 +179,19 @@ convertDatatypes symbols ((dtName, def):rest) = do
     --      (Ctor a_1 a_2 ...) == (Ctor b_1 b_2 ...) ==>
     --      (a_1 == b_1 && a_2 == b_2 && ...)
     mkConfusionCheck :: FuncDecl -> [Z3.Sort] -> Z3State AST
+    mkConfusionCheck ctor [] = mkTrue
     mkConfusionCheck ctor argSorts = do
       let stutterSorts = foldr (\x acc -> x:x:acc) [] argSorts
       let debruijns = zip (reverse [0..(length stutterSorts - 1)]) stutterSorts
       symbols <- mapM mkStringSymbol $ (map (\(i,_) -> "i" ++ show i)) debruijns
       boundVars <- mapM (\(i, srt) -> ((,) i) <$> mkBound i srt ) (debruijns)
-      let set1 = map snd $ filter ((==) 0 . (mod) 2 . fst) boundVars
-      let set2 = map snd $ filter ((==) 1 . (mod) 2 . fst) boundVars
+      let set1 = map snd $ filter ((==) 0 . (flip mod) 2 . fst) boundVars
+      let set2 = map snd $ filter ((==) 1 . (flip mod) 2 . fst) boundVars
       app1 <- mkApp ctor set1
       app2 <- mkApp ctor set2
       eqConstraints <- mapM (uncurry mkEq) (zip set1 set2)
       body <- liftA2 (,) (mkEq app1 app2) (mkAnd eqConstraints) >>= uncurry mkImplies
-      ast <- mkForall [] symbols argSorts body
+      ast <- mkForall [] symbols stutterSorts body
       astStr <- astToString ast
       debug 2 (text "[SMTLIB - confusion check]:" <+> text astStr) $ return ast
 
@@ -400,22 +440,6 @@ toAST expr = case expr of
           vars %= Map.insert ident' v
           return v
 
-    -- | Lookup or create a function declaration with name `name', return type `resT', and argument types `argTypes'
-    function resT name argTypes = do
-      let name' = name ++ concatMap (show . asZ3Sort) (resT : argTypes)
-      declMb <- uses functions (Map.lookup name')
-      case declMb of
-        Just d -> return d
-        Nothing -> do
-          symb <- mkStringSymbol name'
-          argSorts <- mapM toZ3Sort argTypes
-          resSort <- toZ3Sort resT
-          decl <- mkFuncDecl symb argSorts resSort
-          declstr <- funcDeclToString decl
-          functions %= Map.insert name' decl
-          -- return $ traceShow (text "DECLARE" <+> text name <+> pretty argTypes <+> pretty resT) decl
-          trace ("[SMT Function Decl]: " ++ declstr) $ return decl
-
     constructor resT cName argTypes = trace ("[SMT Constructor]: " ++ unwords [show resT, cName, show argTypes]) $
       case resT of
         DataS dtName [] -> -- monomorphic
@@ -431,13 +455,30 @@ toAST expr = case expr of
       declNames <- mapM (\d -> getDeclName d >>= getSymbolString) decls
       return $ decls !! fromJust (elemIndex cName declNames)
 
-    -- | Sort as Z3 sees it
-    asZ3Sort s = case s of
-      VarS _ -> IntS
-      DataS _ (_:_) -> IntS
-      SetS el -> SetS (asZ3Sort el)
-      _ -> s
+-- | Sort as Z3 sees it
+asZ3Sort :: Sort -> Sort
+asZ3Sort s = case s of
+  VarS _ -> IntS
+  DataS _ (_:_) -> IntS
+  SetS el -> SetS (asZ3Sort el)
+  _ -> s
 
+-- | Lookup or create a function declaration with name `name', return type `resT', and argument types `argTypes'
+function :: Sort -> Id -> [Sort] -> StateT Z3Data IO FuncDecl
+function resT name argTypes = do
+  let name' = name ++ concatMap (show . asZ3Sort) (resT : argTypes)
+  declMb <- uses functions (Map.lookup name')
+  case declMb of
+    Just d -> return d
+    Nothing -> do
+      symb <- mkStringSymbol name'
+      argSorts <- mapM toZ3Sort argTypes
+      resSort <- toZ3Sort resT
+      decl <- mkFuncDecl symb argSorts resSort
+      declstr <- funcDeclToString decl
+      functions %= Map.insert name' decl
+      -- return $ traceShow (text "DECLARE" <+> text name <+> pretty argTypes <+> pretty resT) decl
+      trace ("[SMT Function Decl]: " ++ declstr) $ return decl
 
 -- | 'getAllMUSs' @assumption mustHave fmls@ : find all minimal unsatisfiable subsets of @fmls@ with @mustHave@, which contain @mustHave@, assuming @assumption@
 -- (implements Marco algorithm by Mark H. Liffiton et al.)

@@ -33,6 +33,12 @@ mapRight :: (a -> b) -> Either c a -> Either c b
 mapRight _ (Left x) = Left x
 mapRight f (Right x) = Right $ f x
 
+appFst :: (a -> b) -> (a, c) -> (b, c)
+appFst f (l, r) = (f l, r)
+
+appSnd :: (a -> b) -> (c, a) -> (c, b)
+appSnd f (l, r) = (l, f r)
+
 -- | `mappedCompare` @f x y@ : compare @f x@ and @f y@
 mappedCompare :: Ord b => (a -> b) -> a -> a -> Ordering
 mappedCompare f x y = f x `compare` f y
