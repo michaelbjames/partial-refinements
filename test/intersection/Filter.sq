@@ -11,8 +11,8 @@ filter :: <p :: a -> Bool> . (
     ^
     (pred: (x: a -> {Bool | _v == p x}) -> xs: List {a | p _v} -> {List a | _v == xs})
     )
-filter = ??
--- filter = \pred. \xs.
---   match xs with
---     Nil -> Nil
---     Cons y ys -> ??
+-- filter = ??
+filter = \pred. \xs.
+  match xs with
+    Nil -> Nil
+    Cons y ys -> ??

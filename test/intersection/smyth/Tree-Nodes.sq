@@ -42,6 +42,7 @@ termination measure sizeTree :: NatTree -> {Int | _v >= 0} where
   NTLeaf -> 0
   NTNode left x right -> 1 + sizeTree left + sizeTree right
 
+-- checks
 count_nodes_at_lvl :: t:NatTree -> l:Nat -> { Nat |
    ((t == NTLeaf ) ==> _v == 0) &&
    ((t == (NTNode NTLeaf 0 NTLeaf) && l==0) ==> _v == (1)) &&

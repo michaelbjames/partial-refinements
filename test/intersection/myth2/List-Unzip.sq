@@ -19,13 +19,14 @@ termination measure len :: List a -> {Int | _v >= 0} where
 
 -- map :: f: (a -> b) -> xs: List a -> {List b | len _v == len xs}
 -- checks but does not synthesize!
-unzip :: ps: List (Pair (a) (b)) -> Pair ({List a| len _v == len ps}) ({List b|len _v == len ps})
+unzip :: (ps: List (Pair (a) (b)) -> Pair ({List a| len _v == len ps}) ({List b|len _v == len ps})) ^
+  (ps:{List (Pair Bool Bool) | _v == (Cons (Pair True False) Nil)} -> {Pair (List Bool) (List Bool) | _v == (Pair (Cons True Nil) (Cons False Nil))})
 -- unzip = ?? -- \ps. Pair (map (\p. match p with Pair l r -> l) ps) (map (\p. match p with Pair l r -> r) ps)
--- unzip = \ps.
---   match ps with
---     Nil -> Pair (Nil) (Nil)
---     Cons q qs ->
---       match (unzip qs) with
---         Pair ls rs ->
---           match q with
---             Pair l r -> Pair (Cons l ls) (Cons r rs)
+unzip = \ps.
+  match ps with
+    Nil -> Pair (Nil) (Nil)
+    Cons q qs ->
+      match (unzip qs) with
+        Pair ls rs ->
+          match q with
+            Pair l r -> Pair (Cons l ls) (Cons r rs)

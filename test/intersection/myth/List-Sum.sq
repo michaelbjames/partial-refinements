@@ -9,14 +9,14 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Cons x xs -> 1 + len xs
 
 -- Checks, unclear if would synthesize
-sum :: (List Int -> Int) ^
-	   (xs: List {Int| _v == 3} -> {Int | _v == (3 * len xs)})
+-- sum :: (List Int -> Int) ^
+-- 	   (xs: List {Int| _v == 3} -> {Int | _v == (3 * len xs)})
 
 -- Checks, does not synthesize
--- sum :: xs: List Int -> {Int |
--- 		(xs == Nil) ==> (_v == 0) &&
--- 		(xs == (Cons 1 Nil)) ==> (_v == 1) &&
--- 		(xs == (Cons 4 (Cons 1 Nil))) ==> (_v == 5)}
+sum :: xs: List Int -> {Int |
+		((xs == Nil) ==> (_v == 0)) &&
+		((xs == (Cons 1 Nil)) ==> (_v == 1)) &&
+		((xs == (Cons 4 (Cons 1 Nil))) ==> (_v == 5))}
 sum = \xs.
 	match xs with
 		Nil -> 0

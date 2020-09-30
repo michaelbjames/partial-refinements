@@ -159,7 +159,7 @@ convertDatatypes symbols ((dtName, def):rest) | dtName /= "DSet" = do
     --        ((Ctor x_1 x_2...) != x_2) && ...
     -- Order of argSorts MUST align with required order of ctorName
     mkOccursCheck :: HasCallStack => FuncDecl -> [Z3.Sort] -> Z3State AST
-    mkOccursCheck ctor [] = mkTrue
+    mkOccursCheck ctor [] = mkTrue -- Nothing to do on nullary constructors
     mkOccursCheck ctor argSorts = do
       let debruijns = zip (reverse [0..(length argSorts - 1)]) argSorts
       symbols <- mapM mkStringSymbol $ (map (\(i,_) -> "vari" ++ show i)) debruijns
@@ -179,7 +179,7 @@ convertDatatypes symbols ((dtName, def):rest) | dtName /= "DSet" = do
     --      (Ctor a_1 a_2 ...) == (Ctor b_1 b_2 ...) ==>
     --      (a_1 == b_1 && a_2 == b_2 && ...)
     mkConfusionCheck :: FuncDecl -> [Z3.Sort] -> Z3State AST
-    mkConfusionCheck ctor [] = mkTrue
+    mkConfusionCheck ctor [] = mkTrue -- Nothing to do on nullary constructors
     mkConfusionCheck ctor argSorts = do
       let stutterSorts = foldr (\x acc -> x:x:acc) [] argSorts
       let debruijns = zip (reverse [0..(length stutterSorts - 1)]) stutterSorts
@@ -202,18 +202,20 @@ convertDatatypes symbols ((dtName, def):rest) | dtName /= "DSet" = do
     --      (emptyCtor == retSort) XOR ...
     mkJunkCheck :: Z3.Sort -> [(FuncDecl, [Z3.Sort])] -> Z3State AST
     mkJunkCheck retS ctors = do
-      sortSymbol <- mkStringSymbol "topSort"
-      sortSymbolAst <- mkBound 0 retS
-      body <- exactlyOne =<< mapM (uncurry $ mkCtorCheck sortSymbolAst) ctors
+      sortSymbol <- mkStringSymbol "returnSort"
+      body <- exactlyOne =<< mapM (uncurry mkCtorCheck) ctors
       ast <- mkForall [] [sortSymbol] [retS] body
       astStr <- astToString ast
-      debug 2 (text "[SMTLIB - confusion check]:" <+> text astStr) $ return ast
+      debug 2 (text "[SMTLIB - junk check]:" <+> text astStr) $ return ast
       where
-        mkCtorCheck sortSymbolAst fdecl [] = do
+        mkCtorCheck fdecl [] = do
+          sortSymbolAst <- mkBound 0 retS
           ctor <- mkApp fdecl []
           mkEq sortSymbolAst ctor
-        mkCtorCheck sortSymbolAst fdecl argSorts = do
-          let debruijns = zip (reverse [0..(length argSorts - 1)]) argSorts
+        mkCtorCheck fdecl argSorts = do
+          let forallDebruijnIndex = length argSorts
+          sortSymbolAst <- mkBound forallDebruijnIndex retS
+          let debruijns = zip (reverse [0..(length argSorts-1)]) argSorts
           symbols <- mapM mkStringSymbol $ (map (\(i,_) -> "i" ++ show i)) debruijns
           boundVars <- mapM (uncurry mkBound) (debruijns)
           ctor <- mkApp fdecl boundVars
@@ -259,14 +261,16 @@ convertDatatypes symbols ((dtName, DatatypeDef [] _ _ ctors@(_:_) _):rest) = do
 
 convertDatatypes symbols (_:rest) = convertDatatypes symbols rest -- Polymorphic datatype, do not convert
 
+-- This is can be a slow encoding
+-- Following this recommendation, for use without commander variables:
+-- https://github.com/Z3Prover/z3/issues/755#issuecomment-252903970
 exactlyOne :: [AST] -> Z3State AST
 exactlyOne xs = do
-  let pairwiseCombos = [(t1,t2) | (t1,t2) <- liftA2 (,) xs xs, t1 /= t2]
-  noPairBothTrue <- forM pairwiseCombos $ \(t1, t2) -> do
-    t1' <- mkNot t1
-    t2' <- mkNot t2
-    mkOr [t1',t2']
-  mkAnd (xs ++ noPairBothTrue)
+  oneOfs <- forM xs (\x -> do
+              let rest = filter (\z -> x /= z) xs
+              negRest <- mapM mkNot rest
+              mkAnd $ x:negRest)
+  mkOr oneOfs
 
 -- | Get the literal in the auxiliary solver that corresponds to a given literal in the main solver
 litToAux :: AST -> Z3State AST
