@@ -1,4 +1,3 @@
-
 data Nat where
   Z :: Nat
   S :: Nat -> Nat
@@ -7,81 +6,35 @@ termination measure dec :: Nat -> {Int | _v >= 0} where
   Z -> 0
   S m -> 1 + dec m
 
-data NatList where
-  Nil :: NatList
-  Cons :: Nat -> NatList -> NatList
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
 
-termination measure len :: NatList -> {Int | _v >= 0} where
+termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs
 
-data NatOpt where
-  None :: NatOpt
-  Some :: Nat -> NatOpt
-
-list_last :: xs:NatList -> { NatOpt |
-
-   (xs == Nil ==> _v == None) &&
-   (xs == (Cons (S Z) Nil) ==> _v == (Some (S Z))) &&
--- (xs == (Cons (S (S Z)) Nil) ==> _v == (Some (S (S Z)))) &&
--- (xs == (Cons (S (S Z)) (Cons (S Z) Nil)) ==> _v == (Some (S Z))) &&
-   (xs == (Cons (S Z) (Cons (S (S Z)) Nil)) ==> _v == (Some (S (S Z)))) &&
-   (xs == (Cons (S (S (S Z))) (Cons (S (S Z)) (Cons (S Z) Nil))) ==> _v == (Some (S Z))) &&
-   True
-
-}
-list_last = ??
-
--- /var/www/comcom/tmp/Synquid/6191938337171711/Synquid.sq:33: Error:
--- Cannot match shape 'Nat'
--- with shape 'NatList'
--- when checking Z :: NatList in
--- \xs .
--- match Cons Z Z with
-
--- Error
+data Maybe a where
+  Nothing :: Maybe a
+  Just :: a -> Maybe a
 
 
 {-
-
-data Nat where
-  Z :: Nat
-  S :: Nat -> Nat
-
-termination measure dec :: Nat -> {Int | _v >= 0} where
-  Z -> 0
-  S m -> 1 + dec m
-
-data NatList where
-  Nil :: NatList
-  Cons :: Nat -> NatList -> NatList
-
-termination measure len :: NatList -> {Int | _v >= 0} where
-  Nil -> 0
-  Cons x xs -> 1 + len xs
-
-data NatOpt where
-  None :: NatOpt
-  Some :: Nat -> NatOpt
-
-list_last :: xs:NatList -> { NatOpt |
-
-   (xs == Nil ==> _v == None) &&
-   (xs == (Cons (S Z) Nil) ==> _v == (Some (S Z))) &&
-   (xs == (Cons (S (S Z)) Nil) ==> _v == (Some (S (S Z)))) &&
-   (xs == (Cons (S (S Z)) (Cons (S Z) Nil)) ==> _v == (Some (S Z))) &&
-   (xs == (Cons (S Z) (Cons (S (S Z)) Nil)) ==> _v == (Some (S (S Z)))) &&
-   (xs == (Cons (S (S (S Z))) (Cons (S (S Z)) (Cons (S Z) Nil))) ==> _v == (Some (S Z))) &&
-   True
-
-}
-list_last = ??
-
-list_last = \xs .
-match xs with
-Nil -> None
-Cons x3 x4 ->
-match x4 with
-Nil -> Some x3
-Cons x8 x9 -> list_last x4
+Cannot check: Z3 encoding bug.
 -}
+list_last_examples :: xs:List Nat -> { Maybe Nat |
+   (xs == Nil ==> _v == Nothing) &&
+   (xs == (Cons (S Z) Nil) ==> _v == (Just (S Z))) &&
+   (xs == (Cons (S (S Z)) Nil) ==> _v == (Just (S (S Z)))) &&
+   (xs == (Cons (S (S Z)) (Cons (S Z) Nil)) ==> _v == (Just (S Z))) &&
+   (xs == (Cons (S Z) (Cons (S (S Z)) Nil)) ==> _v == (Just (S (S Z)))) &&
+   (xs == (Cons (S (S (S Z))) (Cons (S (S Z)) (Cons (S Z) Nil))) ==> _v == (Just (S Z))) &&
+   True
+}
+list_last_examples = \xs .
+  match xs with
+    Nil -> Nothing
+    Cons x3 x4 ->
+      match x4 with
+        Nil -> Just x3
+        Cons x8 x9 -> list_last_examples x4

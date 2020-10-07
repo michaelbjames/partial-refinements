@@ -31,6 +31,9 @@ type Tree a = PTree a <{True}>
 -- Used in Myth
 append :: xs: List a -> ys: List a -> {List a | len _v == len xs + len ys}
 
+{-
+Checks. Doubtful it would synthesize.
+-}
 tree_inorder :: <p :: a -> PTree a -> PTree a -> Bool>.
 	(t: Tree a -> {List a| len _v == size t})
 tree_inorder = \t.

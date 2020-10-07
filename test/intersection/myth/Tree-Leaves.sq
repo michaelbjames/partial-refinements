@@ -28,22 +28,29 @@ append :: xs: List a -> ys: List a -> {List a | len _v == len xs + len ys}
 -- Escher Extra Components
 isLeaf :: t: Tree a -> {Bool | _v == (size t == 1)}
 
--- Implication needing recursion seems to fail.
--- leaves :: t: Tree Int -> {List Int |
--- 	((t == Empty) ==> (_v == Nil)) &&
--- 	((t == (Node 1 Empty Empty)) ==> (_v == (Cons 1 Nil))) &&
--- 	((t == (Node 1 (Node 2 Empty Empty) Empty)) ==> (_v == (Cons 2 Nil))) &&
--- 	((t == (Node 1 (Node 2 Empty Empty) (Node 3 Empty Empty))) ==> (_v == (Cons 2 (Cons 3 Nil)))) &&
--- 	True
--- 	}
--- leaves :: t: Tree a -> List a
--- leaves :: (t: {Tree a | size t == 1} -> {List a | len _v == 1}) ^
--- Not sufficient below:
--- leaves :: t: Tree Int -> {List Int |
--- 	((t == Empty) ==> (_v == Nil)) &&
--- 	((size t == 1) ==> (len _v == 1)) &&
--- 	((size t == 2) ==> (len _v == 1))
--- 	}
+{-
+Implication example from Smyth.
+Does not check: Z3 encoding bug.
+-}
+collect_leaves_example :: t: Tree Int -> {List Int |
+	((t == Empty) ==> (_v == Nil)) &&
+	((t == (Node 1 Empty Empty)) ==> (_v == (Cons 1 Nil))) &&
+	((t == (Node 1 (Node 2 Empty Empty) Empty)) ==> (_v == (Cons 2 Nil))) &&
+	((t == (Node 1 (Node 2 Empty Empty) (Node 3 Empty Empty))) ==> (_v == (Cons 2 (Cons 3 Nil)))) &&
+	True
+	}
+collect_leaves_example = \t.
+	match t with
+		Empty -> Nil
+		Node x l r -> if (isLeaf t)
+			then Cons x Nil
+			else append (collect_leaves_example l) (collect_leaves_example r)
+
+
+
+{-
+Checks; doubltful it would synthesize.
+-}
 collect_leaves :: (t: Tree Int -> List {Int | _v in telems t}) ^
 	(t: {Tree Int| size _v == 1} -> {List Int | len _v == 1})
 collect_leaves = \t.

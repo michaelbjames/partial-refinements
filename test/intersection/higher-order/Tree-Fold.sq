@@ -1,3 +1,8 @@
+{-
+This is a special case of the NTree-Fold, over a binary tree.
+The idea comes from "Why FP Matters" by John Hughs, 1999.
+-}
+
 data BinaryTree a where
 	Empty :: BinaryTree a
 	Node :: x: a -> l: BinaryTree a -> r: BinaryTree a -> BinaryTree a
@@ -12,28 +17,30 @@ measure telems :: BinaryTree a -> Set a where
 
 {-
 I believe this spec must produce this function. However we cannot type check
-this right now. We have mixed sorts, and these in particular are making
-functions instantiations of type variables (ie.
-(a -> BinaryTree a | size _v >= 1) in place of "c" ).
-the `b` needs to be consistent...
+this right now. This possibly comes from checking the higher-order functions, but
+the error manifests as a shape mismatch (often a backtracked, red herring).
 -}
 foldBinaryTree :: (nodeFun: (a -> c -> b) ->
-                   childFun: (b -> b -> c) ->
-                   b ->
-                   BinaryTree a ->
-                   b
+                  childFun: (b -> b -> c) ->
+                  b ->
+                  BinaryTree a ->
+                  b
                   ) ^
                   -- This polymorphic example should reconstruct the binary tree
                   -- if the function is implemented correctly. Here's how:
-                  -- The node-function completes reconstructing the tree
+                  -- The node-function reconstructs a tree by joining left /
+                  -- right branches with a node value.
                   (nodeFun: (a -> (a -> {BinaryTree a | size _v >= 1}) -> BinaryTree a) ->
-                   -- childFun should combine a left/right into a function to
-                   -- make a subtree
+                   -- childFun should combine a pair of left & right branches
+                   -- into a function to complete a subtree, needing only the
+                   -- node value to join them together.
                    childFun: (l:BinaryTree a -> r:BinaryTree a -> (v:a -> {BinaryTree a | size _v == (size l + size r + 1)})) ->
                    -- Base needs to be empty to force output == input
-                   base:{BinaryTree a| size _v == 0} ->
+                   base:{BinaryTree a | size _v == 0 && _v == Empty} ->
                    input:BinaryTree a ->
                    {BinaryTree a | _v == input})
+                  -- Update: I see this isn't enough: it's not an inductive
+                  -- spec, and the first intersection isn't strong enough.
 foldBinaryTree = \nodeFun. \childFun. \base. \trs.
   match trs with
     Empty -> base
@@ -43,65 +50,3 @@ foldBinaryTree = \nodeFun. \childFun. \base. \trs.
         (childFun
           (foldBinaryTree nodeFun childFun base left)
           (foldBinaryTree nodeFun childFun base right))
-
-
-{-
-Below is my attempt at an n-ary tree's fold.
-We would need either:
-  - mutual recursion
-  - structural termination checking
-to get this to work, since we need to mix trees and lists.
--}
-
--- data List a where
---   Nil :: List a
---   Cons :: x: a -> xs: List a -> List a
-
--- termination measure len :: List a -> {Int | _v >= 0} where
---   Nil -> 0
---   Cons x xs -> 1 + len xs
-
--- Specialized didn't work
--- data TreeList a where
---   Nil :: TreeList a
---   Cons :: x: Tree a -> TreeList a -> TreeList a
-
--- Representation idea from Why FP Matters, John Hughs 1990
--- data Tree a where
---   Node :: a -> TreeList a -> Tree a
-
--- Cannot have matches in measures :'(
--- termination measure size :: Tree a -> {Int | _v >=0} where
---   Node a trs ->
---     match trs with
---       Nil -> 1
---       Cons tree cousins -> 1 + (size tree) + (size (Node a cousins))
-
--- No mutual measure recursion :'(
--- would require mutual recursion synthesis
--- termination measure treeSize :: Tree a -> {Int | _v >= 0} where
---   Node a children -> 1 + (treeLen children)
---
--- measure treeLen :: TreeList a -> {Int | _v >= 0} where
---   Nil -> 0
---   Cons tree cousins -> 1 + (treeSize tree) + (treeLen cousins)
-
-
--- We need a termination measure for List (Tree a).
--- foldTree :: (nodeFun: (a -> b -> b) ->
---              listFun: (b -> b -> b) ->
---              b ->
---              TreeList a ->
---              b)
--- foldTree = \nodeFun. \listFun. \base. \trs.
---   match trs with
---     Nil -> base
---     Cons tree cousins ->
---       match cousins with
---         Nil ->
---           match tree with
---             Node label children -> nodeFun label (foldTree nodeFun listFun base children)
---         Cons _ _ -> listFun (foldTree nodeFun listFun base (Cons tree Nil)) (foldTree nodeFun listFun base cousins)
-
-
-

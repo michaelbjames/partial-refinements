@@ -1,0 +1,34 @@
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+
+-- mixedShapeBug :: (base:a -> xs:List a -> List a)
+-- mixedShapeBug :: (base: Int -> xs:List Int -> List Int)
+-- mixedShapeBug = \base. \xs.
+--   match xs with
+--     Nil -> Nil
+--     Cons y ys -> mixedShapeBug base ys
+
+
+
+mixedShapeFix :: (xs:List Int -> base: Int -> List Int)
+mixedShapeFix = \xs. \base.
+  match xs with
+    Nil -> Nil
+    Cons y ys -> mixedShapeFix ys base
+
+type Nat = {Int | _v >= 0}
+
+mixedShapeHO :: xs:List Nat -> base: Nat -> f:(List Nat -> Nat -> Nat) -> List Nat
+mixedShapeHO = \xs. \base. \f.
+  match xs with
+    Nil -> Nil
+    Cons y ys -> mixedShapeHO ys (f ys base) f
+
+
+

@@ -8,34 +8,26 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs
 
--- This checks but will not synthesize.
+{-
+Does not check. Perhaps from the Z3 encoding bug.
+-}
 snoc ::
-		(x: a -> xs: {List a | _v == Nil} -> {List a | _v == (Cons x Nil)}) ^
-		(x: a -> xs: List a -> {List a | len _v == (len xs + 1)}) ^
-		(x: {Int | _v == 1} -> xs: {List Int| _v == (Cons 2 Nil)} -> {List Int |
+		(xs: {List a | _v == Nil} -> x: a ->  {List a | _v == (Cons x Nil)}) ^
+		(xs: List a -> x: a ->  {List a | len _v == (len xs + 1)}) ^
+		(xs: {List Int| _v == (Cons 2 Nil)} -> x: {Int | _v == 1} -> {List Int |
 			_v == (Cons 2 (Cons 1 Nil))})
 
 
--- This does not.
+{-
+Z3 encoding bug prevents this from checking.
+-}
 -- snoc :: xs: List Int -> x: Int -> {List Int |
--- 	(( xs == Nil) ==> (_v == (Cons x Nil))) &&
--- 	((xs == (Cons 1 Nil)) ==> (_v == (Cons 1 (Cons x Nil))))
--- 	-- ((x == 0 && xs == (Cons 2 (Cons 1 Nil)))==> (_v == (Cons 2 (Cons 1 (Cons 0 Nil)))))
+-- 	((xs == Nil) ==> (_v == (Cons x Nil))) &&
+-- 	((xs == (Cons 1 Nil)) ==> (_v == (Cons 1 (Cons x Nil)))) &&
+-- 	((x == 0 && xs == (Cons 2 (Cons 1 Nil)))==> (_v == (Cons 2 (Cons 1 (Cons 0 Nil)))))
 -- 	}
 
--- snoc :: xs: List Int -> x: Int -> {List Int |
--- 	(((x == 0) && (xs == Nil)) ==> (_v == (Cons 0 Nil))) &&
--- 	(((x == 0) && (xs == (Cons 1 Nil))) ==> (_v == (Cons 1 (Cons 0 Nil)))) &&
--- 	(((x == 0) && (xs == (Cons 2 (Cons 1 Nil)))) ==> (_v == (Cons 2 (Cons 1 (Cons 0 Nil)))))
--- 	}
-
--- snoc :: xs: List Int -> x: Int -> {List Int |
--- 	(((xs == Nil)) ==>
--- 		((_v == (Cons 0 Nil)))) &&
--- 	(((xs == (Cons 1 Nil))) ==>
--- 		(_v == (Cons 1 (Cons 0 Nil))))
--- 	}
-snoc = \z. \zs.
+snoc = \zs. \z.
 	match zs with
 		Nil -> Cons z Nil
 		Cons y ys -> Cons y (snoc ys z)

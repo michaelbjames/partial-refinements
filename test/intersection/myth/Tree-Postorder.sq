@@ -30,29 +30,19 @@ type Tree a = PTree a <{True}>
 -- Used in Myth
 append :: <p:: a -> a -> Bool>. xs: PList a <p> -> ys: PList a <p> -> {PList a <p> | len _v == len xs + len ys}
 
+-- Synthesizes correctly
 -- tree_preorder :: t: Tree a -> {List a | len _v == size t}
 -- tree_preorder = ??
 
+-- Synthesizes correctly
 -- tree_inorder :: <p :: a -> a -> Bool>. (t: PTree a <p> -> {PList a <p> | len _v == size t})
 -- tree_inorder = ??
 
--- Works
--- tree_postorder :: <p :: a -> a -> Bool>. (t: PTree a <p> -> {PList a <{p _1 _0}> | len _v == size t})
--- tree_postorder = ??
--- tree_postorder = \t .
---   match t with
---     Empty -> Nil
---     Node x4 x5 x6 -> append
---                        (tree_postorder x5) (append
---                                               (tree_postorder x6) (Cons x4
---                                                                      Nil))
 
--- Error:
--- Cannot find sufficiently strong refinements
---  when checking (append .. ..)
+-- Won't check from Z3 encoding bug.
 tree_postorder :: t:Tree Int -> {List Int |
-    -- (t == Node 1 (Node 2 Empty Empty) (Node 3 Empty Empty) ==> _v == (Cons 2 (Cons 3 (Cons 1 Nil)))) &&
-    -- (t == (Node 2 Empty Empty) ==> _v == (Cons 2 Nil)) &&
+    (t == Node 1 (Node 2 Empty Empty) (Node 3 Empty Empty) ==> _v == (Cons 2 (Cons 3 (Cons 1 Nil)))) &&
+    (t == (Node 2 Empty Empty) ==> _v == (Cons 2 Nil)) &&
     (t == (Node 3 Empty Empty) ==> _v == (Cons 3 Nil)) &&
     (t == Empty ==> _v == Nil) &&
     True}

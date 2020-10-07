@@ -42,6 +42,9 @@ termination measure sizeTree :: NatTree -> {Int | _v >= 0} where
   NTLeaf -> 0
   NTNode left x right -> 1 + sizeTree left + sizeTree right
 
+{-
+Checks, from Smyth
+-}
 count_nodes_at_lvl :: t:NatTree -> l:Nat -> { Nat |
    ((t == NTLeaf ) ==> _v == 0) &&
    ((t == (NTNode NTLeaf 0 NTLeaf) && l==0) ==> _v == (1)) &&
@@ -58,25 +61,3 @@ count_nodes_at_lvl = \t. \level.
         if level == 0
         then 1
         else (count_nodes_at_lvl left (level - 1)) + (count_nodes_at_lvl right (level - 1))
-
-
--- Error:
--- Cannot find sufficiently strong refinements
---  when checking (append .. ..)
--- nodes_at_level :: (tree:Tree Int -> l:Nat -> {List Int |
---     (tree == Empty ==> _v == Nil) &&
---     ((tree == Node 1 Empty Empty && l == 0) ==> _v == Cons 1 Nil) &&
---     ((tree == Node 1 Empty Empty && l == 1) ==> _v == Nil) &&
---     ((tree == Node 2 Empty Empty && l == 0) ==> _v == (Cons 2 Nil)) &&
---     ((tree == Node 3 Empty Empty && l == 0) ==> _v == (Cons 3 Nil)) &&
---     ((tree == Node 1 (Node 2 Empty Empty) (Node 3 Empty Empty) && l == 1) ==> _v == (Cons 2 (Cons 3 Nil))) &&
---     True}) ^
---     (Tree a -> Nat -> List a) -- This attempts to make it polymorphic,
---                               -- could not find any interesting properties
--- nodes_at_level = \t. \level.
---   match t with
---     Empty -> Nil
---     Node x left right ->
---       if level == 0
---       then Cons x Nil
---       else append (nodes_at_level left (level - 1)) (nodes_at_level right (level - 1))

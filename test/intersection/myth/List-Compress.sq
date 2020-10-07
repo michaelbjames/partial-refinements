@@ -26,9 +26,12 @@ type CList a = PList a <{!(_0 in heads _1)}>
 -- compress_1 = ??
 
 
--- Error:
--- Cannot find sufficiently strong refinements
--- when checking Cons x3 Nil
+{-
+This SHOULD work, but has the Z3 encoding problem.
+Error:
+Cannot find sufficiently strong refinements
+when checking Cons x3 Nil
+-}
 -- compress_int :: xs: List Int -> {List Int |
 --     (xs == Nil ==> (_v == Nil)) &&
 --     (xs == (Cons 1 Nil) ==> (_v == (Cons 1 Nil))) &&
@@ -47,14 +50,25 @@ type CList a = PList a <{!(_0 in heads _1)}>
 --             then compress_int x4
 --             else Cons x3 (Cons x10 x11)
 
--- Error:
--- Cannot find sufficiently strong refinements
---   when checking
---   compress_int_syntactic x4 ::
---   {PList Int <True>|_v == (Cons 1 (Nil))}
-compress_int_syntactic :: (xs: {List {Int | _v == 1} | len _v > 0} -> {List Int| _v == (Cons 1 Nil)}) ^
-  (xs: {List Int | len _v == 0} -> {List Int | _v == Nil}) ^
-  (xs: List Int -> {List Int | len _v <= len xs})
+
+{-
+I'm missing part of the specification. This isn't strong enough yet.
+It fails with:
+Error:
+Cannot find sufficiently strong refinements
+  when checking
+  compress_int_syntactic x4 ::
+  {PList Int <True>|_v == (Cons 1 (Nil))}
+-}
+compress_int_syntactic ::
+  -- The output is always shorter or equal to the input
+  (xs: List Int -> {List Int | len _v < len xs || _v == xs}) ^
+  -- If the list is all 1s, then the output should be just 1
+  (xs: {List {Int | _v == 1} | len _v > 0} -> {List Int| _v == (Cons 1 Nil)}) ^
+  -- An example where it keeps two different elements
+  (xs: {List Int | _v == Cons 2 (Cons 1 Nil)} -> {List Int | _v == xs}) ^
+  -- If it's empty list, then it should produce nothing
+  (xs: {List Int | len _v == 0 || _v == Nil} -> {List Int | _v == Nil})
 compress_int_syntactic = \xs .
   match xs with
     Nil -> Nil

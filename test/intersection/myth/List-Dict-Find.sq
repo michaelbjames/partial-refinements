@@ -1,0 +1,60 @@
+data Pair a b where
+	Pair :: x: a -> y: b -> Pair a b
+
+measure fst :: Pair a b -> a where
+  Pair x y -> x
+
+measure snd :: Pair a b -> b where
+  Pair x y -> y
+
+
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+measure insert :: x: a -> List a -> {List a|True} where
+  Nil -> Cons x Nil
+  Cons y ys -> Cons x (Cons y ys)
+
+
+{-
+Not strong enough. It can check if -f nonterminating is on.
+If we solve the Z3 encoding bug then we can add a couple concrete examples here.
+-}
+find :: (List (Pair Int Int) -> Int -> Int ->  Int) ^
+        ({List (Pair Int Int) | len _v == 0} -> Int -> default: Int -> {Int | _v == default})
+find = \haystack. \needle. \def.
+  match haystack with
+    Nil -> def
+    Cons x xs ->
+      match x with
+        Pair xa xb -> if xa == needle
+          then xb
+          else find xs needle def
+
+
+
+
+{-
+Cannot check. Suffers from the Z3 encoding bug.
+-}
+{-
+find_implication :: xs: List (Pair Int Int) -> x: Int -> def: Int -> {Int |
+    ((x == 0 && xs == (Nil)) ==> (_v == def)) &&
+    ((x == 0 && xs == (Cons (Pair 0 4) Nil)) ==> (_v == 4)) &&
+    ((x == 0 && xs == (Cons (Pair 1 5) (Cons (Pair 0 4) Nil))) ==> (_v == 4)) &&
+    True
+  }
+find_implication = \haystack. \needle. \def.
+  match haystack with
+    Nil -> def
+    Cons x xs ->
+      match x with
+        Pair xa xb -> if xa == needle
+          then xb
+          else find xs needle def
+-}

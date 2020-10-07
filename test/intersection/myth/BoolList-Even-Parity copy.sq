@@ -1,0 +1,44 @@
+{-
+Are there and even number of Trues in a list of Bools?
+-}
+
+data BoolList where
+	Nil :: BoolList
+	Cons :: x: Bool -> xs: BoolList -> BoolList
+
+termination measure len :: BoolList -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+not :: p:Bool -> {Bool | _v == !p}
+true :: {Bool | _v == True}
+
+{-
+Checks and synthesizes
+-}
+list_even_parity :: xs:BoolList -> { Bool |
+   (xs == Nil ==> _v == True) &&
+   (xs == (Cons False Nil) ==> _v == True) &&
+   (xs == (Cons True Nil) ==> _v == False) &&
+   (xs == (Cons False (Cons False Nil)) ==> _v == True) &&
+   (xs == (Cons False (Cons True Nil)) ==> _v == False) &&
+   (xs == (Cons True (Cons False Nil)) ==> _v == False) &&
+   (xs == (Cons True (Cons True Nil)) ==> _v == True) &&
+   True
+}
+list_even_parity = ??
+
+-- This has the parametric refinement bug--should work with a monomorphic boollist
+-- list_even_parity :: (xs: List {Bool | _v == False} -> {Bool | _v == True}) ^
+--   (xs: {List {Bool | _v == True}| len _v == 2} -> {Bool | _v == True}) ^
+--   (xs: {List {Bool | _v == True}| len _v == 3} -> {Bool | _v == False}) ^
+--   (xs: {List Bool | len _v == 0} -> {Bool | _v == True}) ^
+--   (xs: {List Bool | _v == (Cons True (Cons False Nil))} -> {Bool | _v == False}) ^
+--   (xs: {List Bool | _v == (Cons False Nil)} -> {Bool | _v == True})
+-- list_even_parity :: List Bool -> Bool
+-- list_even_parity = \xs.
+--   match xs with
+--     Nil -> True
+--     Cons y ys -> if y
+--       then not (list_even_parity ys)
+--       else list_even_parity ys
