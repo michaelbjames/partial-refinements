@@ -1,0 +1,6 @@
+# This file is used to make Haskell Language Server be quiet in VSCode.
+# It is not required to build the project.
+cradle:
+  stack:
+    - path: "./src"
+      component: "synquid:exe:synquid"
