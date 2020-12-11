@@ -179,9 +179,11 @@ instantiateDatatype dtName sortsInstances = do
       z3ctors <- mapM (convertCtor sortsInstances) ctors
       z3dt <- mkDatatype dtSymb z3ctors
       s <- sortToString z3dt
+      let dataSort = DataS dtName sortsInstances
       trace ("[SMTLIB - sort]: " ++ s) $
         trace ("[SMTLIB - datatype]: " ++ dtName) $
-        (sorts %= (Map.insert dataSort z3dt))
+        (sorts %= Map.insert dataSort z3dt)
+      sorts %= Map.insert (DataS dtInstanceName []) z3dt
       storedDatatypes %= Map.insert dtInstanceName z3dt
       return z3dt
       )
@@ -210,7 +212,6 @@ instantiateDatatype dtName sortsInstances = do
           return $ error $ unwords ["datatype '", dtName, "' not known to synquid"]
 
 
-    dataSort = DataS dtInstanceName []
 
     -- Given the sorts to instantiate with and the uninstantiated name,
     -- produce the instantiated constructor.
@@ -356,7 +357,7 @@ fmlToAST = toAST . simplify
 
 -- | Convert a Synquid refinement term to a Z3 AST
 toAST :: Formula -> Z3State AST
-toAST expr = case expr of
+toAST expr = trace (unwords ["[toAST]:", show expr])$ case expr of
   BoolLit True  -> mkTrue
   BoolLit False -> mkFalse
   SetLit el xs -> setLiteral el xs
@@ -378,8 +379,10 @@ toAST expr = case expr of
     storeddts <- use storedDatatypes
     storedDtsStr <- mapM (\(k,v) -> sortToString v >>= (\x -> return (k, x))) $ Map.toList storeddts
     let tArgs = map sortOf args
-    decl <- trace (unwords ["[SMTLIB - toAST - storedDTs]", show storedDtsStr]) $ constructor s name tArgs
-    mapM toAST args >>= mkApp decl
+    decl <- trace (unwords ["[toAST]: StoredDTs:", show storedDtsStr]) $ constructor s name tArgs
+    declStr <- funcDeclToString decl
+    let mtr = trace (unwords ["[toAST]: constructorDecl:", declStr])
+    mtr $ mapM toAST args >>= mkApp decl
   All v e -> accumAll [v] e
   where
     setLiteral el xs = do
