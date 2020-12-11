@@ -28,6 +28,7 @@ import Control.Applicative
 import Control.Lens hiding (both)
 
 import Debug.Trace
+import Development.Placeholders
 
 -- | Z3 state while building constraints
 data Z3Data = Z3Data {
@@ -35,11 +36,13 @@ data Z3Data = Z3Data {
   _sorts :: Map Sort Z3.Sort,                 -- ^ Mapping from Synquid sorts to Z3 sorts
   _vars :: Map Id AST,                        -- ^ AST nodes for scalar variables
   _functions :: Map Id FuncDecl,              -- ^ Function declarations for measures, predicates, and constructors
-  _storedDatatypes :: Set Id,                 -- ^ Datatypes mapped directly to Z3 datatypes (monomorphic only)
+  _storedDatatypes :: Map Id Z3.Sort,                 -- ^ Datatypes mapped directly to Z3 datatypes (monomorphic only)
   _controlLiterals :: Bimap Formula AST,      -- ^ Control literals for computing UNSAT cores
   _auxEnv :: Z3Env,                           -- ^ Z3 environment for the auxiliary solver
   _boolSortAux :: Maybe Z3.Sort,              -- ^ Boolean sort in the auxiliary solver
-  _controlLiteralsAux :: Bimap Formula AST    -- ^ Control literals for computing UNSAT cores in the auxiliary solver
+  _controlLiteralsAux :: Bimap Formula AST,    -- ^ Control literals for computing UNSAT cores in the auxiliary solver
+  _synquidSymbols :: Map Id RSchema,
+  _synquidDatatypes :: Map Id DatatypeDef
 }
 
 data Z3Env = Z3Env {
@@ -54,11 +57,13 @@ initZ3Data env env' = Z3Data {
   _sorts = Map.empty,
   _vars = Map.empty,
   _functions = Map.empty,
-  _storedDatatypes = Set.empty,
+  _storedDatatypes = Map.empty,
   _controlLiterals = Bimap.empty,
   _auxEnv = env',
   _boolSortAux = Nothing,
-  _controlLiteralsAux = Bimap.empty
+  _controlLiteralsAux = Bimap.empty,
+  _synquidSymbols = Map.empty,
+  _synquidDatatypes = Map.empty
 }
 
 type Z3State = StateT Z3Data IO
@@ -74,6 +79,8 @@ instance MonadSMT Z3State where
     debug 2 (text "[SMT params]: " <+> (text $ pstring)) (return ())
     solverSetParams params
     std <- uses storedDatatypes id
+    synquidSymbols .= allSymbols env
+    synquidDatatypes .= (env ^. datatypes)
 
     debug 2 (text "[SMT symbols]: " <+> (pretty $ Map.toList $ allSymbols env)) (return ())
     debug 2 (text "[SMT datatypes]: " <+> (pretty $ show $ env ^. datatypes)) (return ())
@@ -84,6 +91,12 @@ instance MonadSMT Z3State where
     boolSortAux .= Just boolAux
 
   isSat fml = do
+      -- uses sorts (id)
+      -- -- b <- mkFreshConst "b" llistSort
+      -- rhsEq' <- mkApp sizellistFun [b]
+      -- lhsEq' <- mkIntNum 0
+      -- eqas_dt <- mkEq lhsEq' rhsEq'
+
       res <- local $ (fmlToAST >=> assert') fml >> check
 
       case res of
@@ -93,59 +106,31 @@ instance MonadSMT Z3State where
         _ -> debug 2 (text "SMT CHECK" <+> pretty fml <+> text "UNKNOWN treating as SAT") $ return True
       where
         assert' ast = do
+            _true <- mkTrue
+            str <- benchmarkToSMTLibString "partial-refinement" "" "unknown" ""
+                          [ast]
+                          _true
             s <- astToString ast
-            debug 2 (text "[SMTLIB]:" <+> text s) $ assert ast
+            debug 2 (text "[SMTLIB]:" <+> text s) $
+              debug 2 (text "[SMTLIB - benchmark]:" <+> text str) $ assert ast
 
   allUnsatCores = getAllMUSs
 
 convertDatatypes :: Map Id RSchema -> [(Id, DatatypeDef)] -> Z3State ()
-convertDatatypes symbols ((dtName, def):rest) = do
-  let ctorNames = def ^. constructors
-  mapM convertCtor ctorNames
-  -- function resT cName argTypes -- for each constructor
-  return ()
-  where
-
-    convertCtor cName = do
-      return ()
-
-    -- The occurs check asserts:
-    -- forall (x_1 :: S_1, x_2 :: S_2, ...).
-    --        ((Ctor x_1 x_2...) != x_1) &&
-    --        ((Ctor x_1 x_2...) != x_2) && ...
-    mkOccursCheck :: Id -> [Sort] -> Z3State ()
-    mkOccursCheck ctorName argSorts = error "unimplemented"
-
-    -- The confusion check: two datatypes are equal iff they are
-    -- constructed exactly the same way. We only need one part of the
-    -- implication, since the theory of uninterpreted functions already have
-    -- part, the "congruence check".
-    -- forall (a_1, b_1, a_2, b_2, ...).
-    --      (Ctor a_1 a_2 ...) == (Ctor b_1 b_2 ...) ==>
-    --      (a_1 == b_1 && a_2 == b_2 && ...)
-    mkConfusionCheck :: Id -> [Sort] -> Z3State ()
-    mkConfusionCheck ctorName argSorts = error "unimplemented"
-
-    -- The junk check ensures all instances of the datatype are ONLY created
-    -- from one constructor at a time.
-    -- forall retSort.
-    --      (exists argSorts. Ctor argSotrs == retSort) XOR
-    --      (emptyCtor == retSort) XOR ...
-    mkJunkCheck :: Sort -> [(Id, [Sort])] -> Z3State ()
-    mkJunkCheck retS ctors = error "unimplemented"
-
 convertDatatypes _ [] = trace "no symbols" $ return ()
-convertDatatypes symbols ((dtName, DatatypeDef [] _ _ ctors@(_:_) _):rest) = do
-  ifM (uses storedDatatypes (Set.member dtName))
+-- datatype with no type arguments
+convertDatatypes symbols ((dtName, DatatypeDef tyvars _ _ ctors@(_:_) _):rest) = do
+  ifM (uses storedDatatypes (Map.member dtName))
     (trace "already processed" $ return ()) -- This datatype has already been processed as a dependency
     (do
       dtSymb <- mkStringSymbol dtName
       z3ctors <- mapM convertCtor ctors
       z3dt <- mkDatatype dtSymb z3ctors
       s <- sortToString z3dt
-      trace ("[SMTLIB - sort]: " ++ s)
+      trace ("[SMTLIB - sort]: " ++ s) $
+        trace ("[SMTLIB - datatype]: " ++ dtName) $
         (sorts %= Map.insert dataSort z3dt)
-      storedDatatypes %= Set.insert dtName)
+      storedDatatypes %= Map.insert dtName z3dt)
   convertDatatypes symbols rest
   where
     dataSort = DataS dtName []
@@ -170,8 +155,118 @@ convertDatatypes symbols ((dtName, DatatypeDef [] _ _ ctors@(_:_) _):rest) = do
                                               Just <$> toZ3Sort fSort
                     _ -> Just <$> toZ3Sort fSort
       return (z3FName, z3FSort, 0)
+-- convertDatatypes symbols ((dtName, (DatatypeDef tyvars _ _ ctors _)):rest) = do
+--   ifM (uses storedDatatypes (Map.member dtName))
+--     (trace "already processed" $ return ()) -- This datatype has already been processed as a dependency
+--     (trace (unwords ["convertDatatypes: no creaing polymorphic dt", dtName]) $ return ())
+--   convertDatatypes symbols rest
+-- convertDatatypes symbols (_:rest) = convertDatatypes symbols rest -- Polymorphic datatype, do not convert
 
-convertDatatypes symbols (_:rest) = convertDatatypes symbols rest -- Polymorphic datatype, do not convert
+-- Instantiate a datatype with Sorts.
+-- This will add new types and constructors to the environment
+-- with names like: List_Bool, Nil_Bool, and Cons_Bool_List_Bool
+-- sortsInstances : a list of instances to be assigned to each tyvar in the polymorphic dtname
+instantiateDatatype :: Id -> [Sort] -> Z3State Z3.Sort
+instantiateDatatype dtName sortsInstances = do
+  ctors <- getCtors dtName
+  ifM (uses storedDatatypes (Map.member dtInstanceName))
+    $(todo "already created instance")
+    (do
+      genericDt <- uses storedDatatypes (Map.! dtName)
+      genericDtStr <- sortToString genericDt
+      let mtr = trace (unwords ["instantiateDatatype:", dtName, "got:", genericDtStr])
+      dtSymb <- mtr $ mkStringSymbol dtInstanceName
+      z3ctors <- mapM (convertCtor sortsInstances) ctors
+      z3dt <- mkDatatype dtSymb z3ctors
+      s <- sortToString z3dt
+      trace ("[SMTLIB - sort]: " ++ s) $
+        trace ("[SMTLIB - datatype]: " ++ dtName) $
+        (sorts %= (Map.insert dataSort z3dt))
+      storedDatatypes %= Map.insert dtInstanceName z3dt
+      return z3dt
+      )
+
+  where
+    -- We may get instances for type variables a b c as [BoolS, IntS, IntS]
+    -- But when we need to convert a ctor with type `b -> DT {args}`
+    -- We need to be able to instantiate that `b` correctly
+    getTyVarMapping :: Z3State (Map Id Sort)
+    getTyVarMapping = do
+      synquidDts <- use synquidDatatypes
+      let dtDef = synquidDts Map.! dtName
+      let dtTypeVarNames = dtDef ^. typeParams
+      return $ Map.fromList $ zip dtTypeVarNames sortsInstances
+
+    dtInstanceName = instanceName dtName sortsInstances
+
+    getCtors :: Id -> Z3State [Id]
+    getCtors dtName = do
+      synquidDts <- use synquidDatatypes
+      if dtName `Map.member` synquidDts
+        then do
+          let dtdef = synquidDts Map.! dtName
+          return (dtdef ^. constructors)
+        else
+          return $ error $ unwords ["datatype '", dtName, "' not known to synquid"]
+
+
+    dataSort = DataS dtInstanceName []
+
+    -- Given the sorts to instantiate with and the uninstantiated name,
+    -- produce the instantiated constructor.
+    convertCtor :: [Sort] -> Id -> Z3State Constructor
+    convertCtor sortInstances cName = do
+      let instanceCName = instanceName cName sortInstances
+      z3CName <- mkStringSymbol instanceCName
+      recognizerName <- mkStringSymbol ("is" ++ instanceCName)
+      symbols <- use synquidSymbols
+      let args = allArgs $ toMonotype $ symbols Map.! cName
+      let mtr = trace (unwords ["convertCtor:", cName, "with sortInstances:", unwords $ map show sortInstances, "on args:", concatMap show args])
+      z3Args <- mtr $ mapM convertField args
+      mkConstructor z3CName recognizerName z3Args
+
+    -- Convert each argument of a ctor into the instantiated version.
+    -- Could have an issue with mutual recursion,
+    -- or if we hit another polymorphic DT to be instantiated as well
+    convertField :: Formula -> Z3State (Symbol, Maybe Z3.Sort, Int)
+    convertField (Var fSort fName) = do
+      z3FName <- mkStringSymbol fName
+      z3FSort <- case fSort of
+                    DataS dtName' [] ->  -- Monomorphic
+                      if dtName' == dtName
+                        then return Nothing -- Recursive sort is denoted with Nothing
+                        else error "not possible: an unprocessed monomorphic dt during runtime"
+                    DataS dtName' tyvars' -> do -- Polymorphic.
+                      -- We need to figure out how to instantiate the type vars from up top.
+                      -- this might be prev:Nat a, so we need to align the "a" here
+                      -- with the "a" used elsewhere in instantiating this DT
+                      -- So they're all consistent.
+                      if dtName' == dtName
+                        then do -- this argument is the same type as the one we're instantiating
+                          return Nothing
+                        else do -- this argument needs a different instantiation
+                          error $ unwords ["Converting field:", fName, "::", show fSort]
+                          $(todo "polymorphic argument to instantiate") -- Just <$> toZ3Sort fSort
+                    -- type variable fields need to be instantiated
+                    VarS name -> do
+                      tyVarMapping <- getTyVarMapping
+                      case Map.lookup name tyVarMapping of
+                        Nothing -> error $ unwords ["[ConvertField]: Type variable ",
+                          name, "not known to this instance. We have",
+                          show tyVarMapping]
+                        Just synquidSort -> Just <$> toZ3Sort synquidSort
+                    unknown@_ -> error $ unwords ["Variable with unknown sort:", show unknown]
+
+      return (z3FName, z3FSort, 0)
+
+-- | An instance name for a parametric datatype: like Either_IntS_BoolS
+instanceName :: Id -> [Sort] -> Id
+instanceName id sorts
+  | (not . any isVar) sorts = intercalate "_" $ id : map show sorts
+  | otherwise = error $ unwords $ ["instanceName of Vars:", id] ++ (map show sorts)
+  where
+    isVar VarS {} = True
+    isVar _ = False
 
 -- | Get the literal in the auxiliary solver that corresponds to a given literal in the main solver
 litToAux :: AST -> Z3State AST
@@ -280,8 +375,10 @@ toAST expr = case expr of
     decl <- function s name tArgs
     mapM toAST args >>= mkApp decl
   Cons s name args -> do
+    storeddts <- use storedDatatypes
+    storedDtsStr <- mapM (\(k,v) -> sortToString v >>= (\x -> return (k, x))) $ Map.toList storeddts
     let tArgs = map sortOf args
-    decl <- constructor s name tArgs
+    decl <- trace (unwords ["[SMTLIB - toAST - storedDTs]", show storedDtsStr]) $ constructor s name tArgs
     mapM toAST args >>= mkApp decl
   All v e -> accumAll [v] e
   where
@@ -361,20 +458,46 @@ toAST expr = case expr of
           -- return $ traceShow (text "DECLARE" <+> text name <+> pretty argTypes <+> pretty resT) decl
           trace ("[SMT Function Decl]: " ++ declstr) $ return decl
 
-    constructor resT cName argTypes = trace ("[SMT Constructor]: " ++ unwords [show resT, cName, show argTypes]) $
+    constructor resT cName argTypes = trace ("[SMT Constructor]: " ++ unwords [show resT, "cname:", cName, "args:", show argTypes]) $
       case resT of
         DataS dtName [] -> -- monomorphic
-          ifM (uses storedDatatypes (Set.member dtName))
+          ifM (uses storedDatatypes (Map.member dtName))
             (do
               z3dt <- toZ3Sort resT
               decls <- getDatatypeSortConstructors z3dt
               findDecl cName decls)
-            (function resT cName argTypes)
-        _ -> function resT cName argTypes -- polymorphic
+            (error (unwords ["constructor", cName, "for datatype", dtName, "not already created in init"])) -- (function resT cName argTypes)
+        DataS dtName tyvars -> trace (unwords ["[toAST]: polymorphic constructor! :", cName, " :: ", dtName, "(", show tyvars, ")"]) $ do
+          let dtInstanceName = instanceName dtName tyvars
+          let cNameInstance = instanceName cName tyvars
+          ifM (uses storedDatatypes (Map.member dtInstanceName))
+            (do
+              constructor (DataS dtInstanceName []) cNameInstance argTypes
+              -- z3dt <- trace ("toZ3Sort: " ++ show resT) $ toZ3Sort resT
+              -- -- getDatatypeSortConstructors will crash on built-in types.
+              -- decls <- trace "getDatatypeSortConstructors" $  getDatatypeSortConstructors z3dt
+              -- z3ctor <- trace "findDecl" $ findDecl cName decls
+              -- declstr <- funcDeclToString z3ctor
+
+              -- trace (unwords ["SMT Constructor:", dtName, "declared as:", declstr]) $
+              --   return z3ctor
+
+              -- Original
+              -- function resT cName argTypes -- polymorphic
+              )
+            (do
+              -- We've got to instantiate the type now.
+              z3dt <- instantiateDatatype dtName tyvars
+              decls <- getDatatypeSortConstructors z3dt
+              findDecl cNameInstance decls
+              -- error (unwords ["constructor", cName, "for polymorphic datatype", dtInstanceName, "not already created in init"])
+            ) -- (function resT cName argTypes)
+
 
     findDecl cName decls = do
-      declNames <- mapM (\d -> getDeclName d >>= getSymbolString) decls
-      return $ decls !! fromJust (elemIndex cName declNames)
+      declNames <- mapM (getDeclName >=> getSymbolString) decls
+      trace (unwords ["findDecl looking for", cName, "in", show declNames]) $
+        return $ decls !! fromJust (elemIndex cName declNames)
 
     -- | Sort as Z3 sees it
     asZ3Sort s = case s of
