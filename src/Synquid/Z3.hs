@@ -14,6 +14,7 @@ import qualified Z3.Base as Z3
 
 import Data.Maybe
 import Data.List
+import Data.List.Extra (replace)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
@@ -76,27 +77,22 @@ instance MonadSMT Z3State where
     symb <- mkStringSymbol "mbqi"
     paramsSetBool params symb False
     pstring <- paramsToString params
-    debug 2 (text "[SMT params]: " <+> (text $ pstring)) (return ())
+    debug 2 (text "[MonadSMT]: init: " <+> (text $ pstring)) (return ())
     solverSetParams params
     std <- uses storedDatatypes id
     synquidSymbols .= allSymbols env
     synquidDatatypes .= (env ^. datatypes)
 
-    debug 2 (text "[SMT symbols]: " <+> (pretty $ Map.toList $ allSymbols env)) (return ())
-    debug 2 (text "[SMT datatypes]: " <+> (pretty $ show $ env ^. datatypes)) (return ())
-    debug 2 (text "[SMT stored datatypes]: " <+> (pretty $ show $ std)) (return ())
+    debug 2 (text "[MonadSMT]: init: symbols: " <+> (pretty $ Map.toList $ allSymbols env)) (return ())
+    debug 2 (text "[MonadSMT]: init: datatypes: " <+> (pretty $ show $ env ^. datatypes)) (return ())
+    debug 2 (text "[MonadSMT]: init: stored datatypes:" <+> (pretty $ show $ std)) (return ())
     convertDatatypes (allSymbols env) (Map.toList $ env ^. datatypes)
 
+    debug 2 (text "[MonadSMT]: init: Created." ) (return ())
     boolAux <- withAuxSolver mkBoolSort
     boolSortAux .= Just boolAux
 
   isSat fml = do
-      -- uses sorts (id)
-      -- -- b <- mkFreshConst "b" llistSort
-      -- rhsEq' <- mkApp sizellistFun [b]
-      -- lhsEq' <- mkIntNum 0
-      -- eqas_dt <- mkEq lhsEq' rhsEq'
-
       res <- local $ (fmlToAST >=> assert') fml >> check
 
       case res of
@@ -111,8 +107,8 @@ instance MonadSMT Z3State where
                           [ast]
                           _true
             s <- astToString ast
-            debug 2 (text "[SMTLIB]:" <+> text s) $
-              debug 2 (text "[SMTLIB - benchmark]:" <+> text str) $ assert ast
+            debug 2 (text "[MonadSMT]: isSat:" <+> text s) $
+              debug 2 (text "[MonadSMT]: isSat:" <+> text str) $ assert ast
 
   allUnsatCores = getAllMUSs
 
@@ -127,8 +123,8 @@ convertDatatypes symbols ((dtName, DatatypeDef tyvars _ _ ctors@(_:_) _):rest) =
       z3ctors <- mapM convertCtor ctors
       z3dt <- mkDatatype dtSymb z3ctors
       s <- sortToString z3dt
-      trace ("[SMTLIB - sort]: " ++ s) $
-        trace ("[SMTLIB - datatype]: " ++ dtName) $
+      trace ("[convertDatatypes]: sort:" ++ s) $
+        trace ("[convertDatatypes]: dtname:" ++ dtName) $
         (sorts %= Map.insert dataSort z3dt)
       storedDatatypes %= Map.insert dtName z3dt)
   convertDatatypes symbols rest
@@ -169,24 +165,31 @@ convertDatatypes symbols ((dtName, DatatypeDef tyvars _ _ ctors@(_:_) _):rest) =
 instantiateDatatype :: Id -> [Sort] -> Z3State Z3.Sort
 instantiateDatatype dtName sortsInstances = do
   ctors <- getCtors dtName
-  ifM (uses storedDatatypes (Map.member dtInstanceName))
+  res <- ifM (uses storedDatatypes (Map.member dtInstanceName))
     $(todo "already created instance")
     (do
-      genericDt <- uses storedDatatypes (Map.! dtName)
+      genericDt <- uses storedDatatypes (\stds -> fromMaybe (error $ unwords [
+        "[instantiateDatatype]:", dtName, "on sorts", show sortsInstances,
+        "not found in storedDatatypes among:", show stds]) $
+        Map.lookup dtName stds)
       genericDtStr <- sortToString genericDt
-      let mtr = trace (unwords ["instantiateDatatype:", dtName, "got:", genericDtStr])
+      let mtr = trace (unwords ["[instantiateDatatype]:", dtName, "got:", genericDtStr])
       dtSymb <- mtr $ mkStringSymbol dtInstanceName
       z3ctors <- mapM (convertCtor sortsInstances) ctors
       z3dt <- mkDatatype dtSymb z3ctors
       s <- sortToString z3dt
       let dataSort = DataS dtName sortsInstances
-      trace ("[SMTLIB - sort]: " ++ s) $
-        trace ("[SMTLIB - datatype]: " ++ dtName) $
+      trace ("[instantiateDatatype]: sort:" ++ s) $
+        trace ("[instantiateDatatype]: dtName:" ++ dtName) $
         (sorts %= Map.insert dataSort z3dt)
       sorts %= Map.insert (DataS dtInstanceName []) z3dt
       storedDatatypes %= Map.insert dtInstanceName z3dt
       return z3dt
       )
+  resStr <- sortToString res
+  trace (unwords ["[instantiateDatatype]:", dtName, show sortsInstances, "->",
+    dtInstanceName, "becomes:", resStr]) $
+    return res
 
   where
     -- We may get instances for type variables a b c as [BoolS, IntS, IntS]
@@ -222,7 +225,7 @@ instantiateDatatype dtName sortsInstances = do
       recognizerName <- mkStringSymbol ("is" ++ instanceCName)
       symbols <- use synquidSymbols
       let args = allArgs $ toMonotype $ symbols Map.! cName
-      let mtr = trace (unwords ["convertCtor:", cName, "with sortInstances:", unwords $ map show sortInstances, "on args:", concatMap show args])
+      let mtr = trace (unwords ["[convertCtor]:", cName, "with sortInstances:", unwords $ map show sortInstances, "on args:", concatMap show args])
       z3Args <- mtr $ mapM convertField args
       mkConstructor z3CName recognizerName z3Args
 
@@ -264,7 +267,7 @@ instantiateDatatype dtName sortsInstances = do
 instanceName :: Id -> [Sort] -> Id
 instanceName id sorts
   | (not . any isVar) sorts = intercalate "_" $ id : map show sorts
-  | otherwise = error $ unwords $ ["instanceName of Vars:", id] ++ (map show sorts)
+  | otherwise = error (unwords $ ["[instanceName]: Vars:", id] ++ (map show sorts))
   where
     isVar VarS {} = True
     isVar _ = False
@@ -285,7 +288,7 @@ litFromAux lit = do
 toZ3Sort :: Sort -> Z3State Z3.Sort
 toZ3Sort s = do
   resMb <- uses sorts (Map.lookup s)
-  case resMb of
+  res <- case resMb of
     Just z3s -> return z3s
     Nothing -> do
       z3s <- case s of
@@ -294,12 +297,16 @@ toZ3Sort s = do
         -- VarS name -> mkStringSymbol name >>= mkUninterpretedSort
         VarS name -> trace ("[toZ3Sort - VarS]: " ++ name ++ " - Int") $ mkIntSort
         -- DataS name args -> mkStringSymbol name >>= mkUninterpretedSort
-        DataS name args -> trace ("[toZ3Sort - DataS]: " ++ name ++ show args ++ " - Int") $ mkIntSort
+        DataS name [] -> error $ unwords ["toSort on a monomorphic datatype:", name, ". Not sure when this happens."]
+        DataS name args ->
+            -- trace ("[toZ3Sort - DataS]: " ++ name ++ show args ++ " - Instantiate") $ instantiateDatatype name args
+            trace ("[toZ3Sort - DataS]: " ++ name ++ show args ++ " - Int") $ mkIntSort
         SetS el -> toZ3Sort el >>= mkSetSort
         AnyS -> mkIntSort
       sorts %= Map.insert s z3s
       return z3s
-
+  resStr <- sortToString res
+  trace (unwords ["[toZ3Sort]:", show s, "=(maps to)=>", resStr]) $ return res
 instance MonadZ3 Z3State where
   getSolver = gets (envSolver . _mainEnv)
   getContext = gets (envContext . _mainEnv)
@@ -357,13 +364,13 @@ fmlToAST = toAST . simplify
 
 -- | Convert a Synquid refinement term to a Z3 AST
 toAST :: Formula -> Z3State AST
-toAST expr = trace (unwords ["[toAST]:", show expr])$ case expr of
+toAST expr = trace (unwords ["[toAST]: expression:", show expr, "\n", show $ pretty expr])$ case expr of
   BoolLit True  -> mkTrue
   BoolLit False -> mkFalse
   SetLit el xs -> setLiteral el xs
   IntLit i -> mkIntNum i
   Var s name -> var s name
-  Unknown _ name -> error $ unwords ["toAST: encountered a second-order unknown", name]
+  Unknown _ name -> error $ unwords ["[toAST]: Unknown: encountered a second-order unknown:", name]
   Unary op e -> toAST e >>= unOp op
   Binary op e1 e2 -> join (binOp op <$> toAST e1 <*> toAST e2)
   Ite e0 e1 e2 -> do
@@ -377,12 +384,13 @@ toAST expr = trace (unwords ["[toAST]:", show expr])$ case expr of
     mapM toAST args >>= mkApp decl
   Cons s name args -> do
     storeddts <- use storedDatatypes
-    storedDtsStr <- mapM (\(k,v) -> sortToString v >>= (\x -> return (k, x))) $ Map.toList storeddts
+    storedDtsStr <- mapM (\(dtName,v) -> sortToString v >>= (\sortStr -> return (dtName, sortStr))) $ Map.toList storeddts
     let tArgs = map sortOf args
-    decl <- trace (unwords ["[toAST]: StoredDTs:", show storedDtsStr]) $ constructor s name tArgs
-    declStr <- funcDeclToString decl
-    let mtr = trace (unwords ["[toAST]: constructorDecl:", declStr])
-    mtr $ mapM toAST args >>= mkApp decl
+    fDecl <- trace (unwords ["[toAST]: Cons: StoredDTs:", show storedDtsStr]) $
+              constructor s name tArgs
+    declStr <- funcDeclToString fDecl
+    let mtr = trace (unwords ["[toAST]: Cons: constructorDecl:", declStr])
+    mtr $ mapM toAST args >>= mkApp fDecl
   All v e -> accumAll [v] e
   where
     setLiteral el xs = do
@@ -475,6 +483,7 @@ toAST expr = trace (unwords ["[toAST]:", show expr])$ case expr of
           let cNameInstance = instanceName cName tyvars
           ifM (uses storedDatatypes (Map.member dtInstanceName))
             (do
+              -- This calls again, but with the monomorphized version.
               constructor (DataS dtInstanceName []) cNameInstance argTypes
               -- z3dt <- trace ("toZ3Sort: " ++ show resT) $ toZ3Sort resT
               -- -- getDatatypeSortConstructors will crash on built-in types.
@@ -499,15 +508,18 @@ toAST expr = trace (unwords ["[toAST]:", show expr])$ case expr of
 
     findDecl cName decls = do
       declNames <- mapM (getDeclName >=> getSymbolString) decls
-      trace (unwords ["findDecl looking for", cName, "in", show declNames]) $
+      trace (unwords $ ["findDecl looking for", cName, "in:"] ++ declNames) $
         return $ decls !! fromJust (elemIndex cName declNames)
 
     -- | Sort as Z3 sees it
-    asZ3Sort s = case s of
-      VarS _ -> IntS
-      DataS _ (_:_) -> IntS
-      SetS el -> SetS (asZ3Sort el)
-      _ -> s
+    asZ3Sort s =
+      let ret = case s of
+                  VarS _ -> IntS
+                  DataS _ (_:_) -> IntS
+                  SetS el -> SetS (asZ3Sort el)
+                  _ -> s
+      in
+        trace (unwords ["[asZ3Sort]:", show s, "=(maps to)=>", show ret]) ret
 
 
 -- | 'getAllMUSs' @assumption mustHave fmls@ : find all minimal unsatisfiable subsets of @fmls@ with @mustHave@, which contain @mustHave@, assuming @assumption@

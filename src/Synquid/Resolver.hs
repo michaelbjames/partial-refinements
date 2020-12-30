@@ -206,6 +206,7 @@ resolveSignatures (DataDecl dtName tParams pParams ctors) = mapM_ resolveConstru
           environment %= addPolyConstant name sch''
         else throwResError (commaSep [text "Constructor" <+> text name <+> text "must return type" <+> pretty nominalType, text "got" <+> pretty returnType])
 resolveSignatures (MeasureDecl measureName _ _ post defCases args _) = do
+  trace (unwords ["[resolveSignatures]: MeasureDecl:", measureName]) $ return ()
   sorts <- uses (environment . globalPredicates) (Map.! measureName)
   let (outSort : mArgs) = sorts
   case last mArgs of

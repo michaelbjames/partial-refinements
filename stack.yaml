@@ -3,10 +3,13 @@ flags:
     synquid: true
 packages:
   - '.'
-resolver: lts-15.3
+resolver: lts-16.22
 extra-deps:
   - z3-4.3.1
+# We need GHC > 9 to enable this option.
+# ghc-options:
+#   "$everything": -haddock
 # extra-include-dirs:
 #  - <z3-home>/src/api
 # extra-lib-dirs:
-#  - <z3-home>/build  
+#  - <z3-home>/build
