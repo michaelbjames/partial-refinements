@@ -114,7 +114,7 @@ instance MonadSMT Z3State where
 
 convertDatatypes :: Map Id RSchema -> [(Id, DatatypeDef)] -> Z3State ()
 convertDatatypes _ [] = trace "no symbols" $ return ()
-convertDatatypes symbols (("DSet",_):rest) = trace "[convertDatatype]: Skipping DSet" $ convertDatatypes symbols rest -- Polymorphic datatype, do not convert
+-- convertDatatypes symbols (("DSet",_):rest) = trace "[convertDatatype]: Skipping DSet" $ convertDatatypes symbols rest -- Polymorphic datatype, do not convert
 -- datatype with no type arguments
 convertDatatypes symbols ((dtName, DatatypeDef tyvars _ _ ctors@(_:_) _):rest) = do
   ifM (uses storedDatatypes (Map.member dtName))
