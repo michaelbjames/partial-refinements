@@ -1,0 +1,47 @@
+data List a where
+    Nil :: List a
+    Cons :: x:a -> List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+    Nil -> 0
+    Cons x prev -> 1 + len prev
+
+-- toFalse :: n:List Int -> {Bool |
+--     ((Nil == n) ==> (_v == False)) &&
+--     ((Cons 0 Nil == n) ==> (_v == False)) &&
+--     True
+--     }
+-- toFalse = \n.
+--     match n with
+--         Nil -> False
+--         Cons x prev -> toFalse prev
+
+
+toFalse_isect :: (List Int -> Bool) ^
+    ({List Int | _v == Nil} -> {Bool | _v == False})
+    -- ({List Int | _v == (Cons 1 Nil)} -> {Bool | _v == False})
+toFalse_isect = \d.
+    match d with
+        Nil -> False
+        Cons x prev -> toFalse_isect prev
+
+
+-- toNil :: n:List Int -> {List Int |
+--     ((Nil == n) ==> (_v == Nil)) &&
+--     ((Cons 0 Nil == n) ==> (_v == Nil)) &&
+--     True
+--     }
+-- toNil = \n.
+--     match n with
+--         Nil -> Nil
+--         Cons x prev -> toNil prev
+
+
+-- toListBoolNil :: n:List Int -> {List (List Bool) |
+--     ((Nil == n) ==> (_v == Nil)) &&
+--     ((Cons 0 Nil == n) ==> (_v == Nil)) &&
+--     }
+-- toListBoolNil = \n.
+--     match n with
+--         Nil -> Nil
+--         Cons x prev -> toListBoolNil prev

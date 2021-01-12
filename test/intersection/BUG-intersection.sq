@@ -11,17 +11,17 @@ These two specifications are logically identical.
 The first is expressed as an implication, the second as an intersection.
 The former can check the code but the latter cannot.
 -}
-pairs_implication :: (a -> a -> a) -> xs:List a -> {List a |
-      ((len xs > 1) ==> ((2 * len _v >= len xs) && len _v < len xs)) &&
-      ((len xs <= 1) ==> (_v == xs)) &&
-      True}
-pairs_implication = \f. \xs.
-  match xs with
-    Nil -> Nil
-    Cons y ys ->
-      match ys with
-        Nil -> Cons y ys
-        Cons z zs -> Cons (f y z) (pairs_implication f zs)
+-- pairs_implication :: (a -> a -> a) -> xs:List a -> {List a |
+--       ((len xs > 1) ==> ((2 * len _v >= len xs) && len _v < len xs)) &&
+--       ((len xs <= 1) ==> (_v == xs)) &&
+--       True}
+-- pairs_implication = \f. \xs.
+--   match xs with
+--     Nil -> Nil
+--     Cons y ys ->
+--       match ys with
+--         Nil -> Cons y ys
+--         Cons z zs -> Cons (f y z) (pairs_implication f zs)
 
 pairs_intersect ::
     ((a -> a -> a) -> xs:{List a | len _v > 1} -> {List a | (2 * len _v >= len xs) && (len _v < len xs)}) ^
