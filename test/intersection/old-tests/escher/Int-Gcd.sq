@@ -1,0 +1,18 @@
+{-
+TODO
+-}
+
+type Nat = {Int | _v >= 1}
+
+sub :: i: Int -> j: Int -> {Int | _v == (i - j)}
+
+-- cannot write sufficient termination conditions.
+gcd :: i: Nat -> j: Nat -> {Nat |
+    ((i == j) ==> (_v == i))
+    }
+gcd = \a. \b.
+    if (a == b)
+    then a
+    else if a > b
+        then gcd (sub a b) b
+        else gcd a (sub b a)

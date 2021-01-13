@@ -1,0 +1,27 @@
+type Nat = {Int | _v >= 0}
+
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+append :: xs: List a -> ys: List a -> {List a | len _v == len xs + len ys}
+
+{- Z3 encoding bug prevents checking.
+Examples taken from Smyth.
+-}
+list_rev_append :: l1:List Nat -> { List Nat |
+   (l1 == Nil ==> _v == Nil) &&
+   (l1 == (Cons 0 Nil) ==> _v == (Cons 0 Nil)) &&
+   (l1 == (Cons 1 Nil) ==> _v == (Cons 1 Nil)) &&
+   (l1 == (Cons 0 (Cons 1 Nil)) ==> _v == (Cons 1 (Cons 0 Nil))) &&
+   (l1 == (Cons 0 (Cons 1 (Cons 2 Nil))) ==> _v == (Cons 2 (Cons 1 (Cons 0 Nil)))) &&
+   True
+}
+list_rev_append = \xs.
+  match xs with
+    Nil -> Nil
+    Cons z zs -> append (list_rev_append zs) (Cons z Nil)

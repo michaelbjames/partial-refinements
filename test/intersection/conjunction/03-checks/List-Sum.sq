@@ -1,0 +1,28 @@
+type Nat = {Int | _v >= 0}
+
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+plus :: x:Int -> y:Int -> {Int | _v == (x + y)}
+
+-- Checks, unclear if would synthesize
+-- sum :: (List Int -> Int) ^
+	--    (xs: List {Int| _v == 3} -> {Int | _v == (3 * len xs)})
+
+-- Checks, does not synthesize
+sum :: xs: List Int -> {Int |
+		(xs == Nil) ==> (_v == 0) &&
+		(xs == (Cons 1 Nil)) ==> (_v == 1) &&
+		(xs == (Cons 4 (Cons 1 Nil))) ==> (_v == 5)}
+-- sum = ??
+sum = \xs.
+	match xs with
+		Nil -> 0
+		Cons y ys -> ?? -- y + sum ys
+
+

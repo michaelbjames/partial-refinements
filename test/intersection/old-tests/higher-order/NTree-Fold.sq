@@ -1,0 +1,57 @@
+{- Below is my attempt at an n-ary tree's fold.
+We would need either:
+  - mutual recursion
+  - structural termination checking
+to get this to work, since we need to mix trees and lists recursively.
+
+This idea comes from "Why FP Matters", John Hughs 1990.
+Folds operate over constructors to squash datatypes into another type.
+That fold should be able to produce the same datastructure if each squashing
+function recreates the same constructor node.
+
+This does not work at all in current synquid.
+-}
+
+data List a where
+  Nil :: List a
+  Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+data Tree a where
+  Node :: a -> List a -> Tree a
+
+-- Cannot have matches in measures :'(
+termination measure size :: Tree a -> {Int | _v >=0} where
+  Node a trs ->
+    match trs with
+      Nil -> 1
+      Cons tree cousins -> 1 + (size tree) + (size (Node a cousins))
+
+{-
+No mutual measure recursion :'(
+would require mutual recursion synthesis
+termination measure treeSize :: Tree a -> {Int | _v >= 0} where
+  Node a children -> 1 + (treeLen children)
+-}
+
+-- We need a termination measure for List (Tree a).
+foldTree :: (nodeFun: (a -> b -> b) ->
+             listFun: (b -> b -> b) ->
+             b ->
+             Tree a ->
+             b)
+foldTree = \nodeFun. \listFun. \base. \trs.
+  match trs with
+    Nil -> base
+    Cons tree cousins ->
+      match cousins with
+        Nil ->
+          match tree with
+            Node label children -> nodeFun label (foldTree nodeFun listFun base children)
+        Cons _ _ -> listFun (foldTree nodeFun listFun base (Cons tree Nil)) (foldTree nodeFun listFun base cousins)
+
+
+

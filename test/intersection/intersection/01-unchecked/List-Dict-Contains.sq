@@ -1,0 +1,51 @@
+data Pair a b where
+	Pair :: x: a -> y: b -> Pair a b
+
+measure fst :: Pair a b -> a where
+  Pair x y -> x
+
+measure snd :: Pair a b -> b where
+  Pair x y -> y
+
+
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+measure insert :: x: a -> List a -> {List a|True} where
+  Nil -> Cons x Nil
+  Cons y ys -> Cons x (Cons y ys)
+
+
+{-
+Intersection: Not strong enough. I'm not sure why.
+We can use an abstract `a`, but need a concrete value in the Pair so we can give
+an example.
+Note: use -f allarguments or -f nonterminating; since the List must come second
+but it's decreasing.
+-}
+contains :: (Int -> List (Pair Int b) -> Bool) ^
+            -- Empty list trivially doesn't contain anything
+            (Int -> {List (Pair Int b) | len _v == 0} -> {Bool | _v == False}) ^
+            -- The list where x is in every element definitely contains x
+            -- This causes a checking problem when included
+            (x: Int -> {List (Pair {Int | _v == x} b) | len _v > 0} -> {Bool | _v == True}) ^
+            -- The list where x is in no element definitely does not contains x
+            -- This causes a checking problem when included
+            (x: Int -> {List (Pair {Int | _v != x} b) | len _v > 0} -> {Bool | _v == False}) ^
+            -- Lastly we need an example to force a recursive call
+            -- This causes a checking problem when included
+            (x: {Int | _v != 0} -> {List (Pair Int Int) | _v == (Cons (Pair 0 0) (Cons (Pair x 0) Nil))} -> {Bool | _v == True})
+
+contains = \needle. \haystack.
+  match haystack with
+    Nil -> False
+    Cons x xs ->
+      match x with
+        Pair xa xb -> if xa == needle
+          then True
+          else contains needle xs

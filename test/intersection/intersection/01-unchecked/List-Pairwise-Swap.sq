@@ -1,0 +1,26 @@
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+{-
+Definitely not strong enough to synthesize. Nor can it check.
+-}
+list_pairwise_swap :: (List Int -> List Int) ^
+  ({List Int | len _v == 0} -> {List Int | len _v == 0}) ^
+  ({List Int | len _v == 1} -> {List Int | len _v == 0}) ^
+  ({List Int | len _v == 2} -> {List Int | len _v == 2}) ^
+  ({List Int | len _v == 3} -> {List Int | len _v == 0})
+list_pairwise_swap = \xs.
+  match xs with
+    Nil -> Nil
+    Cons y ys ->
+      match ys with
+        Nil -> Nil
+        Cons yy yys ->
+          match (list_pairwise_swap ys) with
+            Nil -> Cons yy y (list_pairwise_swap yys)
+            Cons yyy yyys -> list_pairwise_swap yys

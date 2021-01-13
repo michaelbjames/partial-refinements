@@ -1,0 +1,25 @@
+{-
+TODO
+-}
+
+type Nat = {Int | _v >= 0}
+
+sumUnder :: Nat -> Nat
+sumUnder = \i. if i <= 0
+    then 0
+    else i + (sumUnder (i - 1))
+
+-- Does not work. Shape error??
+-- sumUnder2 :: i: Nat -> {Nat |
+--     ((2 * _v) == (i * (i + 1)))
+--     }
+-- sumUnder2 = ??
+
+
+opUnder :: ((Nat -> Nat -> Nat) -> Nat -> Nat) ^
+    (f:(i: Nat -> j: Nat -> {Nat | _v == i}) -> x:{Nat|_v > 0} -> {Nat| _v == x}) ^
+    -- (f:(i: Nat -> j: Nat -> {Nat | _v == j}) -> x:Nat -> {Nat| _v == 0}) ^
+    (f:(i: Nat -> j: Nat -> Nat) -> x:{Nat | _v == 0} -> {Nat| _v == 0})
+opUnder = \f. \i. if i <= 0
+    then 0
+    else f i (opUnder f (i - 1))

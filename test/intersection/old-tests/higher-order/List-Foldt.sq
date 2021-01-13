@@ -1,0 +1,62 @@
+{-
+There are more than just fold-left and fold-right. There's a tree-like fold
+that's valid if the operation is associative and symmetric (e.g., (-) :: Int ->
+Int -> Int is symmetric but not associative). So a tree-like fold:
+foldt (+) [1,2,3,4] 0 = (1 + 2) + (3 + 4)
+
+from: https://wiki.haskell.org/Fold
+foldt            :: (a -> a -> a) -> a -> [a] -> a
+foldt f z []     = z
+foldt f z [x]    = x                             -- aka foldt' of data-ordlist
+foldt f z xs     = foldt f z (pairs f xs)
+
+foldi            :: (a -> a -> a) -> a -> [a] -> a
+foldi f z []     = z
+foldi f z (x:xs) = f x (foldi f z (pairs f xs))  -- aka foldt of data-ordlist
+
+pairs            :: (a -> a -> a) -> [a] -> [a]
+pairs f (x:y:t)  = f x y : pairs f t
+pairs f t        = t
+-}
+
+data List a where
+  Nil :: List a
+  Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+{-
+Before we can build foldt and foldi, we need a strong enough pairs function.
+It should produce the ceil(len(xs) / 2) elements by combining them.
+
+Here we encounter a bug: these two types are logically equivalent, yet
+Synquid only accepts the implication based one.
+
+While both specs can check, they are not strong enough to synthesize what we
+want.
+-}
+-- pairs :: ((a -> a -> a) -> xs:{List a | len _v > 1} -> {List a | (2 * len _v >= len xs) && (len _v < len xs)}) ^
+--          ((a -> a -> a) -> xs:{List a | len _v <= 1} -> {List a | _v == xs})
+-- This checks.
+pairs :: (a -> a -> a) -> xs:List a -> {List a |
+      ((len xs > 1) ==> ((2 * len _v >= len xs) && len _v < len xs)) &&
+      ((len xs <= 1) ==> (_v == xs))}
+pairs = \f. \xs.
+  match xs with
+    Nil -> Nil
+    Cons y ys ->
+      match ys with
+        Nil -> Cons y ys
+        Cons z zs -> Cons (f y z) (pairs f zs)
+
+
+-- foldl :: <p Int -> a -> Bool> . (f: (b -> a -> b) -> b -> List <p> a -> b) ^
+--   (f: (acc:b -> a -> {b|_v == acc}) -> seed: b -> List <p> a -> {b | _v == seed}) ^
+--   (f: (acc:Int -> x:a -> {Int | _v == p acc x}) -> seed: {Int | _v == 0} -> xs: List a -> {Int | _v == len xs}) ^
+--   (f: (acc:{b|True} -> x:{a|True} -> {b|True}))
+-- foldl = \f. \seed. \xs.
+--   match xs with
+--     Nil -> seed
+--     Cons y ys -> foldl f (f seed y) ys

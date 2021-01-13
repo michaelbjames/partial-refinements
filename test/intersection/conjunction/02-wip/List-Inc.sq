@@ -1,0 +1,37 @@
+data Nat where
+  Z :: Nat
+  S :: Nat -> Nat
+
+termination measure dec :: Nat -> {Int | _v >= 0} where
+  Z -> 0
+  S m -> 1 + dec m
+
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+inc :: x: Int -> {Int | _v == (x + 1)}
+
+map :: f: (a -> b) -> xs: List a -> {List b | len _v == len xs}
+map = \f . \xs .
+    match xs with
+      Nil -> Nil
+      Cons x3 x4 -> let f0 = \x9 . f
+                                     x9 in
+                    Cons (f x3) (map f0 x4)
+
+{-
+There's a problem with nil. This does not check
+-}
+list_inc_conj :: (xs: List Int -> {List Int |
+  ((xs == Nil) ==> (_v == Nil)) &&
+  -- ((xs == Cons 1 Nil) ==> (_v == Cons 2 Nil)) &&
+  -- ((xs == Cons 2 Nil) ==> (_v == Cons 3 Nil)) &&
+  -- ((xs == Cons 1 (Cons 3 Nil)) ==> (_v == Cons 2 (Cons 4 Nil))) &&
+  True
+  })
+list_inc_conj = \x. map (\y. inc y) x

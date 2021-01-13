@@ -1,0 +1,34 @@
+data Nat a b c where
+    Z :: Nat a b c
+    S :: prev:Nat a b c -> Nat a b c
+    P :: b -> Nat a b c
+
+
+-- I believe the function can be simplified
+toZero :: n:Nat Bool Int Int-> {Bool |
+    ((n == Z) ==> (_v == False)) &&
+    ((n == S Z) ==> (_v == False)) && -- Comment this out and it checks.
+    -- ((n == (P 4)) ==> (_v == False)) &&
+    True
+    }
+toZero = \n.
+    match n with
+        Z -> False
+        S prev -> toZero prev
+        P b -> False
+
+
+data Nat_Bool_Int_Int where
+    Z_Bool_Int_Int :: Nat_Bool_Int_Int
+    P_Bool_Int_Int :: Int -> Nat_Bool_Int_Int
+    S_Bool_Int_Int :: prev:Nat_Bool_Int_Int -> Nat_Bool_Int_Int
+
+
+-- This one tests different parametric instances
+-- multiZero :: nb:Nat Bool -> ni:Nat Int -> {Bool |
+--   ((ni == Z:Nat Int) && (ni == Z)) ==> (_v == False) &&
+--   ((ni == S Z) || (ni == S Z) ==> (_v == False))}
+-- multiZero = \nb. \ni.
+--     match nb with
+--         Z -> False
+--         S prev -> toZero prev ni

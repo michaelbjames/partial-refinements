@@ -1,0 +1,23 @@
+type Nat = {Int | _v >= 0}
+
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+
+{-
+Synthesizes
+-}
+snoc :: xs: List Int -> x: Int -> {List Int |
+	((xs == Nil) ==> (_v == (Cons x Nil))) &&
+	((xs == (Cons 1 Nil)) ==> (_v == (Cons 1 (Cons x Nil)))) &&
+	((x == 0 && xs == (Cons 2 (Cons 1 Nil)))==> (_v == (Cons 2 (Cons 1 (Cons 0 Nil)))))
+	}
+
+snoc = ??
+
+
