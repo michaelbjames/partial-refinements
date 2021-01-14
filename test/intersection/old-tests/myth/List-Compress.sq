@@ -27,31 +27,30 @@ type CList a = PList a <{!(_0 in heads _1)}>
 
 
 {-
-This SHOULD work, but has the Z3 encoding problem.
-Error:
-Cannot find sufficiently strong refinements
-when checking Cons x3 Nil
+Checks
+Not strong enough to synthesize. Needs more examples.
 -}
--- compress_int :: xs: List Int -> {List Int |
+-- compress_int_conj :: xs: List Int -> {List Int |
 --     (xs == Nil ==> (_v == Nil)) &&
 --     (xs == (Cons 1 Nil) ==> (_v == (Cons 1 Nil))) &&
 --     (xs == (Cons 1 (Cons 1 Nil)) ==> (_v == (Cons 1 Nil))) &&
 --     (xs == (Cons 2 (Cons 1 (Cons 1 Nil))) ==> (_v == (Cons 2 (Cons 1 Nil)))) &&
 --     True
 --     }
--- compress_int = \xs .
+-- compress_int_conj = \xs .
 --   match xs with
 --     Nil -> Nil
 --     Cons x3 x4 ->
---       match compress_int x4 with
+--       match compress_int_conj x4 with
 --         Nil -> Cons x3 Nil
 --         Cons x10 x11 ->
 --           if x3 == x10
---             then compress_int x4
+--             then compress_int_conj x4
 --             else Cons x3 (Cons x10 x11)
 
 
 {-
+Does not check
 I'm missing part of the specification. This isn't strong enough yet.
 It fails with:
 Error:
@@ -62,13 +61,15 @@ Cannot find sufficiently strong refinements
 -}
 compress_int_syntactic ::
   -- The output is always shorter or equal to the input
-  (xs: List Int -> {List Int | len _v < len xs || _v == xs}) ^
-  -- If the list is all 1s, then the output should be just 1
-  (xs: {List {Int | _v == 1} | len _v > 0} -> {List Int| _v == (Cons 1 Nil)}) ^
-  -- An example where it keeps two different elements
-  (xs: {List Int | _v == Cons 2 (Cons 1 Nil)} -> {List Int | _v == xs}) ^
+  (xs: List Int -> {List Int | (len _v < len xs) || (_v == xs)}) ^
   -- If it's empty list, then it should produce nothing
-  (xs: {List Int | len _v == 0 || _v == Nil} -> {List Int | _v == Nil})
+  (xs: {List Int | len _v == 0} -> {List Int | _v == Nil}) ^
+  -- The next two don't work and it's not clear why.
+  -- If the list is all 1s, then the output should be just 1
+  (xs: {List {Int | _v == 1} | len _v > 0} -> {List Int | _v == (Cons 1 Nil)})
+  -- An example where it keeps two different elements
+  -- (xs: {List Int | _v == Cons 2 (Cons 1 Nil)} -> {List Int | _v == xs})
+
 compress_int_syntactic = \xs .
   match xs with
     Nil -> Nil

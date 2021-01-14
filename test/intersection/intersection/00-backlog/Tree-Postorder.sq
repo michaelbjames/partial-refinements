@@ -1,0 +1,56 @@
+data PList a <p :: a -> a -> Bool> where
+	Nil :: PList a <p>
+	Cons :: x: a -> xs: PList {a | p x _v} <p> -> PList a <p>
+
+termination measure len :: PList a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+measure elems :: PList a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs
+
+data PTree a <p :: a -> a -> Bool> where
+	Empty :: PTree a <p>
+	Node :: x: a -> l: PTree {a | p _v x} <p> -> r: PTree {a | p x _v} <p> -> PTree a <p>
+
+termination measure size :: PTree a -> {Int | _v >= 0} where
+  Empty -> 0
+  Node x l r -> size l + size r + 1
+
+measure telems :: PTree a -> Set a where
+  Empty -> []
+  Node x l r -> telems l + telems r + [x]
+
+type Nat = {Int | _v >= 0}
+type List a = PList a <{True}>
+type Tree a = PTree a <{True}>
+
+
+-- Used in Myth
+append :: <p:: a -> a -> Bool>. xs: PList a <p> -> ys: PList a <p> -> {PList a <p> | len _v == len xs + len ys}
+
+-- Synthesizes correctly
+-- tree_preorder :: t: Tree a -> {List a | len _v == size t}
+-- tree_preorder = ??
+
+-- Synthesizes correctly
+-- tree_inorder :: <p :: a -> a -> Bool>. (t: PTree a <p> -> {PList a <p> | len _v == size t})
+-- tree_inorder = ??
+
+
+-- Won't check from Z3 encoding bug.
+tree_postorder :: t:Tree Int -> {List Int |
+    (t == Node 1 (Node 2 Empty Empty) (Node 3 Empty Empty) ==> _v == (Cons 2 (Cons 3 (Cons 1 Nil)))) &&
+    (t == (Node 2 Empty Empty) ==> _v == (Cons 2 Nil)) &&
+    (t == (Node 3 Empty Empty) ==> _v == (Cons 3 Nil)) &&
+    (t == Empty ==> _v == Nil) &&
+    True}
+tree_postorder = \t .
+  match t with
+    Empty -> Nil
+    Node x4 x5 x6 -> append
+                       (tree_postorder x5) (append
+                                              (tree_postorder x6) (Cons x4
+                                                                     Nil))
+

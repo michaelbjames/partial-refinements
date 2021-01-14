@@ -18,11 +18,10 @@ data Maybe a where
   Nothing :: Maybe a
   Just :: a -> Maybe a
 
-
 {-
-Cannot check: Z3 encoding bug.
+Checks, cannot synthesize yet.
 -}
-list_last_examples :: xs:List Nat -> { Maybe Nat |
+list_last_conj :: xs:List Nat -> { Maybe Nat |
    (xs == Nil ==> _v == Nothing) &&
    (xs == (Cons (S Z) Nil) ==> _v == (Just (S Z))) &&
    (xs == (Cons (S (S Z)) Nil) ==> _v == (Just (S (S Z)))) &&
@@ -31,10 +30,10 @@ list_last_examples :: xs:List Nat -> { Maybe Nat |
    (xs == (Cons (S (S (S Z))) (Cons (S (S Z)) (Cons (S Z) Nil))) ==> _v == (Just (S Z))) &&
    True
 }
-list_last_examples = \xs .
+list_last_conj = \xs .
   match xs with
     Nil -> Nothing
     Cons x3 x4 ->
       match x4 with
         Nil -> Just x3
-        Cons x8 x9 -> list_last_examples x4
+        Cons x8 x9 -> list_last_conj x4

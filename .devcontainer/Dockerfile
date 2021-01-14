@@ -57,6 +57,11 @@ RUN ghcup upgrade \
     && ghcup set ghc 8.8.4 \
     && ghcup install cabal
 
+# You'll want this to help development
+RUN stack install hoogle && hoogle generate
+# Code formatting
+RUN stack install ormolu
+
 ENV PATH /root/.local/bin/:$PATH
 ENV PATH /root/.ghcup/bin/:$PATH
 ENV PATH /root/.cabal/bin/:$PATH
