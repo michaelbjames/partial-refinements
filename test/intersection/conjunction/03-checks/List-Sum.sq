@@ -23,6 +23,6 @@ sum :: xs: List Int -> {Int |
 sum = \xs.
 	match xs with
 		Nil -> 0
-		Cons y ys -> ?? -- y + sum ys
+		Cons y ys -> y + sum ys
 
 

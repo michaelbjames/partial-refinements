@@ -1,0 +1,44 @@
+data OList a <p :: Int -> a -> Bool> where
+  Nil :: OList a <p>
+  Cons :: x: {a | p 0 _v} -> xs: OList a <{p (_0 + 1) _1}> -> OList a <p>
+
+termination measure len :: OList a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+type List a = OList a <{True}>
+
+{-
+The OList maintains an ordering on the list in the predicate.
+So, a left fold over such a list counting elements seen will produce a number
+that is exactly the length of the list. The count will also map to each
+element's ordinal position in the OList.
+This should check.
+The first two specs should check on their own, but together they do not.
+Together, looks like it gets tripped up on `foldl ys` in the first spec.
+It gives ys the OList a <True> type, which doesn't check in the first world.
+
+It selects the first world for `foldl` and while fails while checking `ys`:
+First:
+[reconstructE] [PSymbol]: making choice (1/1) for ys
+    type: {OList a <P1 (_0 + 1) _1>|_v == ys}
+
+Now in context:
+Checking ys :: {OList A2 <P2 _0 _1>|len _v >= 0 && len _v < len arg2} in
+\xs . \f . \seed .
+      match xs with
+        Cons y ys -> foldl ?? ?? ??
+
+Substitute in predicates and type assignments...
+[checkE] finalized type: {OList a <True>|len _v >= 0 && len _v < len arg2}
+
+Fails. Somehow the predicate assignment, for the first world made OList a <True>!
+-}
+foldl :: <p :: Int -> a -> Bool> .
+  (OList a <p> -> f: (b -> a -> b) -> b ->  b) ^  -- works on its own
+  (List a -> f: (acc:b -> a -> {b|_v == acc}) -> seed: b -> {b | _v == seed}) -- works on its own
+  -- (xs: OList a <p> -> f: (acc:Int -> x:a -> {Int | _v == acc && p acc x}) -> seed: {Int | _v == 0} -> {Int | _v == len xs})
+foldl = \xs. \f. \seed.
+  match xs with
+    Nil -> seed
+    Cons y ys -> foldl ys f (f seed y)

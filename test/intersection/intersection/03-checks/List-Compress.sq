@@ -40,9 +40,10 @@ compress ::
   (xs: {List Int | len _v == 0} -> {List Int | _v == Nil}) ^
   -- The next two don't work and it's not clear why.
   -- If the list is all 1s, then the output should be just 1
-  (xs: {List {Int | _v == 1} | len _v > 0} -> {List Int | _v == (Cons 1 Nil)})
+  -- (xs: {List {Int | _v == 1} | len _v > 0} -> {List Int | _v == (Cons 1 Nil)})
+  (xs: {List Int | _v == (Cons 1 Nil) || _v == (Cons 1 (Cons 1 Nil))} -> {List Int | _v == (Cons 1 Nil)}) ^
   -- An example where it keeps two different elements
-  -- (xs: {List Int | _v == Cons 2 (Cons 1 Nil)} -> {List Int | _v == xs})
+  (xs: {List Int | _v == Cons 2 (Cons 1 Nil) || _v == (Cons 3 (Cons 2 (Cons 1 Nil)))} -> {List Int | _v == xs})
 
 compress = \xs .
   match xs with
@@ -53,4 +54,15 @@ compress = \xs .
         Cons x10 x11 ->
           if x3 == x10
             then compress x4
-            else Cons x3 (Cons x10 x11)
+            else ?? -- Cons x3 (Cons x10 x11)
+
+-- compress = \xs .
+--   match xs with
+--     Nil -> Nil
+--     Cons x3 x4 ->
+--       match compress x4 with
+--         Nil -> Cons x3 Nil
+--         Cons x10 x11 ->
+--           if x3 == x10
+--             then compress x4
+--             else Cons x3 (Cons x10 x11)

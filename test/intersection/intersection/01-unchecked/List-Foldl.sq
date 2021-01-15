@@ -16,10 +16,10 @@ foldl (-) 3 [2,1] = ((-) ((-) 3 2) 1) = 0
 It cannot check, the error manifests as a shape mismatch on the recursive call.
 We believe this is related to a HOF auxilliary goal.
 -}
-foldl :: (xs:List a -> base:b -> f:(x:a -> acc:b -> b) -> b) ^
+foldl :: -- (xs:List a -> base:b -> f:(x:a -> acc:b -> b) -> b) ^
           (xs: List Int ->
             base:Int ->
-            f:(acc:Int -> x:Int -> {Int | _v == x - acc}) ->  -- f does subtraction
+            f:(acc:Int -> x:Int -> {Int | _v == (acc - x)}) ->  -- f does subtraction
             {Int | ((base == 3 && xs == (Cons 2 (Cons 1 Nil))) ==> (_v == 0)) &&
                    ((base == 1 && xs == (Cons 1 Nil))          ==> (_v == 0)) &&
                    ((base == 0 && xs == Nil)                   ==> (_v == 0))}) -- concrete, trace-complete examples

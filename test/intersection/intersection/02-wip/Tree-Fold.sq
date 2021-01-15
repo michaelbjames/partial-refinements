@@ -17,36 +17,37 @@ measure telems :: BinaryTree a -> Set a where
 
 {-
 I believe this spec must produce this function. However we cannot type check
-this right now. This possibly comes from checking the higher-order functions, but
-the error manifests as a shape mismatch (often a backtracked, red herring).
+this right now. This possibly comes from instantiating the `c` type variable to a function
 -}
-foldBinaryTree :: (nodeFun: (a -> c -> b) ->
+foldBinaryTree :: (BinaryTree a ->
+                  nodeFun: (a -> c -> b) ->
                   childFun: (b -> b -> c) ->
                   b ->
-                  BinaryTree a ->
                   b
                   ) ^
+                  (
+                  input:BinaryTree a ->
                   -- This polymorphic example should reconstruct the binary tree
                   -- if the function is implemented correctly. Here's how:
                   -- The node-function reconstructs a tree by joining left /
                   -- right branches with a node value.
-                  (nodeFun: (a -> (a -> {BinaryTree a | size _v >= 1}) -> BinaryTree a) ->
+                  nodeFun: (a -> mkNode:(a -> {BinaryTree a | size _v > 0}) -> BinaryTree a) ->
                    -- childFun should combine a pair of left & right branches
                    -- into a function to complete a subtree, needing only the
                    -- node value to join them together.
-                   childFun: (l:BinaryTree a -> r:BinaryTree a -> (v:a -> {BinaryTree a | size _v == (size l + size r + 1)})) ->
-                   -- Base needs to be empty to force output == input
-                   base:{BinaryTree a | size _v == 0 && _v == Empty} ->
-                   input:BinaryTree a ->
-                   {BinaryTree a | _v == input})
+                   childFun: (l:BinaryTree a -> r:BinaryTree a -> (v:a -> {BinaryTree a | _v == Node v l r})) ->
+                  -- Base needs to be empty to force output == input
+                  base:{BinaryTree a | size _v == 0 && _v == Empty} ->
+                   {BinaryTree a | _v == input}
+                   )
                   -- Update: I see this isn't enough: it's not an inductive
                   -- spec, and the first intersection isn't strong enough.
-foldBinaryTree = \nodeFun. \childFun. \base. \trs.
+foldBinaryTree = \trs. \nodeFun. \childFun. \base.
   match trs with
     Empty -> base
     Node label left right ->
       nodeFun
         label
         (childFun
-          (foldBinaryTree nodeFun childFun base left)
-          (foldBinaryTree nodeFun childFun base right))
+          (foldBinaryTree left nodeFun childFun base)
+          (foldBinaryTree right nodeFun childFun base))
