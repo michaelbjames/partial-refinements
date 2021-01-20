@@ -444,12 +444,12 @@ checkE env typ p@(Program pTerm pTyp) = do
   incremental <- asks . view $ _1 . incrementalChecking -- Is incremental type checking of E-terms enabled?
   consistency <- asks . view $ _1 . consistencyChecking -- Is consistency checking enabled?
 
-  when (incremental || arity typ == 0) ((logItFrom "checkE" (text "incremental added")) >> (addConstraint $ Subtype env pTyp typ False "")) -- Add subtyping check, unless it's a function type and incremental checking is diasbled
-  when (consistency && arity typ > 0) ((logItFrom "checkE" (text "consistency added")) >> (addConstraint $ Subtype env pTyp typ True "")) -- Add consistency constraint for function types
+  when (incremental || arity typ == 0) (addConstraint $ Subtype env pTyp typ False "") -- Add subtyping check, unless it's a function type and incremental checking is diasbled
+  when (consistency && arity typ > 0) (addConstraint $ Subtype env pTyp typ True "") -- Add consistency constraint for function types
   fTyp <- runInSolver $ finalizeType typ
-  logItFrom "checkE" (text "finalized type: " <+> pretty fTyp)
+  logItFrom "checkE" (text "finalized type:" <+> pretty fTyp)
   pos <- asks . view $ _1 . sourcePos
-  typingState . errorContext .= (pos, text "when checking" </> pretty p </> text "::" </> pretty fTyp </> text "in" $+$ pretty (ctx p))
+  typingState . errorContext .= (pos, text "when checking" </> pretty p <+> text "::" <+> pretty fTyp </> text "in" $+$ pretty (ctx p))
   runInSolver solveTypeConstraints
   typingState . errorContext .= (noPos, empty)
   writeLog 2 $ text "Checking OK:" <+> pretty p <+> text "::" <+> pretty fTyp <+> text "in" $+$ pretty (ctx (untyped PHole))

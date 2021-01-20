@@ -469,7 +469,7 @@ refineTop _ (ScalarT IntT _) = ScalarT IntT ftrue
 refineTop _ (ScalarT BoolT _) = ScalarT BoolT ftrue
 refineTop _ (ScalarT (TypeVarT vSubst a) _) = ScalarT (TypeVarT vSubst a) ftrue
 refineTop env (FunctionT x tArg tFun) = FunctionT x (refineBot env tArg) (refineTop env tFun)
-refineTop _ (AndT _ _) = error "We should not see an AndT being used in subtype relations."
+refineTop _ (AndT _ _) = error "refineTop: We should not see an AndT being used in subtype relations."
 
 -- | Insert strongest refinement
 refineBot :: Environment -> SType -> RType

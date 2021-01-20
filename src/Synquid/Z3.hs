@@ -8,7 +8,7 @@ import Synquid.Type
 import Synquid.Program
 import Synquid.SolverMonad
 import Synquid.Util ( bothM, debug, ifM, partitionM, Id )
-import Synquid.Pretty ( text, Pretty(pretty), ($+$), (<+>), (</>) )
+import Synquid.Pretty (brackets,  text, Pretty(pretty), ($+$), (<+>), (</>) )
 import Z3.Monad hiding (Z3Env, newEnv, Sort)
 import qualified Z3.Base as Z3
 
@@ -97,7 +97,12 @@ instance MonadSMT Z3State where
 
       case res of
         Unsat -> debug 2 (text "SMT CHECK" <+> pretty fml <+> text "UNSAT") $ return False
-        Sat -> debug 2 (text "SMT CHECK" <+> pretty fml <+> text "SAT") $ return True
+        Sat -> do
+          debug 2 (text "SMT CHECK" <+> pretty fml <+> text "SAT") $ return True
+          model <- solverGetModel
+          satModelStr <- modelToString model
+          debug 2 (brackets (text "isSat") <> text ": SAT model:" </> text satModelStr) $
+            return True
         -- _ -> error $ unwords ["isValid: Z3 returned Unknown for", show fml]
         _ -> debug 2 (text "SMT CHECK" <+> pretty fml <+> text "UNKNOWN treating as SAT") $ return True
       where
@@ -107,8 +112,9 @@ instance MonadSMT Z3State where
                           [ast]
                           _true
             s <- astToString ast
-            debug 2 (text "[MonadSMT]: isSat:" <+> text s) $
-              debug 2 (text "[MonadSMT]: isSat:" </> text str) $ assert ast
+            debug 2 (text "[MonadSMT]: isSat:" </> text s) $
+              -- debug 3 (text "[MonadSMT]: Z3 query:" </> text str) $
+              assert ast
 
   allUnsatCores = getAllMUSs
 

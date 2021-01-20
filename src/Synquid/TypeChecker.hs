@@ -137,25 +137,13 @@ reconstructI' env t (PLet x iDef@(Program (PFun _ _) _) iBody) = do -- lambda-le
 reconstructI' env t@(LetT x tDef tBody) impl =
   reconstructI' (addVariable x tDef env) tBody impl
 reconstructI' env t@(AndT l r) impl = do
-  writeLog 3 $ text "reconstructI' AndT Left branch:" <+> (pretty l)
+  logItFrom "reconstructI'" $ text "AndT checking Left branch:" <+> pretty l
   left <- reconstructI' env l impl
-  left' <- flip insertAuxSolutions left <$> use solvedAuxGoals 
-  logItFrom "reconstructI'" $ text "reconstructI' AndT Left program:" <+> (pretty left')
+  left' <- flip insertAuxSolutions left <$> use solvedAuxGoals
+  logItFrom "reconstructI'" $ text "reconstructI' AndT Left program checks:" <+> (pretty left')
+  logItFrom "reconstructI'" $ text "reconstructI' AndT Right branch: " <+> pretty r
   reconstructI' env r (content (eraseTypes left'))
   logItFrom "reconstructI'" $ text "reconstructI' AndT Left checks against Right:" <+> (pretty left)
-  {-
-  writeLog 3 $ text "reconstructI' AndT right branch:" <+> (pretty r)
-  right <- reconstructI' env r impl
-  right' <- flip insertAuxSolutions right <$> use solvedAuxGoals 
-  logItFrom "reconstructI'" $ text "reconstructI' AndT Right program:" <+> (pretty right')
-  reconstructI' env l (content (eraseTypes right'))
-  logItFrom "reconstructI'" $ text "reconstructI' AndT Right checks against left:" <+> (pretty right')
-  -}
-  -- right <- reconstructI' env r impl
-  -- logItFrom "reconstructI'" $ text "reconstructI' AndT Right program:" <+> (pretty right)
-  -- if ((eraseTypes left) == (eraseTypes right))
-  --   then return ()
-  --   else logItFrom "reconstructI'" (text "programs not equal") >> mzero
   writeLog 2 $ text "reconstructI' AndT complete"
   return left
 reconstructI' env t@(FunctionT _ tArg tRes) impl = case impl of
@@ -272,11 +260,21 @@ reconstructE' env typ (PSymbol name) =
       let nameShape = Map.lookup name (env ^. shapeConstraints)
       let shapes = unsequence $ intersectionToList <$> nameShape
       writeLog 3 $ text "nameShape:" <+> (text $ show shapes)
+      when (length ts /= length shapes)
+        $ error $ unwords ["ts and shapes have different lengths: ts:", show $ length ts, "vs shapes:", show $ length shapes]
       -- t could be an intersection, loop over choices
-      let choices = (flip map) (zip ts shapes) $ \(t, s) -> do
+
+      symbolUseCount %= Map.insertWith (+) name 1
+      let iterList = zip3 ts shapes [1..]
+      let choices = flip map iterList $ \(t, s, idx) -> do
+            logItFrom "reconstructE" $ brackets (text "PSymbol")
+              <> text ": making choice"
+              <+> parens ((text $ show idx) <> text "/" <> (text $ show $ length iterList))
+              <+> text "for" <+> text name
+              <> L.nest 4 (L.line <> (text "type:" <+> pretty t) L.<$> (text "shape:" <+> pretty s))
+
             let p = Program (PSymbol name) t
-            symbolUseCount %= Map.insertWith (+) name 1
-            -- if the shape was an intersection, they should all be the same.
+            -- if the shape was an intersection, all parts of the intersection should all have the same shape.
             case s of
               Nothing -> return ()
               Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False ""
