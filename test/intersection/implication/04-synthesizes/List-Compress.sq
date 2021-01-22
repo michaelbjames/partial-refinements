@@ -28,22 +28,30 @@ type CList a = PList a <{!(_0 in heads _1)}>
 
 {-
 Checks
-Not strong enough to synthesize. Needs more examples.
+I think this is strong enough to synthesize. But it doesn't check against the old spec.
 -}
 compress_int :: xs: List Int -> {List Int |
     (xs == Nil ==> (_v == Nil)) &&
     (xs == (Cons 1 Nil) ==> (_v == (Cons 1 Nil))) &&
     (xs == (Cons 1 (Cons 1 Nil)) ==> (_v == (Cons 1 Nil))) &&
     (xs == (Cons 2 (Cons 1 (Cons 1 Nil))) ==> (_v == (Cons 2 (Cons 1 Nil)))) &&
+    (xs == (Cons 2 (Cons 2 (Cons 1 (Cons 1 Nil)))) ==> (_v == (Cons 2 (Cons 1 Nil)))) &&
+
+    (xs == (Cons 1 (Cons 1 (Cons 1 Nil))) ==> (_v == (Cons 1 Nil))) &&
+
+    (xs == (Cons 2 (Cons 1 Nil)) ==> (_v == (Cons 2 (Cons 1 Nil)))) &&
+    (xs == (Cons 3 (Cons 2 (Cons 1 Nil))) ==> (_v == (Cons 3 (Cons 2 (Cons 1 Nil))))) &&
+
     True
     }
-compress_int = \xs .
-  match xs with
-    Nil -> Nil
-    Cons x3 x4 ->
-      match compress_int x4 with
-        Nil -> Cons x3 Nil
-        Cons x10 x11 ->
-          if x3 == x10
-            then compress_int x4
-            else Cons x3 (Cons x10 x11)
+compress_int = ??
+-- compress_int = \xs .
+--   match xs with
+--     Nil -> Nil
+--     Cons x3 x4 ->
+--       match compress_int x4 with
+--         Nil -> Cons x3 Nil
+--         Cons x10 x11 ->
+--           if x3 == x10
+--             then compress_int x4
+--             else Cons x3 (Cons x10 x11)

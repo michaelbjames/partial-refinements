@@ -16,7 +16,7 @@ termination measure len :: List a -> {Int | _v >= 0} where
 
 inc :: x: Int -> {Int | _v == (x + 1)}
 
-map :: f: (a -> b) -> xs: List a -> {List b | len _v == len xs}
+map :: f: (a -> b) -> xs: List a -> {List b | (len _v == len xs) && (xs == Nil ==> _v == Nil)}
 map = \f . \xs .
     match xs with
       Nil -> Nil
@@ -25,7 +25,8 @@ map = \f . \xs .
                     Cons (f x3) (map f0 x4)
 
 {-
-There's a problem with nil. This does not check
+I had to make `map` stronger than the intersection version.
+Map now includes a Nil case.
 -}
 list_inc_conj :: (xs: List Int -> {List Int |
   ((xs == Nil) ==> (_v == Nil)) &&

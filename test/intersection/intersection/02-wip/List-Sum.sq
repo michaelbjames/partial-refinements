@@ -8,12 +8,13 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs
 
--- Checks
+plus :: x:Int -> y:Int -> {Int | _v == (x+y)}
+
 sum :: (List Int -> Int) ^
 	   (xs: List {Int| _v == 3} -> {Int | _v == (3 * len xs)})
 sum = \xs.
 	match xs with
 		Nil -> 0
-		Cons y ys -> y + sum ys
+		Cons y ys -> plus y (sum ys)
 
 

@@ -17,9 +17,10 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Cons x xs -> 1 + len xs
 
 
--- map :: f: (a -> b) -> xs: List a -> {List b | len _v == len xs}
--- checks but does not synthesize!
-unzip :: ps: List (Pair (a) (b)) -> Pair ({List a| len _v == len ps}) ({List b|len _v == len ps})
+{-
+I believe this should synthesize. But it also just doesn't need an intersection
+-}
+unzip ::(ps: List (Pair (a) (b)) -> Pair ({List a| len _v == len ps}) ({List b|len _v == len ps}))
 unzip = \ps.
   match ps with
     Nil -> Pair (Nil) (Nil)
@@ -27,4 +28,4 @@ unzip = \ps.
       match (unzip qs) with
         Pair ls rs ->
           match q with
-            Pair l r -> Pair (Cons l ls) (Cons r rs)
+            Pair l r ->  Pair (Cons l ls) (Cons r rs)

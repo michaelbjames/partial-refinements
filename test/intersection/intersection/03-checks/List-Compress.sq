@@ -24,26 +24,25 @@ type CList a = PList a <{!(_0 in heads _1)}>
 
 
 {-
-Does not check
-I'm missing part of the specification. This isn't strong enough yet.
-It fails with:
-Error:
-Cannot find sufficiently strong refinements
-  when checking
-  compress x4 ::
-  {PList Int <True>|_v == (Cons 1 (Nil))}
+
 -}
 compress ::
   -- The output is always shorter or equal to the input
-  (xs: List Int -> {List Int | (len _v < len xs) || (_v == xs)}) ^
+  (xs: List Int -> {List Int | ((len _v < len xs) || (_v == xs)) && elems _v == elems xs}) ^
+
   -- If it's empty list, then it should produce nothing
   (xs: {List Int | len _v == 0} -> {List Int | _v == Nil}) ^
-  -- The next two don't work and it's not clear why.
-  -- If the list is all 1s, then the output should be just 1
-  -- (xs: {List {Int | _v == 1} | len _v > 0} -> {List Int | _v == (Cons 1 Nil)})
-  (xs: {List Int | _v == (Cons 1 Nil) || _v == (Cons 1 (Cons 1 Nil))} -> {List Int | _v == (Cons 1 Nil)}) ^
+
+  -- A couple base cases
+  (xs: {List Int |  _v == (Cons 1 (Cons 1 Nil))} -> {List Int | _v == (Cons 1 Nil)}) ^
+
   -- An example where it keeps two different elements
-  (xs: {List Int | _v == Cons 2 (Cons 1 Nil) || _v == (Cons 3 (Cons 2 (Cons 1 Nil)))} -> {List Int | _v == xs})
+  -- (xs: {List Int | _v == Cons 2 (Cons 1 Nil)} -> {List Int | _v == xs}) ^
+  -- (xs: {List Int | _v == Cons 3 (Cons 2 (Cons 1 Nil))} -> {List Int | _v == xs})
+
+  -- This spec will not work. It gets tripped on the first call to compress
+  -- This spec will work if it is split in two, at the disjunction in the predicate.
+  (xs: {List Int | _v == Nil || _v == (Cons 1 Nil) || _v == Cons 2 (Cons 1 Nil) || _v == (Cons 3 (Cons 2 (Cons 1 Nil))) } -> {List Int | _v == xs})
 
 compress = \xs .
   match xs with
@@ -54,15 +53,4 @@ compress = \xs .
         Cons x10 x11 ->
           if x3 == x10
             then compress x4
-            else ?? -- Cons x3 (Cons x10 x11)
-
--- compress = \xs .
---   match xs with
---     Nil -> Nil
---     Cons x3 x4 ->
---       match compress x4 with
---         Nil -> Cons x3 Nil
---         Cons x10 x11 ->
---           if x3 == x10
---             then compress x4
---             else Cons x3 (Cons x10 x11)
+            else Cons x3 (Cons x10 x11)
