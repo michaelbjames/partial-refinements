@@ -1,7 +1,28 @@
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
 -- Not strong enough...
-pairs :: ((a -> a -> a) -> xs:List a -> {List a | (len xs > 1) ==> ((2 * len _v >= len xs) && (len _v < len xs))}) ^
-         ((a -> a -> a) -> xs:List a -> {List a | (len xs <= 1) ==> (_v == xs)})
+-- pairs :: ((a -> a -> a) -> xs:List a -> {List a |
+--                 (len xs > 1) ==> ((2 * len _v >= len xs) && (len _v < len xs))}) ^
+--          ((a -> a -> a) -> xs:List a -> {List a | (len xs <= 1) ==> (_v == xs)})
 -- This is strong enough.
 --pairs :: (a -> a -> a) -> xs:List a -> {List a |
 --           ((len xs > 1) ==> ((2 * len _v >= len xs) && len _v < len xs)) &&
 --           ((len xs <= 1) ==> (_v == xs)) }
+
+
+pairs :: ((a -> a -> a) -> xs:{List a | len _v > 1} -> {List a |
+                (2 * len _v >= len xs) && (len _v < len xs)}) ^
+         ((a -> a -> a) -> xs:{List a | len _v <= 1} -> {List a | _v == xs})
+pairs = \f. \xs.
+    match xs with
+        Nil -> Nil
+        Cons z zs ->
+            match zs with
+                Nil -> z
+                Cons y ys -> Cons (f z y) (pairs f ys)

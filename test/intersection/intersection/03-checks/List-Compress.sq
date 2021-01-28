@@ -41,8 +41,10 @@ compress ::
   -- (xs: {List Int | _v == Cons 3 (Cons 2 (Cons 1 Nil))} -> {List Int | _v == xs})
 
   -- This spec will not work. It gets tripped on the first call to compress
+  (xs: {List Int | _v == Cons 2 (Cons 1 Nil) || _v == Cons 3 (Cons 2 (Cons 1 Nil))} -> {List Int | _v == xs})
+
   -- This spec will work if it is split in two, at the disjunction in the predicate.
-  (xs: {List Int | _v == Nil || _v == (Cons 1 Nil) || _v == Cons 2 (Cons 1 Nil) || _v == (Cons 3 (Cons 2 (Cons 1 Nil))) } -> {List Int | _v == xs})
+  -- (xs: {List Int | _v == Nil || _v == (Cons 1 Nil) || _v == Cons 2 (Cons 1 Nil) || _v == (Cons 3 (Cons 2 (Cons 1 Nil))) } -> {List Int | _v == xs})
 
 compress = \xs .
   match xs with
