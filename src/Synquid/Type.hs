@@ -26,6 +26,7 @@ data TypeSkeleton r =
   FunctionT Id (TypeSkeleton r) (TypeSkeleton r) |
   LetT Id (TypeSkeleton r) (TypeSkeleton r) |
   AndT (TypeSkeleton r) (TypeSkeleton r) |
+  UnionT (TypeSkeleton r) (TypeSkeleton r) |
   AnyT
   deriving (Show, Eq, Ord)
 
@@ -37,25 +38,34 @@ isScalarType (ScalarT _ _) = True
 -- isScalarType (LetT _ _ t) = isScalarType t
 isScalarType (LetT _ _ _) = True
 isScalarType _ = False
+
 baseTypeOf (ScalarT baseT _) = baseT
 baseTypeOf (LetT _ _ t) = baseTypeOf t
 baseTypeOf _ = error "baseTypeOf: applied to a function type"
+
 isFunctionType (FunctionT _ _ _) = True
 -- isFunctionType (LetT _ _ t) = isFunctionType t
 isFunctionType _ = False
+
 argType (FunctionT _ t _) = t
 resType (FunctionT _ _ t) = t
 
-isIntersection (AndT _ _) = False
+isIntersection (AndT _ _) = True
 isIntersection _ = False
+
+isUnion (UnionT _ _) = True
+isUnion _ = False
 
 containsIntersection (AndT _ _) = True
 containsIntersection (FunctionT _ arg res) = containsIntersection arg || containsIntersection res
 containsIntersection (LetT _ binding bound) = containsIntersection binding || containsIntersection bound
 containsIntersection _ = False
 
-intersectionToList (AndT lty rty) = (intersectionToList lty) ++ (intersectionToList rty)
+intersectionToList (AndT lty rty) = intersectionToList lty ++ intersectionToList rty
 intersectionToList x = [x]
+
+unionToList (UnionT lty rty) = unionToList lty ++ unionToList rty
+unionToList x = [x]
 
 hasAny AnyT = True
 hasAny (ScalarT baseT _) = baseHasAny baseT
@@ -257,7 +267,8 @@ shape (ScalarT BoolT _) = ScalarT BoolT ()
 shape (ScalarT (TypeVarT _ a) _) = ScalarT (TypeVarT Map.empty a) ()
 shape (FunctionT x tArg tFun) = FunctionT x (shape tArg) (shape tFun)
 shape (LetT _ _ t) = shape t
-shape (AndT l r) = AndT (shape l) (shape r)
+-- shape (AndT l r) = AndT (shape l) (shape r)
+shape (AndT l r) = shape l
 shape AnyT = AnyT
 
 -- | Conjoin refinement to a type
@@ -276,6 +287,7 @@ addRefinementToLast (FunctionT x tArg tRes) fml = FunctionT x tArg (addRefinemen
 addRefinementToLast (LetT x tDef tBody) fml = LetT x tDef (addRefinementToLast tBody fml)
 
 -- | Conjoin refinement to the return type inside a schema
+addRefinementToLastSch :: SchemaSkeleton Formula -> Formula -> SchemaSkeleton Formula
 addRefinementToLastSch (Monotype t) fml = Monotype $ addRefinementToLast t fml
 addRefinementToLastSch (ForallT a sch) fml = ForallT a $ addRefinementToLastSch sch fml
 addRefinementToLastSch (ForallP sig sch) fml = ForallP sig $ addRefinementToLastSch sch fml

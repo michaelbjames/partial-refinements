@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, FlexibleContexts, TupleSections #-}
+{-# LANGUAGE TemplateHaskell, FlexibleContexts, TupleSections, DeriveDataTypeable #-}
 
 -- | Generating synthesis constraints from specifications, qualifiers, and program templates
 module Synquid.Explorer where
@@ -8,8 +8,8 @@ import Synquid.Type hiding (set)
 import Synquid.Program
 import Synquid.Error
 import Synquid.SolverMonad
-import Synquid.TypeConstraintSolver hiding (freshId, freshVar)
-import qualified Synquid.TypeConstraintSolver as TCSolver (freshId, freshVar)
+import Synquid.TypeConstraintSolver hiding (freshId, freshVar, fresh, freshFromIntersect)
+import qualified Synquid.TypeConstraintSolver as TCSolver
 import Synquid.Util
 import Synquid.Pretty
 import Synquid.Tokens
@@ -27,6 +27,8 @@ import Control.Monad.Reader
 import Control.Applicative hiding (empty)
 import Control.Lens
 import Debug.Trace
+import Development.Placeholders
+import Data.Data (Data)
 
 {- Interface -}
 
@@ -36,6 +38,12 @@ data FixpointStrategy =
   | FirstArgument     -- ^ Fixpoint decreases the first well-founded argument
   | AllArguments      -- ^ Fixpoint decreases the lexicographical tuple of all well-founded argument in declaration order
   | Nonterminating    -- ^ Fixpoint without termination check
+
+-- | How to deal with intersections at Var rule sites?
+data IntersectStrategy =
+    EitherOr         -- ^ Try to check with only one of the intersected types
+  | InferMedian      -- ^ Find some supertype that is not an intersection itself
+  deriving (Data, Eq, Ord, Show)
 
 -- | Choices for the order of e-term enumeration
 data PickSymbolStrategy = PickDepthFirst | PickInterleave
@@ -59,7 +67,8 @@ data ExplorerParams = ExplorerParams {
   _useMemoization :: Bool,                -- ^ Should enumerated terms be memoized?
   _symmetryReduction :: Bool,             -- ^ Should partial applications be memoized to check for redundancy?
   _sourcePos :: SourcePos,                -- ^ Source position of the current goal
-  _explorerLogLevel :: Int                -- ^ How verbose logging is
+  _explorerLogLevel :: Int,                -- ^ How verbose logging is
+  _intersectStrategy :: IntersectStrategy
 }
 
 makeLenses ''ExplorerParams
@@ -444,8 +453,8 @@ checkE env typ p@(Program pTerm pTyp) = do
   incremental <- asks . view $ _1 . incrementalChecking -- Is incremental type checking of E-terms enabled?
   consistency <- asks . view $ _1 . consistencyChecking -- Is consistency checking enabled?
 
-  when (incremental || arity typ == 0) (addConstraint $ Subtype env pTyp typ False "") -- Add subtyping check, unless it's a function type and incremental checking is diasbled
-  when (consistency && arity typ > 0) (addConstraint $ Subtype env pTyp typ True "") -- Add consistency constraint for function types
+  when (incremental || arity typ == 0) (addConstraint $ Subtype env pTyp typ False "checkE-subtype") -- Add subtyping check, unless it's a function type and incremental checking is diasbled
+  when (consistency && arity typ > 0) (addConstraint $ Subtype env pTyp typ True "checkE-consistency") -- Add consistency constraint for function types
   fTyp <- runInSolver $ finalizeType typ
   logItFrom "checkE" (text "finalized type:" <+> pretty fTyp)
   pos <- asks . view $ _1 . sourcePos
@@ -465,6 +474,7 @@ enumerateAt env typ 0 = do
     msum $ map pickSymbol symbols'
   where
     pickSymbol (name, sch) = do
+      $(todo "inferMedian type")
       when (Set.member name (env ^. letBound)) mzero
       t <- symbolType env name sch
       let ts = intersectionToList t
@@ -477,7 +487,7 @@ enumerateAt env typ 0 = do
             -- if the shape was an intersection, they should all be the same.
             case s of
               Nothing -> return ()
-              Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False ""
+              Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False "enum-symbol"
             return p
       msum choices
 
@@ -603,6 +613,12 @@ freshId = runInSolver . TCSolver.freshId
 freshVar :: MonadHorn s => Environment -> String -> Explorer s String
 freshVar env prefix = runInSolver $ TCSolver.freshVar env prefix
 
+fresh :: MonadHorn s => Environment -> RType -> Explorer s RType
+fresh env t = runInSolver $ TCSolver.fresh env t
+
+freshFromIntersect :: MonadHorn s => Environment -> RType -> Explorer s RType
+freshFromIntersect env t = runInSolver $ TCSolver.freshFromIntersect env t
+
 -- | Return the current valuation of @u@;
 -- in case there are multiple solutions,
 -- order them from weakest to strongest in terms of valuation of @u@ and split the computation
@@ -642,12 +658,25 @@ instantiate env sch top argNames = do
               else return ffalse
       instantiate' subst (Map.insert p fml pSubst) sch
     instantiate' subst pSubst (Monotype t) = go subst pSubst argNames t
+
     go subst pSubst argNames (FunctionT x tArg tRes) = do
       x' <- case argNames of
               [] -> freshVar env "x"
               (argName : _) -> return argName
       liftM2 (FunctionT x') (go subst pSubst [] tArg) (go subst pSubst (drop 1 argNames) (renameVar (isBoundTV subst) x x' tArg tRes))
+    go subst pSubst argNames t@AndT{} = do
+      let intersectedTypes = intersectionToList t
+      medianType <- freshFromIntersect env t
+      -- let medianType = shape t
+      unless (isFunctionType medianType) $
+        error "varInferMedian: Goal type not a function!"
+      addConstraint $ WellFormed env medianType
+      addConstraint $ Subtype env t medianType False "instantiate-isect-LHS"
+      -- The G |- medianType <: goalType happens back in the PSymbol rule
+      -- medianType <- varInferMedian env t
+      go subst pSubst argNames medianType
     go subst pSubst _ t = return $ typeSubstitutePred pSubst . typeSubstitute subst $ t
+
     isBoundTV subst a = (a `Map.member` subst) || (a `elem` (env ^. boundTypeVars))
 
 -- | 'symbolType' @env x sch@: precise type of symbol @x@, which has a schema @sch@ in environment @env@;

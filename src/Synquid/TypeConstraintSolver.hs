@@ -26,6 +26,8 @@ module Synquid.TypeConstraintSolver (
   hasPotentialScrutinees,
   freshId,
   freshVar,
+  freshFromIntersect,
+  fresh,
   currentAssignment,
   finalizeType,
   finalizeProgram,
@@ -45,6 +47,7 @@ import Synquid.Resolver (addAllVariables)
 
 import Data.Maybe
 import Data.List
+import Data.List.Extra (allSame)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
@@ -266,6 +269,7 @@ simplifyConstraint c = do
   simplifyConstraint' tass pass c
 
 -- Any type: drop
+simplifyConstraint' :: MonadHorn s => Map Id RType -> Map Id a -> Constraint -> TCSolver s ()
 simplifyConstraint' _ _ (Subtype _ _ AnyT _ _) = return ()
 simplifyConstraint' _ _ c@(Subtype _ AnyT _ _ _) = return ()
 simplifyConstraint' _ _ c@(WellFormed _ AnyT) = return ()
@@ -347,9 +351,58 @@ simplifyConstraint' _ _ c@(Subtype _ (ScalarT baseT _) (ScalarT baseT' _) _ _) |
 simplifyConstraint' _ _ c@(WellFormed _ (ScalarT baseT _)) = simpleConstraints %= (c :)
 simplifyConstraint' _ _ c@(WellFormedCond _ _) = simpleConstraints %= (c :)
 simplifyConstraint' _ _ c@(WellFormedMatchCond _ _) = simpleConstraints %= (c :)
+
+-- Intersection type
+-- Assert the intersection is a function
+simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superTArg superTRet) consisent@False label) = do
+  let conjuncts = intersectionToList isect
+  unless (isFunctionType . head $ conjuncts) $
+    throwError $ text  "Cannot subtype intersection of non-function" <+> squotes (pretty isect) $+$ text "with " <+> squotes (pretty superT)
+  let conjunctArgs = map argType conjuncts
+  when (any isIntersection conjunctArgs) $
+    throwError $ text  "Intersection of functions, whose arguments are intersections!" <+> squotes (pretty isect) $+$ text "<(??):" <+> squotes (pretty superT)
+  let unionOfArgs = foldr1 UnionT conjunctArgs
+  -- G |- superTArg <: (subTArg1 OR ... OR .. subTArgN)
+  simplifyConstraint $ Subtype env superTArg unionOfArgs consisent (label ++ "+arg-world-union")
+
+  -- Bind the argument in the environement, and generate a new subtyping constraint
+  -- G, x: (AndT subTArg superTArg) |- subTRet <: superTRet
+  forM_ (zip conjuncts [1..]) $ \(FunctionT x subTArg subTRet, idx) -> do
+    if isScalarType subTArg
+    then simplifyConstraint $
+      Subtype (addVariable y (AndT subTArg superTArg) env)
+        (renameVar (isBound env) x y subTArg subTRet)
+        superTRet
+        consisent (label ++ "+ret-world-" ++ show idx)
+    else error "argument is not a scalar!"
+      -- simplifyConstraint $  -- The argument is a HOF. Not sure if this is right.
+      -- Subtype env subTRet superTRet consisent label
+
+-- Union Type
+simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label)
+  -- Reflexivity
+  | l == r  && l == subT = return ()
+  -- Everyone's on the same basetype, we can push the Union into the refinement
+  | (not . isFunctionType $ subT)
+    -- TODO: Skipping subT becuase it isn't decided yet,
+    -- we'll make sure it has the same shape as the other two.
+    -- This won't always be the case, say in a 3-way union where
+    -- && baseTypeOf l == baseTypeOf subT
+    && allSame (map baseTypeOf $ unionToList superT) = do
+      let fmls = concatMap allRefinementsOf' $ unionToList superT
+      let (ScalarT repB _) = head $ unionToList superT
+      let newSuperT = ScalarT repB (foldr1 (|||) fmls)
+      simplifyConstraint (Subtype env subT newSuperT consistent (label ++ "+pushed-into-refinement"))
+  | otherwise = throwError $ text "Cannot decompose RHS union"
+    <+> squotes (pretty subT) <+> text "<:"
+    <+> squotes (pretty superT) <+> parens (text label)
+
 -- Otherwise (shape mismatch): fail
-simplifyConstraint' _ _ (Subtype _ t t' _ _) =
-  throwError $ text  "Cannot match shape" <+> squotes (pretty $ shape t) $+$ text "with shape" <+> squotes (pretty $ shape t')
+simplifyConstraint' _ _ (Subtype _ t t' _ label) =
+  throwError $ text  "Cannot match shape"
+    <+> squotes (pretty $ shape t)
+    $+$ text "with shape" <+> squotes (pretty $ shape t')
+    $+$ text "from label" <+> squotes (text label)
 
 -- | Unify type variable @a@ with type @t@ or fail if @a@ occurs in @t@
 unify env a t = if a `Set.member` typeVarsOf t
@@ -425,6 +478,11 @@ processConstraint c@(Subtype env (ScalarT baseTL l) (ScalarT baseTR r) False lab
       let c' = Subtype env (ScalarT baseTL lhs) (ScalarT baseTR rhs) False label
       writeLog 3 $ text "addSplitConstraint" <+> pretty c'
       simpleConstraints %= (c' :)
+-- processConstraint (Subtype env (ScalarT baseTl l) unionR@UnionT{} False label) | allSame (map baseTypeOf $ unionToList unionR)
+--   = do
+--     let disjunctTypes = unionToList unionR
+--     -- ([[G]] /\ l) ==> (U1 \/ U2 ... \/ UN)
+--     error "foo"
 
 processConstraint (Subtype env (ScalarT baseTL l) (ScalarT baseTR r) True label) | baseTL == baseTR
   = do
@@ -533,7 +591,14 @@ embedding env vars includeQuantified = do
                     addBindings env tass pass qmap (fmls `Set.union` fmls') (rest `Set.union` newVars)
                   LetT y tDef tBody -> addBindings (addVariable x tBody . addVariable y tDef . removeVariable x $ env) tass pass qmap fmls vars
                   AnyT -> Set.singleton ffalse
-                  _ -> error $ unwords ["embedding: encountered non-scalar variable", x, "in 0-arity bucket"]
+                  AndT l r -> let
+                    envl = addVariable x l (removeVariable x env)
+                    envr = addVariable x r (removeVariable x env)
+                    leftBound = addBindings envl tass pass qmap fmls (Set.singleton x)
+                    rightBound = addBindings envr tass pass qmap fmls vars
+                    in
+                      leftBound `Set.union` rightBound
+                  t -> error $ unwords ["embedding: encountered non-scalar variable", x, "in 0-arity bucket, with type", show $ pretty t]
                 Just sch -> addBindings env tass pass qmap fmls rest -- TODO: why did this work before?
     allSymbols = symbolsOfArity 0
 
@@ -571,7 +636,9 @@ somewhatFreshVar env prefix s = Var s name
                     then unbound (n + 1) (v ++ show n)
                     else v
 
--- | 'fresh' @t@ : a type with the same shape as @t@ but fresh type variables, fresh predicate variables, and fresh unknowns as refinements
+-- | 'fresh' @t@ : a type with the same shape as @t@ but fresh type variables,
+-- fresh predicate variables, and fresh unknowns as refinements.
+-- a "fresh" intersection is not an intersection, but has the shape of one of its conjuncts
 fresh :: Monad s => Environment -> RType -> TCSolver s RType
 fresh env (ScalarT (TypeVarT vSubst a) _) | not (isBound env a) = do
   -- Free type variable: replace with fresh free type variable
@@ -593,13 +660,20 @@ fresh env (ScalarT baseT _) = do
     freshBase baseT = return baseT
 fresh env (FunctionT x tArg tFun) =
   liftM2 (FunctionT x) (fresh env tArg) (fresh env tFun)
-fresh env t = let (env', t') = embedContext env t in fresh env' t'
+fresh env t =  let (env', t') = embedContext env t in fresh env' t'
 
 freshPred env sorts = do
   p' <- freshId "P"
   modify $ addTypingConstraint (WellFormedPredicate env sorts p')
   let args = zipWith Var sorts deBrujns
   return $ Pred BoolS p' args
+
+freshFromIntersect env (AndT l r) = freshFromIntersect env l
+freshFromIntersect env (FunctionT x tArg tRes) = do
+  tArg' <- freshFromIntersect env tArg
+  tRes' <- freshFromIntersect env tRes
+  return $ FunctionT x tArg' tRes'
+freshFromIntersect env t@(ScalarT _ _) = fresh env t
 
 addTypeAssignment tv t = typeAssignment %= Map.insert tv t
 addPredAssignment p fml = predAssignment %= Map.insert p fml

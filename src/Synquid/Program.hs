@@ -469,7 +469,7 @@ refineTop _ (ScalarT IntT _) = ScalarT IntT ftrue
 refineTop _ (ScalarT BoolT _) = ScalarT BoolT ftrue
 refineTop _ (ScalarT (TypeVarT vSubst a) _) = ScalarT (TypeVarT vSubst a) ftrue
 refineTop env (FunctionT x tArg tFun) = FunctionT x (refineBot env tArg) (refineTop env tFun)
-refineTop _ (AndT _ _) = error "refineTop: We should not see an AndT being used in subtype relations."
+refineTop env (AndT l r) = AndT (refineTop env l) (refineTop env r)
 
 -- | Insert strongest refinement
 refineBot :: Environment -> SType -> RType
@@ -480,7 +480,7 @@ refineBot _ (ScalarT IntT _) = ScalarT IntT ffalse
 refineBot _ (ScalarT BoolT _) = ScalarT BoolT ffalse
 refineBot _ (ScalarT (TypeVarT vSubst a) _) = ScalarT (TypeVarT vSubst a) ffalse
 refineBot env (FunctionT x tArg tFun) = FunctionT x (refineTop env tArg) (refineBot env tFun)
-refineBot _ (AndT _ _) = error "refineBot: unhandled AndT"
+refineBot env (AndT l r) = AndT (refineBot env l) (refineBot env r)
 
 {- Input language declarations -}
 

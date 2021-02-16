@@ -232,6 +232,7 @@ prettySType :: SType -> Doc
 prettySType (ScalarT base _) = pretty base
 prettySType (FunctionT _ t1 t2) = hlParens (pretty t1 <+> operator "->" <+> pretty t2)
 prettySType (AndT l r) = hlParens (pretty l <+> operator "^" <+> pretty r)
+prettySType (UnionT t1 t2) = hlParens (pretty t1) <+> operator "\\/" <+> hlParens (pretty t2)
 prettySType AnyT = text "_"
 
 instance Pretty SType where
@@ -257,6 +258,7 @@ prettyTypeAt n t = condHlParens (n' <= n) (
     FunctionT x t1 t2 -> text x <> operator ":" <> prettyTypeAt n' t1 <+> operator "->" <+> prettyTypeAt 0 t2
     LetT x t1 t2 -> text "LET" <+> text x <> operator ":" <> prettyTypeAt n' t1 <+> operator "IN" <+> prettyTypeAt 0 t2
     AndT t1 t2 -> hlParens (pretty t1) <+> operator "^" <+> hlParens (pretty t2)
+    UnionT t1 t2 -> hlParens (pretty t1) <+> operator "\\/" <+> hlParens (pretty t2)
   )
   where
     n' = typePower t
@@ -335,7 +337,7 @@ prettyBindings env = commaSep (map pretty (Map.keys $ removeDomain (env ^. const
 -- prettyBindings env = empty
 
 instance Pretty Environment where
-  pretty env = prettyBindings env <+> prettyAssumptions env
+  pretty env = prettyBindings env <> text ";" <+> prettyAssumptions env
 
 prettySortConstraint :: SortConstraint -> Doc
 prettySortConstraint (SameSort sl sr) = pretty sl <+> text "=" <+> pretty sr

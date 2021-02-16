@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 -- | Refinement type reconstruction for programs with holes
 module Synquid.TypeChecker (reconstruct, reconstructTopLevel) where
 
@@ -23,6 +24,7 @@ import Control.Monad.Reader
 import Control.Applicative hiding (empty)
 import Control.Lens
 import qualified Text.PrettyPrint.ANSI.Leijen as L
+import Development.Placeholders
 import Debug.Trace
 
 -- | 'reconstruct' @eParams tParams goal@ : reconstruct missing types and terms in the body of @goal@ so that it represents a valid type judgment;
@@ -249,38 +251,55 @@ reconstructE' _ (AndT _ _) _ = error "and E-term cannot have an intersection"
 reconstructE' env typ PHole = do
   d <- asks . view $ _1 . eGuessDepth
   generateEUpTo env typ d
-reconstructE' env typ (PSymbol name) =
+{- Var Rule -}
+reconstructE' env typ (PSymbol name) = do
+  intersectionStrat <- asks . view $ _1 . intersectStrategy
   case lookupSymbol name (arity typ) (hasSet typ) env of
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
     Just sch -> do
       writeLog 3 $ text "schema:" <+> (pretty sch)
-      t' <- symbolType env name sch
-      writeLog 3 $ text "symbol type:" <+> (pretty t')
-      let ts = intersectionToList t'
-      let nameShape = Map.lookup name (env ^. shapeConstraints)
-      let shapes = unsequence $ intersectionToList <$> nameShape
-      writeLog 3 $ text "nameShape:" <+> (text $ show shapes)
-      when (length ts /= length shapes)
-        $ error $ unwords ["ts and shapes have different lengths: ts:", show $ length ts, "vs shapes:", show $ length shapes]
-      -- t could be an intersection, loop over choices
+      t' <- symbolType env name sch  -- symbolType will select the right type if it's polymorphic
+      case intersectionStrat of
 
-      symbolUseCount %= Map.insertWith (+) name 1
-      let iterList = zip3 ts shapes [1..]
-      let choices = flip map iterList $ \(t, s, idx) -> do
-            logItFrom "reconstructE" $ brackets (text "PSymbol")
-              <> text ": making choice"
-              <+> parens ((text $ show idx) <> text "/" <> (text $ show $ length iterList))
-              <+> text "for" <+> text name
-              <> L.nest 4 (L.line <> (text "type:" <+> pretty t) L.<$> (text "shape:" <+> pretty s))
+        {- Select one side of an intersection -}
+        EitherOr -> do
+          writeLog 3 $ text "symbol type:" <+> (pretty t')
+          let ts = intersectionToList t'
+          let nameShape = head . intersectionToList <$> Map.lookup name (env ^. shapeConstraints)
+          writeLog 3 $ text "nameShape:" <+> (text $ show nameShape)
+          -- when (length ts /= length shapes)
+          -- $ error $ unwords ["ts and shapes have different lengths: ts:", show $ length ts, "vs shapes:", show $ length shapes]
+          -- t could be an intersection, loop over choices
 
-            let p = Program (PSymbol name) t
-            -- if the shape was an intersection, all parts of the intersection should all have the same shape.
-            case s of
+          symbolUseCount %= Map.insertWith (+) name 1
+          let iterList = zip3 ts (repeat nameShape) [1..]
+          let choices = flip map iterList $ \(t, s, idx) -> do
+                logItFrom "reconstructE" $ brackets (text "PSymbol")
+                  <> text ": making choice"
+                  <+> parens ((text $ show idx) <> text "/" <> (text $ show $ length iterList))
+                  <+> text "for" <+> text name
+                  <> L.nest 4 (L.line <> (text "type:" <+> pretty t) L.<$> (text "shape:" <+> pretty s))
+
+                let p = Program (PSymbol name) t
+                -- if the shape was an intersection, all parts of the intersection should all have the same shape.
+                case s of
+                  Nothing -> return ()
+                  Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False "var-eitherOr-shape-match"
+                checkE env typ p
+                return p
+          msum choices
+
+        {- Base rule -}
+        _ -> do
+          logItFrom "reconstructE'-Var-Base" (text "symbol:" <+> (pretty name) <> (text "::") <> (pretty typ) <+> (text "symbol type:")  <+> (pretty t'))
+          symbolUseCount %= Map.insertWith (+) name 1
+          let p = Program (PSymbol name) t'
+          case Map.lookup name (env ^. shapeConstraints) of
               Nothing -> return ()
-              Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False ""
-            checkE env typ p
-            return p
-      msum choices
+              Just sc -> addConstraint $ Subtype env (refineBot env $ shape t') (refineTop env sc) False "var-shape-match"
+          checkE env typ p
+          logItFrom "reconstructE'-Var-Base" (text "Checked:" <+> (pretty name) <> (text "::") <> (pretty typ) <+> (text "against") <+> (pretty t'))
+          return p
   where
     unsequence :: Maybe [a] -> [Maybe a]
     unsequence Nothing = [Nothing]

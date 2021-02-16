@@ -43,7 +43,7 @@ main = do
   res <- cmdArgsRun $ mode
   case res of
     (Synthesis file libs onlyGoals
-               appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency memoize symmetry
+               appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency memoize symmetry isect
                lfp bfs
                out_file out_module outFormat resolve
                print_spec print_stats log_) -> do
@@ -61,6 +61,7 @@ main = do
                     _consistencyChecking = consistency,
                     _useMemoization = memoize,
                     _symmetryReduction = symmetry,
+                    _intersectStrategy = isect,
                     _explorerLogLevel = log_
                     }
                   let solverParams = defaultHornSolverParams {
@@ -108,6 +109,7 @@ data CommandLineArgs
         consistency :: Bool,
         memoize :: Bool,
         symmetry :: Bool,
+        intersection :: IntersectStrategy,
         -- | Solver params
         lfp :: Bool,
         bfs_solver :: Bool,
@@ -140,6 +142,7 @@ synt = Synthesis {
   memoize             = False           &= help ("Use memoization (default: False)") &= name "z",
   symmetry            = False           &= help ("Use symmetry reductions (default: False)") &= name "s",
   lfp                 = False           &= help ("Use least fixpoint solver (only works for type checking, default: False)") &= groupname "Solver parameters",
+  Main.intersection = InferMedian  &= help ("Which ruleset to use for intersection on vars?"),
   bfs_solver          = False           &= help ("Use BFS instead of MARCO to solve second-order constraints (default: False)"),
   resolve             = False           &= help ("Resolve only; no type checking or synthesis (default: False)"),
   out_file            = Nothing         &= help ("Generate Haskell output file (default: none)") &= typFile &= name "o" &= opt "" &= groupname "Output",
@@ -177,7 +180,8 @@ defaultExplorerParams = ExplorerParams {
   _symmetryReduction = False,
   _context = id,
   _sourcePos = noPos,
-  _explorerLogLevel = 0
+  _explorerLogLevel = 0,
+  _intersectStrategy = InferMedian
 }
 
 -- | Parameters for constraint solving
@@ -257,7 +261,7 @@ runOnFile synquidParams explorerParams solverParams file libs = do
       case mProg of
         Left typeErr -> pdoc (pretty typeErr) >> pdoc empty >> exitFailure
         Right prog -> do
-          when (gSynthesize goal) $ pdoc (prettySolution goal prog) >> pdoc empty          
+          when (gSynthesize goal) $ pdoc (prettySolution goal prog) >> pdoc empty
           return (goal, prog)
     printStats results declsByFile = do
       let env = gEnvironment (fst $ head results)
