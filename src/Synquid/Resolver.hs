@@ -205,7 +205,7 @@ resolveSignatures (DataDecl dtName tParams pParams ctors) = mapM_ resolveConstru
           let sch'' = addRefinementToLastSch sch' (Var nominalSort valueVarName |=| Cons nominalSort name (allArgs (toMonotype sch')))
           environment %= addPolyConstant name sch''
         else throwResError (commaSep [text "Constructor" <+> text name <+> text "must return type" <+> pretty nominalType, text "got" <+> pretty returnType])
-resolveSignatures (MeasureDecl measureName _ _ post defCases args _) = do
+resolveSignatures (MeasureDecl measureName inSort outSort post defCases args _) = do
   trace (unwords ["[resolveSignatures]: MeasureDecl:", measureName]) $ return ()
   sorts <- uses (environment . globalPredicates) (Map.! measureName)
   let (outSort : mArgs) = sorts
@@ -231,6 +231,14 @@ resolveSignatures (MeasureDecl measureName _ _ post defCases args _) = do
             return (MeasureCase n args body')) defCases
           let args' = fmap (\(Var s x) -> (x, s)) freshConsts
           environment %= addMeasure measureName (MeasureDef inSort outSort defs' args' post')
+
+          -- Assemble measure postcondition
+          mVar <- freshId "D" inSort
+          let mCArgs = map (\(x, s) -> Var s x) args'
+          let postApp = substitute (Map.singleton valueVarName (Pred outSort measureName (mCArgs ++ [mVar]))) post'
+          -- Wrap in universal quantifiers
+          let quantifiedPost = foldr All postApp (mVar : mCArgs)
+          environment . measurePostconditions %= Map.insertWith (++) dtName [quantifiedPost]
           checkingGoals %= (++ [(measureName, (impl (MeasureDef inSort outSort defCases' args post'), pos))])
     _ -> throwResError $ text "Last input of measure" <+> text measureName <+> text "must be a datatype"
   where

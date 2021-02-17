@@ -524,6 +524,7 @@ generateHornClauses c@(Subtype env (ScalarT baseTL l) (ScalarT baseTR r) False l
   = do
       qmap <- use qualifierMap
       let relevantVars = potentialVars qmap (l |&| r)
+      traceM $ "RELEVANT SUBTYPE: " ++ show relevantVars
       emb <- embedding env relevantVars True
       clauses <- lift . lift . lift $ preprocessConstraint (conjunction (Set.insert l emb) |=>| r)
       hornClauses %= (zip clauses (repeat label) ++)
@@ -531,6 +532,7 @@ generateHornClauses (Subtype env (ScalarT baseTL l) (ScalarT baseTR r) True _) |
   = do
       qmap <- use qualifierMap
       let relevantVars = potentialVars qmap (l |&| r)
+      traceM $ "RELEVANT CONSISTENCY: " ++ show relevantVars
       emb <- embedding env relevantVars False
       let clause = conjunction (Set.insert l $ Set.insert r emb)
       consistencyChecks %= (clause :)
@@ -575,31 +577,37 @@ embedding env vars includeQuantified = do
     qmap <- use qualifierMap
     let ass = Set.map (substitutePredicate pass) $ (env ^. assumptions)
     let allVars = vars `Set.union` potentialVars qmap (conjunction ass)
-    return $ addBindings env tass pass qmap ass allVars
+    let measurePosts = env ^. measurePostconditions
+    return $ addBindings env tass pass qmap measurePosts ass allVars
   where
-    addBindings env tass pass qmap fmls vars =
+    addBindings env tass pass qmap allPosts fmls vars =
       if Set.null vars
         then fmls
         else let (x, rest) = Set.deleteFindMin vars in
               case Map.lookup x (allSymbols env) of
-                Nothing -> addBindings env tass pass qmap fmls rest -- Variable not found (useful to ignore value variables)
+                Nothing -> addBindings env tass pass qmap allPosts fmls rest -- Variable not found (useful to ignore value variables)
                 Just (Monotype t) -> case typeSubstitute tass t of
                   ScalarT baseT fml ->
+                    let (posts, allPosts') = case baseT of
+                          (DatatypeT dt _ _) -> (Map.findWithDefault [] dt allPosts, Map.delete dt allPosts)
+                          _ -> ([], allPosts) in
                     let fmls' = Set.fromList $ map (substitute (Map.singleton valueVarName (Var (toSort baseT) x)) . substitutePredicate pass)
-                                          (fml : allMeasurePostconditions includeQuantified baseT env) in
+                                          -- Uncomment below to use the old style of instantiation!
+                                          --(fml : allMeasurePostconditions includeQuantified baseT env) in
+                                          (fml : posts) in
                     let newVars = Set.delete x $ setConcatMap (potentialVars qmap) fmls' in
-                    addBindings env tass pass qmap (fmls `Set.union` fmls') (rest `Set.union` newVars)
-                  LetT y tDef tBody -> addBindings (addVariable x tBody . addVariable y tDef . removeVariable x $ env) tass pass qmap fmls vars
+                    addBindings env tass pass qmap allPosts' (fmls `Set.union` fmls') (rest `Set.union` newVars)
+                  LetT y tDef tBody -> addBindings (addVariable x tBody . addVariable y tDef . removeVariable x $ env) tass pass qmap allPosts fmls vars
                   AnyT -> Set.singleton ffalse
                   AndT l r -> let
                     envl = addVariable x l (removeVariable x env)
                     envr = addVariable x r (removeVariable x env)
-                    leftBound = addBindings envl tass pass qmap fmls (Set.singleton x)
-                    rightBound = addBindings envr tass pass qmap fmls vars
+                    leftBound = addBindings envl tass pass qmap allPosts fmls (Set.singleton x)
+                    rightBound = addBindings envr tass pass qmap allPosts fmls vars
                     in
                       leftBound `Set.union` rightBound
                   t -> error $ unwords ["embedding: encountered non-scalar variable", x, "in 0-arity bucket, with type", show $ pretty t]
-                Just sch -> addBindings env tass pass qmap fmls rest -- TODO: why did this work before?
+                Just sch -> addBindings env tass pass qmap allPosts fmls rest -- TODO: why did this work before?
     allSymbols = symbolsOfArity 0
 
 bottomValuation :: QMap -> Formula -> Formula
