@@ -240,8 +240,7 @@ data Environment = Environment {
   _globalPredicates :: Map Id [Sort],      -- ^ Signatures (resSort:argSorts) of module-level logic functions (measures, predicates)
   _measures :: Map Id MeasureDef,          -- ^ Measure definitions
   _typeSynonyms :: Map Id ([Id], RType),   -- ^ Type synonym definitions
-  _unresolvedConstants :: Map Id RSchema,  -- ^ Unresolved types of components (used for reporting specifications with macros)
-  _measurePostconditions :: Map Id [Formula] -- Map from datatype name to list of all relevant postconditions
+  _unresolvedConstants :: Map Id RSchema   -- ^ Unresolved types of components (used for reporting specifications with macros)
 } deriving (Show)
 
 makeLenses ''Environment
@@ -267,8 +266,7 @@ emptyEnv = Environment {
   _datatypes = Map.empty,
   _measures = Map.empty,
   _typeSynonyms = Map.empty,
-  _unresolvedConstants = Map.empty,
-  _measurePostconditions = Map.empty
+  _unresolvedConstants = Map.empty
 }
 
 -- | 'symbolsOfArity' @n env@: all symbols of arity @n@ in @env@
@@ -423,6 +421,7 @@ allPredicates env = Map.fromList (map (\(PredSig pName argSorts resSort) -> (pNa
 allMeasuresOf dtName env = Map.filter (\(MeasureDef (DataS sName _) _ _ _ _) -> dtName == sName) $ env ^. measures
 
 -- | 'allMeasurePostconditions' @baseT env@ : all nontrivial postconditions of measures of @baseT@ in case it is a datatype
+allMeasurePostconditions :: Bool -> BaseType Formula -> Environment -> [Formula]
 allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env =
     let
       allMeasures = Map.toList $ allMeasuresOf dtName env
@@ -456,7 +455,6 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
                             setVal = Pred (SetS elemSort) mName [Var (toSort baseT) valueVarName]
                           in Just $ All scopedVar (fin scopedVar setVal |=>| substitute (Map.singleton valueVarName scopedVar) fml)
     elemProperties (mName, MeasureDef {}) = Nothing
-
 allMeasurePostconditions _ _ _ = []
 
 typeSubstituteEnv :: TypeSubstitution -> Environment -> Environment
