@@ -1,4 +1,4 @@
-qualifier { len _v >= 0 }
+qualifier { len _v >= 0, len _v < len zs }
 
 data List a where
 	Nil :: List a
