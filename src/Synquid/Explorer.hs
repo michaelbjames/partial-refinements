@@ -657,14 +657,16 @@ instantiate env sch top argNames = do
                 return $ Pred BoolS p' (zipWith Var argSorts' deBrujns)
               else return ffalse
       instantiate' subst (Map.insert p fml pSubst) sch
-    instantiate' subst pSubst (Monotype t) = go subst pSubst argNames t
+    instantiate' subst pSubst (Monotype t) = do
+      intersectionStrat <- asks . view $ _1 . intersectStrategy
+      go subst pSubst intersectionStrat argNames t
 
-    go subst pSubst argNames (FunctionT x tArg tRes) = do
+    go subst pSubst intersectionStrat argNames (FunctionT x tArg tRes) = do
       x' <- case argNames of
               [] -> freshVar env "x"
               (argName : _) -> return argName
-      liftM2 (FunctionT x') (go subst pSubst [] tArg) (go subst pSubst (drop 1 argNames) (renameVar (isBoundTV subst) x x' tArg tRes))
-    go subst pSubst argNames t@AndT{} = do
+      liftM2 (FunctionT x') (go subst pSubst intersectionStrat [] tArg) (go subst pSubst intersectionStrat (drop 1 argNames) (renameVar (isBoundTV subst) x x' tArg tRes))
+    go subst pSubst intersectionStrat@InferMedian argNames t@AndT{} = do
       let intersectedTypes = intersectionToList t
       medianType <- freshFromIntersect env t
       -- let medianType = shape t
@@ -674,8 +676,8 @@ instantiate env sch top argNames = do
       addConstraint $ Subtype env t medianType False "instantiate-isect-LHS"
       -- The G |- medianType <: goalType happens back in the PSymbol rule
       -- medianType <- varInferMedian env t
-      go subst pSubst argNames medianType
-    go subst pSubst _ t = return $ typeSubstitutePred pSubst . typeSubstitute subst $ t
+      go subst pSubst intersectionStrat argNames medianType
+    go subst pSubst _ _ t = return $ typeSubstitutePred pSubst . typeSubstitute subst $ t
 
     isBoundTV subst a = (a `Map.member` subst) || (a `elem` (env ^. boundTypeVars))
 

@@ -266,11 +266,9 @@ reconstructE' env typ (PSymbol name) = do
           writeLog 3 $ text "symbol type:" <+> (pretty t')
           let ts = intersectionToList t'
           let nameShape = head . intersectionToList <$> Map.lookup name (env ^. shapeConstraints)
-          writeLog 3 $ text "nameShape:" <+> (text $ show nameShape)
-          -- when (length ts /= length shapes)
-          -- $ error $ unwords ["ts and shapes have different lengths: ts:", show $ length ts, "vs shapes:", show $ length shapes]
-          -- t could be an intersection, loop over choices
+          writeLog 3 $ text "nameShape:" <+> text (show nameShape)
 
+          -- t could be an intersection, loop over choices
           symbolUseCount %= Map.insertWith (+) name 1
           let iterList = zip3 ts (repeat nameShape) [1..]
           let choices = flip map iterList $ \(t, s, idx) -> do
@@ -290,7 +288,7 @@ reconstructE' env typ (PSymbol name) = do
           msum choices
 
         {- Base rule -}
-        _ -> do
+        InferMedian -> do
           logItFrom "reconstructE'-Var-Base" (text "symbol:" <+> (pretty name) <> (text "::") <> (pretty typ) <+> (text "symbol type:")  <+> (pretty t'))
           symbolUseCount %= Map.insertWith (+) name 1
           let p = Program (PSymbol name) t'
@@ -300,10 +298,6 @@ reconstructE' env typ (PSymbol name) = do
           checkE env typ p
           logItFrom "reconstructE'-Var-Base" (text "Checked:" <+> (pretty name) <> (text "::") <> (pretty typ) <+> (text "against") <+> (pretty t'))
           return p
-  where
-    unsequence :: Maybe [a] -> [Maybe a]
-    unsequence Nothing = [Nothing]
-    unsequence (Just y) = map Just y
 
 reconstructE' env typ (PApp iFun iArg) = do
   x <- freshVar env "x"

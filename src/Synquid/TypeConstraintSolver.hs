@@ -393,6 +393,10 @@ simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label
       let (ScalarT repB _) = head $ unionToList superT
       let newSuperT = ScalarT repB (foldr1 (|||) fmls)
       simplifyConstraint (Subtype env subT newSuperT consistent (label ++ "+pushed-into-refinement"))
+  | not $ allSame (map baseTypeOf $ unionToList superT) = throwError $
+    text "Cannot decompose RHS union, at least one has a nested refinement that does not match the rest."
+    <+> squotes (pretty subT) <+> text "<:"
+    <+> squotes (pretty superT) <+> parens (text label)
   | otherwise = throwError $ text "Cannot decompose RHS union"
     <+> squotes (pretty subT) <+> text "<:"
     <+> squotes (pretty superT) <+> parens (text label)
@@ -582,10 +586,10 @@ embedding env vars vvBase includeQuantified = do
         then fmls
         else let (x, rest) = Set.deleteFindMin vars in
               case Map.lookup x (allSymbols env) of
-                Nothing -> 
+                Nothing ->
                   let posts = Set.fromList $ if x == valueVarName
                         then allMeasurePostconditions includeQuantified vvBase env
-                        else [] 
+                        else []
                    in addBindings env tass pass qmap (posts `Set.union` fmls) rest -- Variable not found (useful to ignore value variables)
                 Just (Monotype t) -> case typeSubstitute tass t of
                   ScalarT baseT fml ->

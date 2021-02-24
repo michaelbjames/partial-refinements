@@ -15,14 +15,14 @@ data Maybe a where
 Checks, with top 3, not the last one.
 -}
 
-list_last :: (xs:List Int -> Maybe Int) ^
-  (xs:{List Int| len _v == 0} -> {Maybe Int | _v == Nothing}) ^
-  (xs:{List Int | _v == ((Cons 2 (Cons 1 Nil)))} -> {Maybe Int | _v == Nothing}) ^
+list_last :: (xs:List Int -> {Maybe Int}) ^
+  -- (xs:{List Int | len _v == 0} -> {Maybe Int | _v == Nothing}) ^
+  -- (xs:{List Int | _v == ((Cons 2 (Cons 1 Nil)))} -> {Maybe Int | _v == Nothing}) ^
 
   -- This last refinement causes it to fail
-  (xs:{List {Int | _v == 1} | len _v > 0} -> {Maybe Int | _v == Nothing})
+  -- (xs:{List {Int | _v == 1} | len _v > 0} -> {Maybe Int | _v == Nothing})
   -- It does not fail with a concrete example
-  -- (xs:{List Int | _v == Cons 1 Nil} -> {Maybe Int | _v == Just 1})
+  (xs:{List Int | _v == Nil || _v == Cons 1 Nil || _v == (Cons 2 (Cons 1 Nil)) } -> {Maybe Int | _v == Nothing})
 list_last = \xs .
   match xs with
     Nil -> Nothing
