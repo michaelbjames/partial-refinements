@@ -142,9 +142,10 @@ reconstructI' env t@(AndT l r) impl = do
   logItFrom "reconstructI'" $ text "AndT checking Left branch:" <+> pretty l
   left <- reconstructI' env l impl
   left' <- flip insertAuxSolutions left <$> use solvedAuxGoals
+  let impl' = content (eraseTypes left')
   logItFrom "reconstructI'" $ text "reconstructI' AndT Left program checks:" <+> (pretty left')
   logItFrom "reconstructI'" $ text "reconstructI' AndT Right branch: " <+> pretty r
-  reconstructI' env r (content (eraseTypes left'))
+  reconstructI' env r impl'
   logItFrom "reconstructI'" $ text "reconstructI' AndT Left checks against Right:" <+> (pretty left)
   writeLog 2 $ text "reconstructI' AndT complete"
   return left
@@ -289,6 +290,17 @@ reconstructE' env typ (PSymbol name) = do
 
         {- Base rule -}
         InferMedian -> do
+          logItFrom "reconstructE'-Var-Base" (text "symbol:" <+> (pretty name) <> (text "::") <> (pretty typ) <+> (text "symbol type:")  <+> (pretty t'))
+          symbolUseCount %= Map.insertWith (+) name 1
+          let p = Program (PSymbol name) t'
+          case Map.lookup name (env ^. shapeConstraints) of
+              Nothing -> return ()
+              Just sc -> addConstraint $ Subtype env (refineBot env $ shape t') (refineTop env sc) False "var-shape-match"
+          checkE env typ p
+          logItFrom "reconstructE'-Var-Base" (text "Checked:" <+> (pretty name) <> (text "::") <> (pretty typ) <+> (text "against") <+> (pretty t'))
+          return p
+
+        LaurentBCD -> do
           logItFrom "reconstructE'-Var-Base" (text "symbol:" <+> (pretty name) <> (text "::") <> (pretty typ) <+> (text "symbol type:")  <+> (pretty t'))
           symbolUseCount %= Map.insertWith (+) name 1
           let p = Program (PSymbol name) t'

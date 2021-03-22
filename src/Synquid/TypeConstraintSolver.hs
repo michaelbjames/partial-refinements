@@ -353,7 +353,11 @@ simplifyConstraint' _ _ c@(WellFormedCond _ _) = simpleConstraints %= (c :)
 simplifyConstraint' _ _ c@(WellFormedMatchCond _ _) = simpleConstraints %= (c :)
 
 -- Intersection type
--- Assert the intersection is a function
+-- RHS: (T <: A; T <: B) ==> T <: A /\ B
+simplifyConstraint' _ _ (Subtype env subT superT@(AndT l r) consistent label) = do
+  simplifyConstraint (Subtype env subT l consistent (label ++ "+l"))
+  simplifyConstraint (Subtype env subT r consistent (label ++ "+r"))
+-- LHS: Assert the intersection is a function
 simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superTArg superTRet) consisent@False label) = do
   let conjuncts = intersectionToList isect
   unless (isFunctionType . head $ conjuncts) $
@@ -404,8 +408,8 @@ simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label
 -- Otherwise (shape mismatch): fail
 simplifyConstraint' _ _ (Subtype _ t t' _ label) =
   throwError $ text  "Cannot match shape"
-    <+> squotes (pretty $ shape t)
-    $+$ text "with shape" <+> squotes (pretty $ shape t')
+    <+> squotes (pretty $ shape t) <+> text ":" <+> pretty t
+    $+$ text "with shape" <+> squotes (pretty $ shape t') <+> text ":" <+> pretty t'
     $+$ text "from label" <+> squotes (text label)
 
 -- | Unify type variable @a@ with type @t@ or fail if @a@ occurs in @t@

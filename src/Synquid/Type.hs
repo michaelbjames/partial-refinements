@@ -64,6 +64,9 @@ containsIntersection _ = False
 intersectionToList (AndT lty rty) = intersectionToList lty ++ intersectionToList rty
 intersectionToList x = [x]
 
+listToIntersection [x] = x
+listToIntersection xs = foldr1 AndT xs
+
 unionToList (UnionT lty rty) = unionToList lty ++ unionToList rty
 unionToList x = [x]
 

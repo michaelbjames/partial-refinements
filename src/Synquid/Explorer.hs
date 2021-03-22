@@ -43,6 +43,7 @@ data FixpointStrategy =
 data IntersectStrategy =
     EitherOr         -- ^ Try to check with only one of the intersected types
   | InferMedian      -- ^ Find some supertype that is not an intersection itself
+  | LaurentBCD       -- ^ Use the Laurent BCD subtyping rule for intersection types.
   deriving (Data, Eq, Ord, Show)
 
 -- | Choices for the order of e-term enumeration
@@ -666,8 +667,8 @@ instantiate env sch top argNames = do
               [] -> freshVar env "x"
               (argName : _) -> return argName
       liftM2 (FunctionT x') (go subst pSubst intersectionStrat [] tArg) (go subst pSubst intersectionStrat (drop 1 argNames) (renameVar (isBoundTV subst) x x' tArg tRes))
+
     go subst pSubst intersectionStrat@InferMedian argNames t@AndT{} = do
-      let intersectedTypes = intersectionToList t
       medianType <- freshFromIntersect env t
       -- let medianType = shape t
       unless (isFunctionType medianType) $
@@ -677,6 +678,23 @@ instantiate env sch top argNames = do
       -- The G |- medianType <: goalType happens back in the PSymbol rule
       -- medianType <- varInferMedian env t
       go subst pSubst intersectionStrat argNames medianType
+
+    go subst pSubst intersectionStrat@LaurentBCD argNames t@AndT{} = do
+      let conjuncts = intersectionToList t
+      let tpowerset = map Set.toList . Set.toList . Set.delete Set.empty . Set.powerSet . Set.fromList $ conjuncts
+      let choices = flip map (zip tpowerset [1..]) $ \(ts, idx) -> do
+            let total = length tpowerset
+            let t = listToIntersection ts
+            writeLog 3 $ text "choice" <+> parens (text (show idx) <> text "/" <> text (show total)) <> text ":" <+> pretty t
+            medianType <- freshFromIntersect env t
+            unless (isFunctionType medianType) $
+              error "varInferMedian: Goal type not a function!"
+            addConstraint $ WellFormed env medianType
+            addConstraint $ Subtype env t medianType False "instantiate-isect-LHS"
+            return medianType
+      choice <- msum choices
+      -- Now try to infer the medium type
+      go subst pSubst intersectionStrat argNames choice
     go subst pSubst _ _ t = return $ typeSubstitutePred pSubst . typeSubstitute subst $ t
 
     isBoundTV subst a = (a `Map.member` subst) || (a `elem` (env ^. boundTypeVars))

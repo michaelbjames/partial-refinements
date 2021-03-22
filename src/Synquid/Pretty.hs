@@ -362,7 +362,7 @@ instance Pretty Constraint where
 
 
 instance Pretty Candidate where
-  pretty (Candidate sol valids invalids label) = text label <> text ":" <+> pretty sol <+> parens (pretty (Set.size valids) <+> pretty (Set.size invalids))
+  pretty (Candidate sol valids invalids label) = text label <> text ":" <+> pretty sol <+> parens (text "#valid:" <+> pretty (Set.size valids) <> text ", #invalid:" <+> pretty (Set.size invalids))
 
 instance Pretty Goal where
   pretty (Goal name env spec impl depth _ _) = pretty env <+> operator "|-" <+> text name <+> operator "::" <+> pretty spec $+$ text name <+> operator "=" <+> pretty impl $+$ parens (text "depth:" <+> pretty depth)
