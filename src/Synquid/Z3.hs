@@ -113,7 +113,7 @@ instance MonadSMT Z3State where
                           _true
             s <- astToString ast
             -- debug 2 (text "[MonadSMT]: isSat:" </> text s) $
-              -- debug 3 (text "[MonadSMT]: Z3 query:" </> text str) $
+            -- debug 3 (text "[MonadSMT]: Z3 query:" </> text str) $
             assert ast
 
   allUnsatCores = getAllMUSs

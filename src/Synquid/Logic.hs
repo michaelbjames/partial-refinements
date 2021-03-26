@@ -14,6 +14,7 @@ import Data.Map (Map)
 
 import Control.Lens hiding (both)
 import Control.Monad
+import Data.List.Extra (nubOrd)
 
 {- Sorts -}
 
@@ -408,7 +409,7 @@ makeLenses ''QSpace
 
 emptyQSpace = QSpace [] 0
 
-toSpace mbN quals = let quals' = nub quals in
+toSpace mbN quals = let quals' = nubOrd quals in
   case mbN of
     Nothing -> QSpace quals' (length quals')
     Just n -> QSpace quals' n

@@ -44,6 +44,7 @@ data IntersectStrategy =
     EitherOr         -- ^ Try to check with only one of the intersected types
   | InferMedian      -- ^ Find some supertype that is not an intersection itself
   | LaurentBCD       -- ^ Use the Laurent BCD subtyping rule for intersection types.
+  | AlgorithmicLaurent  -- ^ Like Laurent BCD, but on functions, build up co-domain checks to avoid a powerset
   deriving (Data, Eq, Ord, Show)
 
 -- | Choices for the order of e-term enumeration
@@ -132,10 +133,7 @@ runExplorer eParams tParams topLevel initTS go = do
       case errs of
         [] -> return $ Left impossible
         -- all logged errors are in es. The error for the last program tried is the head.
-        (e:es) -> let
-          epstr = fromMaybe "None" ((show . pretty) <$> listToMaybe es)
-          printstr = "prior error:\n" ++ epstr
-          in trace printstr $ return $ Left e
+        (e:es) -> return $ Left e
     (res : _) -> return $ Right res
   where
     initExplorerState = ExplorerState initTS [] Map.empty Map.empty Map.empty Map.empty
@@ -679,6 +677,19 @@ instantiate env sch top argNames = do
       -- medianType <- varInferMedian env t
       go subst pSubst intersectionStrat argNames medianType
 
+    go subst pSubst intersectionStrat@AlgorithmicLaurent argNames t@AndT{} = do
+      medianType <- freshFromIntersect env t
+      -- let medianType = shape t
+      unless (isFunctionType medianType) $
+        error "varInferMedian: Goal type not a function!"
+      addConstraint $ WellFormed env medianType
+      addConstraint $ Subtype env t medianType False "instantiate-isect-LHS"
+      -- The G |- medianType <: goalType happens back in the PSymbol rule
+      -- medianType <- varInferMedian env t
+      go subst pSubst intersectionStrat argNames medianType
+
+    -- Use a Laurent-presentation of BCD to infer a median type from some
+    -- subset of the intersected types.
     go subst pSubst intersectionStrat@LaurentBCD argNames t@AndT{} = do
       let conjuncts = intersectionToList t
       let tpowerset = map Set.toList . Set.toList . Set.delete Set.empty . Set.powerSet . Set.fromList $ conjuncts
@@ -695,7 +706,22 @@ instantiate env sch top argNames = do
       choice <- msum choices
       -- Now try to infer the medium type
       go subst pSubst intersectionStrat argNames choice
+
+    -- go subst pSubst intersectionStrat@AlgorithmicLaurent argNames t@AndT{} = do
+    --   medianType <- freshFromIntersect env t
+    --   unless (isFunctionType medianType) $
+    --     error "varInferMedian: Goal type not a function!"
+    --   let conjuncts = intersectionToList t
+    --   plausibleConjucts <- foldM (findConjuncts medianType) [] conjuncts
+
+    --   undefined
+    --   where
+    --     -- Check that G, y:(T /\ Ti), Ci |- [y/x]Ti’ <: T’
+    --     findConjuncts median rest ti = do
+    --       return rest
+
     go subst pSubst _ _ t = return $ typeSubstitutePred pSubst . typeSubstitute subst $ t
+
 
     isBoundTV subst a = (a `Map.member` subst) || (a `elem` (env ^. boundTypeVars))
 

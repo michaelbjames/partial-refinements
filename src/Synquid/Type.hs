@@ -153,8 +153,8 @@ predsOfType (LetT x tDef tBody) = predsOfType tDef `Set.union` predsOfType tBody
 predsOfType AnyT = Set.empty
 
 varRefinement x s = Var s valueVarName |=| Var s x
-isVarRefinemnt (Binary Eq (Var _ v) (Var _ _)) = v == valueVarName
-isVarRefinemnt _ = False
+isVarRefinement (Binary Eq (Var _ v) (Var _ _)) = v == valueVarName
+isVarRefinement _ = False
 
 -- | Polymorphic type skeletons (parametrized by refinements)
 data SchemaSkeleton r =
@@ -276,7 +276,7 @@ shape AnyT = AnyT
 
 -- | Conjoin refinement to a type
 addRefinement :: TypeSkeleton Formula -> Formula -> TypeSkeleton Formula
-addRefinement (ScalarT base fml) fml' = if isVarRefinemnt fml'
+addRefinement (ScalarT base fml) fml' = if isVarRefinement fml'
   then ScalarT base fml' -- the type of a polymorphic variable does not require any other refinements
   else ScalarT base (fml `andClean` fml')
 addRefinement (LetT x tDef tBody) fml = LetT x tDef (addRefinement tBody fml)

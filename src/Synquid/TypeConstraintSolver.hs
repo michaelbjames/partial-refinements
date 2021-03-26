@@ -46,8 +46,10 @@ import Synquid.Util
 import Synquid.Resolver (addAllVariables)
 
 import Data.Maybe
+import Data.Bifunctor
+import Data.Foldable
 import Data.List
-import Data.List.Extra (allSame)
+import Data.List.Extra (allSame, nubOrd)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
@@ -120,7 +122,7 @@ initTypingState env schema = do
   }
 
 -- | Impose typing constraint @c@ on the programs
-addTypingConstraint c = over typingConstraints (nub . (c :))
+addTypingConstraint c = over typingConstraints (nubOrd . (c :))
 
 -- | Solve @typingConstraints@: either strengthen the current candidates and return shapeless type constraints or fail
 solveTypeConstraints :: MonadHorn s => TCSolver s ()
@@ -135,8 +137,11 @@ solveTypeConstraints = do
   generateAllHornClauses
 
   solveHornClauses
+  -- TODO: Re-enable this:
   -- There are no checks that the user DIDNT disable this.
   -- checkTypeConsistency
+  cands <- use candidates
+  writeLog 3 $ text "[solveTypeConstraints]: Solved Candidates:" $+$ pretty (cands :: [Candidate])
 
   hornClauses .= []
   consistencyChecks .= []
@@ -357,30 +362,47 @@ simplifyConstraint' _ _ c@(WellFormedMatchCond _ _) = simpleConstraints %= (c :)
 simplifyConstraint' _ _ (Subtype env subT superT@(AndT l r) consistent label) = do
   simplifyConstraint (Subtype env subT l consistent (label ++ "+l"))
   simplifyConstraint (Subtype env subT r consistent (label ++ "+r"))
--- LHS: Assert the intersection is a function
+-- LHS: A /\ B <: T ... Assert the intersection is a function
 simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superTArg superTRet) consisent@False label) = do
   let conjuncts = intersectionToList isect
   unless (isFunctionType . head $ conjuncts) $
     throwError $ text  "Cannot subtype intersection of non-function" <+> squotes (pretty isect) $+$ text "with " <+> squotes (pretty superT)
-  let conjunctArgs = map argType conjuncts
-  when (any isIntersection conjunctArgs) $
+  conjunctsWithConstraints <- forM conjuncts (\t -> do
+    constraintName <- freshId "C"
+    let c = Unknown Map.empty constraintName
+    -- Set the qualifier map to just False (True is an implicit other option)
+    addQuals constraintName (toSpace (Just 0) [BoolLit False])
+    -- simplifyConstraint (WellFormedCond env c)
+    return (t,c))
+  let conjunctArgs = map (first argType) conjunctsWithConstraints
+  when (any (isIntersection . fst) conjunctArgs) $
     throwError $ text  "Intersection of functions, whose arguments are intersections!" <+> squotes (pretty isect) $+$ text "<(??):" <+> squotes (pretty superT)
-  let unionOfArgs = foldr1 UnionT conjunctArgs
-  -- G |- superTArg <: (subTArg1 OR ... OR .. subTArgN)
+  --       cUnknown <- Unknown Map.empty <$> freshId "C"
+  -- addConstraint $ WellFormedCond env cUnknown
+  -- let newEnv = addAssumption cUnknown env
+
+  let Just unionOfArgs = foldr unionConstraint Nothing conjunctArgs
+  -- G |- superTArg <: ((subTArg1 AND C1) OR ... OR .. (subTArgN AND C2))
   simplifyConstraint $ Subtype env superTArg unionOfArgs consisent (label ++ "+arg-world-union")
 
   -- Bind the argument in the environement, and generate a new subtyping constraint
-  -- G, x: (AndT subTArg superTArg) |- subTRet <: superTRet
-  forM_ (zip conjuncts [1..]) $ \(FunctionT x subTArg subTRet, idx) -> do
+  -- G, x: (AndT subTArg1 superTArg), C1 |- [x/y]subTRet <: superTRet
+  forM_ (zip conjunctsWithConstraints [1..]) $ \((FunctionT x subTArg subTRet, constraint), idx) -> do
+    let env' = addAssumption constraint env
+    let subTArg' = addRefinement subTArg constraint
     if isScalarType subTArg
     then simplifyConstraint $
-      Subtype (addVariable y (AndT subTArg superTArg) env)
-        (renameVar (isBound env) x y subTArg subTRet)
+      Subtype (addVariable y (AndT subTArg' superTArg) env')
+        (renameVar (isBound env') x y subTArg' subTRet)
         superTRet
         consisent (label ++ "+ret-world-" ++ show idx)
     else error "argument is not a scalar!"
       -- simplifyConstraint $  -- The argument is a HOF. Not sure if this is right.
       -- Subtype env subTRet superTRet consisent label
+  where
+    unionConstraint (t,cUnknown) Nothing = Just $ addRefinement t cUnknown
+    unionConstraint (t,cUnknown) (Just rest) = Just $ UnionT (addRefinement t cUnknown) rest
+
 
 -- Union Type
 simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label)
@@ -413,6 +435,7 @@ simplifyConstraint' _ _ (Subtype _ t t' _ label) =
     $+$ text "from label" <+> squotes (text label)
 
 -- | Unify type variable @a@ with type @t@ or fail if @a@ occurs in @t@
+unify :: Monad s => Environment -> Id -> TypeSkeleton Formula -> StateT TypingState (ReaderT TypingParams (ExceptT ErrorMessage s)) ()
 unify env a t = if a `Set.member` typeVarsOf t
   then error $ show $ text "simplifyConstraint: type variable occurs in the other type"
   else do
@@ -779,13 +802,15 @@ finalizeProgram p = do
   sol <- uses candidates (solution . head)
   return $ fmap (typeApplySolution sol . typeSubstitutePred pass . typeSubstitute tass) p
 
+
+constraintsForEq = Set.fromList ["a", "u"]
 instance Eq TypingState where
-  (==) st1 st2 = (restrictDomain (Set.fromList ["a", "u"]) (_idCount st1) == restrictDomain (Set.fromList ["a", "u"]) (_idCount st2)) &&
+  (==) st1 st2 = (restrictDomain constraintsForEq (_idCount st1) == restrictDomain constraintsForEq (_idCount st2)) &&
                   _typeAssignment st1 == _typeAssignment st2 &&
                   _candidates st1 == _candidates st2
 
 instance Ord TypingState where
-  (<=) st1 st2 = (restrictDomain (Set.fromList ["a", "u"]) (_idCount st1) <= restrictDomain (Set.fromList ["a", "u"]) (_idCount st2)) &&
+  (<=) st1 st2 = (restrictDomain constraintsForEq (_idCount st1) <= restrictDomain constraintsForEq (_idCount st2)) &&
                 _typeAssignment st1 <= _typeAssignment st2 &&
                 _candidates st1 <= _candidates st2
 

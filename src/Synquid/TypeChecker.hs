@@ -259,12 +259,12 @@ reconstructE' env typ (PSymbol name) = do
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
     Just sch -> do
       writeLog 3 $ text "schema:" <+> (pretty sch)
-      t' <- symbolType env name sch  -- symbolType will select the right type if it's polymorphic
+      t' <- symbolType env name sch  -- symbolType will infer a type if it's polymorphic or an intersection
+      logItFrom "reconstructE'-Var-Base" (text "symbol:" <+> (pretty name) <> (text "::") <> (pretty typ) <+> (text "symbol type:")  <+> (pretty t'))
       case intersectionStrat of
 
         {- Select one side of an intersection -}
         EitherOr -> do
-          writeLog 3 $ text "symbol type:" <+> (pretty t')
           let ts = intersectionToList t'
           let nameShape = head . intersectionToList <$> Map.lookup name (env ^. shapeConstraints)
           writeLog 3 $ text "nameShape:" <+> text (show nameShape)
@@ -289,19 +289,11 @@ reconstructE' env typ (PSymbol name) = do
           msum choices
 
         {- Base rule -}
-        InferMedian -> do
-          logItFrom "reconstructE'-Var-Base" (text "symbol:" <+> (pretty name) <> (text "::") <> (pretty typ) <+> (text "symbol type:")  <+> (pretty t'))
-          symbolUseCount %= Map.insertWith (+) name 1
-          let p = Program (PSymbol name) t'
-          case Map.lookup name (env ^. shapeConstraints) of
-              Nothing -> return ()
-              Just sc -> addConstraint $ Subtype env (refineBot env $ shape t') (refineTop env sc) False "var-shape-match"
-          checkE env typ p
-          logItFrom "reconstructE'-Var-Base" (text "Checked:" <+> (pretty name) <> (text "::") <> (pretty typ) <+> (text "against") <+> (pretty t'))
-          return p
-
-        LaurentBCD -> do
-          logItFrom "reconstructE'-Var-Base" (text "symbol:" <+> (pretty name) <> (text "::") <> (pretty typ) <+> (text "symbol type:")  <+> (pretty t'))
+        InferMedian -> baseRule t'
+        LaurentBCD -> baseRule t'
+        AlgorithmicLaurent -> baseRule t'
+      where
+        baseRule t' = do
           symbolUseCount %= Map.insertWith (+) name 1
           let p = Program (PSymbol name) t'
           case Map.lookup name (env ^. shapeConstraints) of
