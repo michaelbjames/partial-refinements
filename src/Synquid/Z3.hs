@@ -8,7 +8,7 @@ import Synquid.Type
 import Synquid.Program
 import Synquid.SolverMonad
 import Synquid.Util ( bothM, debug, ifM, partitionM, Id )
-import Synquid.Pretty (brackets,  text, Pretty(pretty), ($+$), (<+>), (</>) )
+import Synquid.Pretty (brackets,  text, Pretty(pretty), ($+$), (<+>), (</>), commaSep )
 import Z3.Monad hiding (Z3Env, newEnv, Sort)
 import qualified Z3.Base as Z3
 
@@ -105,18 +105,18 @@ instance MonadSMT Z3State where
             return True
         -- _ -> error $ unwords ["isValid: Z3 returned Unknown for", show fml]
         _ -> debug 2 (text "SMT CHECK" <+> pretty fml <+> text "UNKNOWN treating as SAT") $ return True
-      where
-        assert' ast = do
-            _true <- mkTrue
-            str <- benchmarkToSMTLibString "[partial-refinement]" "" "unknown" ""
-                          [ast]
-                          _true
-            s <- astToString ast
-            -- debug 2 (text "[MonadSMT]: isSat:" </> text s) $
-            -- debug 3 (text "[MonadSMT]: Z3 query:" </> text str) $
-            assert ast
 
   allUnsatCores = getAllMUSs
+
+assert' ast = do
+    _true <- mkTrue
+    str <- benchmarkToSMTLibString "[partial-refinement]" "" "unknown" ""
+                  [ast]
+                  _true
+    s <- astToString ast
+    -- debug 2 (text "[MonadSMT]: isSat:" </> text s) $
+    -- debug 3 (text "[MonadSMT]: Z3 query:" </> text str) $
+    assert ast
 
 convertDatatypes :: Map Id RSchema -> [(Id, DatatypeDef)] -> Z3State ()
 convertDatatypes _ [] = return ()
@@ -546,21 +546,22 @@ getAllMUSs' controlLitsAux mustHave cores = do
           mus <- getUnsatCore >>= minimize
           blockUp mus
           unsatFmls <- mapM litToFml (delete mustHave mus)
-          if mustHave `elem` mus
+          if (mustHave `elem` mus) || (unsatFmls == [ffalse])
             then do
+                  when (unsatFmls == [ffalse]) (debug 2 (text "MUS solution is vacuous") $ return ())
                   debugOutput "MUS" unsatFmls
                   getAllMUSs' controlLitsAux mustHave (unsatFmls : cores)
             else do
                   debugOutput "MUSeless" unsatFmls
                   getAllMUSs' controlLitsAux mustHave cores
-        _ -> do
+        Sat -> do
           mss <- maximize seed rest  -- Satisfiable: expand to MSS
           blockDown mss
           mapM litToFml mss >>= debugOutput "MSS"
           getAllMUSs' controlLitsAux mustHave cores
-        -- _ -> do
-          -- fmls <- mapM litToFml seed
-          -- error $ unwords $ ["getAllMUSs: Z3 returned Unknown for"] ++ map show fmls
+        _ -> do
+          fmls <- mapM litToFml seed
+          error $ unwords $ ["getAllMUSs: Z3 returned Unknown (maybe consider SAT) for"] ++ map show fmls
 
   where
     -- | Get the formula mapped to a given control literal in the main solver

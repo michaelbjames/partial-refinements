@@ -1,3 +1,5 @@
+qualifier { len _v >= 0}
+
 data List a where
 	Nil :: List a
 	Cons :: x: a -> xs: List a -> List a
@@ -9,8 +11,8 @@ termination measure len :: List a -> {Int | _v >= 0} where
 
 listToFalseGen ::
     (zs:List Int -> Bool) ^
-    -- (zs:{List Int | len _v >= 0} -> {Bool| _v == False}) ^
-    (zs:{List Int | len _v >= 0} -> {Bool | _v == False})
+    (zs:{List Int | len _v > 0}  -> {Bool | _v == False}) ^
+    (zs:{List Int | len _v == 0} -> {Bool | _v == False})
 listToFalseGen = \zs.
     match zs with
         Nil -> False

@@ -371,7 +371,7 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
     constraintName <- freshId "C"
     let c = Unknown Map.empty constraintName
     -- Set the qualifier map to just False (True is an implicit other option)
-    addQuals constraintName (toSpace (Just 0) [BoolLit False])
+    addQuals constraintName (toSpace Nothing [BoolLit False])
     -- simplifyConstraint (WellFormedCond env c)
     return (t,c))
   let conjunctArgs = map (first argType) conjunctsWithConstraints

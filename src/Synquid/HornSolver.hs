@@ -213,6 +213,7 @@ strengthen qmap extractAssumptions fml@(Binary Implies lhs rhs) sol = do
     let n = maxValSize qmap sol unknowns
     writeLog 3 (text "[strengthen]: Instantiated axioms:" $+$ commaSep (map pretty $ Set.toList assumptions))
     let allAssumptions = usedLhsQuals `Set.union` assumptions
+    writeLog 3 (text "[strengthen]: allAssumptions:" $+$ commaSep (map pretty $ Set.toList allAssumptions))
     lhsValuations <- optimalValuations n (lhsQuals Set.\\ usedLhsQuals) allAssumptions rhs -- all minimal valid valuations of the whole antecedent
     writeLog 3 (text "[strengthen]: Optimal valuations:" $+$ vsep (map pretty lhsValuations))
     let splitVals vals = nub $ concatMap splitLhsValuation vals

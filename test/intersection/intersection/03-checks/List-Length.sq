@@ -1,0 +1,20 @@
+qualifier { len _v >= 0, len _v < len zs }
+
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+-- listToFalse :: (xs:List Int -> Bool) ^
+    -- (xs:{List Int | _v == Nil} -> {Bool | _v == False}) ^
+    -- (xs:{List Int | _v == Cons 1 Nil || _v == Cons 2 (Cons 1 Nil)} -> {Bool | _v == False})
+
+length :: (zs:{List Int | len _v == 0} -> {Int| _v == 0}) ^
+    (zs:{List Int | len _v > 0} -> {Int | _v == len zs})
+length = \zs.
+    match zs with
+        Nil -> 0
+        Cons y ys -> 1 + length ys
