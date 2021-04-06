@@ -233,7 +233,7 @@ typeSubstitutePred pSubst t = let tsp = typeSubstitutePred pSubst
     ScalarT (DatatypeT name tArgs pArgs) fml -> ScalarT (DatatypeT name (map tsp tArgs) (map (substitutePredicate pSubst) pArgs)) (substitutePredicate pSubst fml)
     ScalarT baseT fml -> ScalarT baseT (substitutePredicate pSubst fml)
     FunctionT x tArg tRes -> FunctionT x (tsp tArg) (tsp tRes)
-    LetT x tDef tBody -> FunctionT x (tsp tDef) (tsp tBody)
+    LetT x tDef tBody -> LetT x (tsp tDef) (tsp tBody)
     AndT l r -> AndT (tsp l) (tsp r)
     AnyT -> AnyT
 
