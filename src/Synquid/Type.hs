@@ -1,4 +1,5 @@
 -- | Refinement Types
+{-# LANGUAGE TemplateHaskell #-}
 module Synquid.Type where
 
 import Synquid.Logic
@@ -14,6 +15,7 @@ import qualified Data.Map as Map
 import Data.Map (Map)
 import Control.Monad
 import Control.Lens hiding (set)
+import Development.Placeholders
 
 {- Type skeletons -}
 
@@ -103,6 +105,7 @@ refineSort AnyS f = AnyT
 
 typeIsData :: TypeSkeleton r -> Bool
 typeIsData (ScalarT DatatypeT{} _) = True
+typeIsData AndT{} = $(todo "typeIsData andT")
 typeIsData _ = False
 
 arity :: TypeSkeleton r -> Int
@@ -116,6 +119,7 @@ hasSet :: TypeSkeleton r -> Bool
 hasSet (ScalarT (DatatypeT name _ _) _) = name == setTypeName
 hasSet (FunctionT _ t1 t2) = hasSet t1 || hasSet t2
 hasSet (LetT _ t1 t2) = hasSet t1 || hasSet t2
+hasSet (AndT l r) = hasSet l || hasSet r
 hasSet _ = False
 
 lastType (FunctionT _ _ tRes) = lastType tRes
@@ -321,7 +325,7 @@ substituteInType isBound subst AnyT = AnyT
 renameVar :: (Id -> Bool) -> Id -> Id -> RType -> RType -> RType
 renameVar isBound old new (ScalarT b _)     t = substituteInType isBound (Map.singleton old (Var (toSort b) new)) t
 renameVar isBound old new (LetT _ _ tBody)  t = renameVar isBound old new tBody t
-renameVar isBound old new (AndT _ _) t = error "Unhandled AndT Case: renameVar"
+renameVar isBound old new (AndT _ _) t = $(todo "unhandled renameVar")
 renameVar _ _ _ _                           t = t -- function arguments cannot occur in types (and AnyT is assumed to be function)
 
 -- | Intersection of two types (assuming the types were already checked for consistency)
@@ -339,6 +343,7 @@ typeApplySolution sol (ScalarT (DatatypeT name tArgs pArgs) fml) = ScalarT (Data
 typeApplySolution sol (ScalarT base fml) = ScalarT base (applySolution sol fml)
 typeApplySolution sol (FunctionT x tArg tRes) = FunctionT x (typeApplySolution sol tArg) (typeApplySolution sol tRes)
 typeApplySolution sol (LetT x tDef tBody) = LetT x (typeApplySolution sol tDef) (typeApplySolution sol tBody)
+typeApplySolution _ AndT{} = $(todo "typeApplySolution incomplete")
 typeApplySolution _ AnyT = AnyT
 
 typeFromSchema :: RSchema -> RType

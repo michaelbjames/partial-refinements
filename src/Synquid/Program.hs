@@ -19,6 +19,7 @@ import Data.Map (Map)
 import Control.Monad
 import Control.Lens as Lens
 import Debug.Trace
+import Development.Placeholders (todo)
 
 {- Program terms -}
 
@@ -185,8 +186,9 @@ renameAsImpl isBound = renameAsImpl' Map.empty
   where
     renameAsImpl' subst (Program (PFun y pRes) _) (FunctionT x tArg tRes) = case tArg of
       ScalarT baseT fml -> FunctionT y (substituteInType isBound subst tArg) (renameAsImpl' (Map.insert x (Var (toSort baseT) y) subst) pRes tRes)
-      AndT _ _ -> error "illegal AndT usage"
+      AndT _ _ -> $(todo "nested AndT usage! Normalize it all to the top level first")
       _ -> FunctionT y (substituteInType isBound subst tArg) (renameAsImpl' subst pRes tRes)
+    renameAsImpl' subst  p (AndT l r) = AndT (renameAsImpl' subst p l) (renameAsImpl' subst p r)
     renameAsImpl' subst  _ t = substituteInType isBound subst t
 
 {- Top-level definitions -}
