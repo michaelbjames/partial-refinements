@@ -372,7 +372,6 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
     let c = Unknown Map.empty constraintName
     -- Set the qualifier map to just False (True is an implicit other option)
     addQuals constraintName (toSpace Nothing [BoolLit False])
-    -- simplifyConstraint (WellFormedCond env c)
     return (t,c))
   let conjunctArgs = map (first argType) conjunctsWithConstraints
   when (any (isIntersection . fst) conjunctArgs) $
@@ -380,10 +379,6 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
   --       cUnknown <- Unknown Map.empty <$> freshId "C"
   -- addConstraint $ WellFormedCond env cUnknown
   -- let newEnv = addAssumption cUnknown env
-
-  let Just unionOfArgs = foldr unionConstraint Nothing conjunctArgs
-  -- G |- superTArg <: ((subTArg1 AND C1) OR ... OR .. (subTArgN AND C2))
-  simplifyConstraint $ Subtype env superTArg unionOfArgs consisent (label ++ "+arg-world-union")
 
   -- Bind the argument in the environement, and generate a new subtyping constraint
   -- G, x: (AndT subTArg1 superTArg), C1 |- [x/y]subTRet <: superTRet
@@ -399,6 +394,12 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
     else error "argument is not a scalar!"
       -- simplifyConstraint $  -- The argument is a HOF. Not sure if this is right.
       -- Subtype env subTRet superTRet consisent label
+
+  -- Run Solve for the C1..Cn constraints, and remove those disjunctions that would be false.
+  writeLog 3 $ text "running the superTArg <: ((subTArg1 AND C1) OR ... OR .. (subTArgN AND C2))"
+  let Just unionOfArgs = foldr unionConstraint Nothing conjunctArgs
+  -- G |- superTArg <: ((subTArg1 AND C1) OR ... OR .. (subTArgN AND C2))
+  simplifyConstraint $ Subtype env superTArg unionOfArgs consisent (label ++ "+arg-world-union")
   where
     unionConstraint (t,cUnknown) Nothing = Just $ addRefinement t cUnknown
     unionConstraint (t,cUnknown) (Just rest) = Just $ UnionT (addRefinement t cUnknown) rest

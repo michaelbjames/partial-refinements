@@ -660,7 +660,8 @@ instantiate env sch top argNames = do
       intersectionStrat <- asks . view $ _1 . intersectStrategy
       go subst pSubst intersectionStrat argNames t
 
-    go subst pSubst intersectionStrat argNames (FunctionT x tArg tRes) = do
+    go subst pSubst intersectionStrat argNames t@(FunctionT x tArg tRes) = do
+      writeLog 3 (text "go: argNames" <+> (pretty argNames) <+> text "type:" <+> (pretty t))
       x' <- case argNames of
               [] -> freshVar env "x"
               (argName : _) -> return argName
@@ -706,19 +707,6 @@ instantiate env sch top argNames = do
       choice <- msum choices
       -- Now try to infer the medium type
       go subst pSubst intersectionStrat argNames choice
-
-    -- go subst pSubst intersectionStrat@AlgorithmicLaurent argNames t@AndT{} = do
-    --   medianType <- freshFromIntersect env t
-    --   unless (isFunctionType medianType) $
-    --     error "varInferMedian: Goal type not a function!"
-    --   let conjuncts = intersectionToList t
-    --   plausibleConjucts <- foldM (findConjuncts medianType) [] conjuncts
-
-    --   undefined
-    --   where
-    --     -- Check that G, y:(T /\ Ti), Ci |- [y/x]Ti’ <: T’
-    --     findConjuncts median rest ti = do
-    --       return rest
 
     go subst pSubst _ _ t = return $ typeSubstitutePred pSubst . typeSubstitute subst $ t
 
