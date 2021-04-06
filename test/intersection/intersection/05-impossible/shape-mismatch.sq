@@ -1,0 +1,84 @@
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+mixedShape :: (xs:List a -> f:(arg0:a -> b) -> List b) ^
+  (xs: List Int -> f:(arg0:Int -> Bool) -> List Bool)
+mixedShape = \xs. \f.
+  match xs with
+    Nil -> Nil
+    Cons y ys -> mixedShape ys f
+
+{-
+Using algorithmicLaurent!
+
+This program cannot be typed easily because shapes get decided before constraints are solved. However, to type this function we need the shape to be a function of the contraints. In the first conjunct as a goal, the shape should be generic; but in the second conjunct, the shape should be the specific one.
+
+
+[runInSolver] Type Checker returned error:
+TYPE ERROR: Cannot match shape 'Int' : Int
+with shape 'a' : {a|U4}
+from label 'instantiate-isect-LHS+ret-world-2'
+when checking
+mixedShape :: x1:_ -> x0:_ -> List b
+in
+\xs . \f .
+    match xs with
+      Cons y ys -> mixedShape ?? ??
+test/intersection/intersection/02-wip/mixedShape.sq:11: Error:
+  Cannot match shape 'Int' : Int
+  with shape 'a' : {a|U4}
+  from label 'instantiate-isect-LHS+ret-world-2'
+  when checking
+  mixedShape :: x1:_ -> x0:_ -> List b
+  in
+  \xs . \f .
+      match xs with
+        Cons y ys -> mixedShape ?? ??
+
+
+Our current goal is the first type:
+(xs:List a -> f:(arg0:a -> b) -> List b)
+We get to the recursive call and now have two types, from the conjuncts.
+
+There are two sets of problems:
+
+First, with the arguments. They set up the subtype:
+G |- List a <: ({List a | C1} \/ {List Int | C2})
+
+However, we don't yet have a rule for this case--where the base types dont match.
+I have a proposal:
+
+G, C_i |- T <: {B_i|psi_i}
+C_1 XOR ... XOR C_n
+---------------------------------  [Disjoint-Union-RHS]
+G |- T <: (\/_i {Bi|psi_i && Ci})
+
+Join({B| psi_1 && C_1} \/ {B| psi_2 && C_2}) = {B| (psi_1 || psi_2) && C_12}; C12 = C1 || C2
+
+
+If we ignore the first issue, we set up the constraint for the first world, just fine:
+G, C1, xs: (List a ^ List a) |- [xs/y](f:(a -> b) -> List b) <: (f:(a -> b) -> List b)
+but then in the second world:
+G, C2, xs: (List a ^ List Int) |- [xs/y](f:(Int -> Bool) -> List Bool) <: (f:(a -> b) -> List b)
+Then we try to break this down further:
+|- Int <: a      |- b <: Bool
+-----------------------------
+|- (a -> b) <: (Int -> Bool)
+
+And then we hit our error: (Int </: a)
+
+In this case, we want C2=False to eliminate this whole subtype constraint.
+We can derive this "C2 = False" assignment from the failed subtype constraint.
+Then if all constraints are false, we know the whole call must be invalid.
+
+I see two ways we could resolve this:
+1. Instead of error out on this case, emit an unsatisfiable constraint. I don't think this will slow down synthesis. It will take what would be an fatal error and turn it into a constraint that, in the non-intersection case, would be unsatisfiable. In the non-intersection case, this should merely delay the error one step (to MARCO)
+
+2.
+
+-}

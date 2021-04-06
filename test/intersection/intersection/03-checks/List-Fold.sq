@@ -7,10 +7,10 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Cons x xs -> 1 + len xs
 
 -- This spec checks but is not strong enough to specify the _direction_ of the fold.
-foldl :: (xs:List a -> f: (b -> a -> b) -> b -> b) ^
+foldl :: (xs:List a -> f: (acc:b -> x:a -> b) -> seed:b -> b) ^
   -- (xs: List a -> f: (acc:Int -> a -> {Int | _v == acc + 1}) -> seed: Int -> {Int | _v == (len xs + seed)})
-  (xs: List Int -> f: (acc:Int -> Int -> {Int | _v == acc + 1}) -> seed: Int -> {Int | _v == (len xs + seed)})
+  (xs: List Int -> f: (acc:Int -> x:Int -> {Int | _v == acc + 1}) -> seed: Int -> {Int | _v == (len xs + seed)})
 foldl = \xs. \f. \seed.
   match xs with
     Nil -> seed
-    Cons y ys -> fold ys f (f seed y)
+    Cons y ys -> foldl ys f (f seed y)

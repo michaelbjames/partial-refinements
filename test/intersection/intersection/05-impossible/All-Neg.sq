@@ -19,3 +19,15 @@ allNeg = \xs.
     Cons y ys -> if y >= 0
       then False -- Cannot synthesize this expression.
       else allNeg ys
+
+{-
+This works with EitherOr, but not algorithmiclaurent (or any complex one)
+
+-- first call (assumed xs is [Neg]).
+  The if-true case cannot happen
+  allNeg :: List {Int|_v < 0} -> True
+
+-- second call (assumed xs is non-empty [Nat]),
+  The if-false case cannot happen, so it can use the 1st defn
+  allNeg :: List {Int|_v < 0} -> False
+-}

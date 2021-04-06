@@ -11,8 +11,8 @@ termination measure len :: List a -> {Int | _v >= 0} where
 
 listToFalseGen ::
     (zs:List Int -> Bool) ^
-    (zs:{List Int | len _v > 0}  -> {Bool | _v == False}) ^
-    (zs:{List Int | len _v == 0} -> {Bool | _v == False})
+    -- (zs:{List Int | len _v > 0}  -> {Bool | _v == False}) ^
+    (zs:{List Int | len _v >= 0} -> {Bool | _v == False})
 listToFalseGen = \zs.
     match zs with
         Nil -> False

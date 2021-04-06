@@ -16,13 +16,13 @@ termination measure len :: List a -> {Int | _v >= 0} where
 --           ((len xs <= 1) ==> (_v == xs)) }
 
 
-pairs :: ((a -> a -> a) -> xs:{List a | len _v > 1} -> {List a |
+pairs :: (f:(a -> a -> a) -> xs:{List a | len _v > 1} -> {List a |
                 (2 * len _v >= len xs) && (len _v < len xs)}) ^
-         ((a -> a -> a) -> xs:{List a | len _v <= 1} -> {List a | _v == xs})
+         (f:(a -> a -> a) -> xs:{List a | len _v <= 1} -> {List a | _v == xs})
 pairs = \f. \xs.
     match xs with
         Nil -> Nil
         Cons z zs ->
             match zs with
-                Nil -> z
+                Nil -> Cons z Nil
                 Cons y ys -> Cons (f z y) (pairs f ys)
