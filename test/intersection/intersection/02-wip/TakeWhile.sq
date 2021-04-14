@@ -8,6 +8,7 @@ termination measure len :: List a -> {Int | _v >= 0} where
 
 {-
 We can check the solution, but not synthesize the whole thing.
+Currently works with either-or, but not with the inferred subtyping rules
 -}
 takeWhile :: <p :: a -> Bool> . (
     (pred: (x: a -> {Bool | _v == p x}) -> xs: List a -> List {a | p _v})

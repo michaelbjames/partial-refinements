@@ -161,4 +161,20 @@ asInteger s = if all isDigit s then Just $ read s else Nothing
 debugOutLevel = 3
 
 -- | 'debug' @level msg@ : output @msg@ at level @level@
+debug :: Show a => Integer -> a -> b -> b
 debug level msg = if level <= debugOutLevel then traceShow msg else id
+
+
+(!!!) xs loc i = case mbAt xs i of
+  Nothing -> error ("!! index too large at: " ++ loc)
+  Just x -> x
+
+mbAt :: [a] -> Int -> Maybe a
+mbAt xs i
+    | i < 0     = Nothing
+    | otherwise = go i xs
+  where
+    go :: Int -> [a] -> Maybe a
+    go 0 (x:_)  = Just x
+    go j (_:ys) = go (j - 1) ys
+    go _ []     = Nothing

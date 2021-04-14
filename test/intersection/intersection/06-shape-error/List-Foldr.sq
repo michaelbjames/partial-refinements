@@ -1,6 +1,6 @@
 data List a where
   Nil :: List a
-  Cons x xs :: x:a -> xs: List a -> List a
+  Cons :: a -> List a -> List a
 
 termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
@@ -10,6 +10,7 @@ termination measure len :: List a -> {Int | _v >= 0} where
 The core idea of this fold doesn't specify a direction. However,
 the left-fold would not prove under this spec. The left direction
 is not inductive!
+This only works with none of the options because of a shap mismatch.
 -}
 foldr ::
   (xs: List a -> f: (a -> b -> b) -> b -> b) ^
@@ -18,5 +19,5 @@ foldr ::
 foldr = \xs. \f. \seed.
   match xs with
     Nil -> seed
-    -- Cons y ys -> foldr ys f (f y seed) -- foldl
-    Cons y ys -> f y (foldr ys f seed) -- foldr
+    Cons y ys -> foldr ys f (f y seed) -- foldl
+    -- Cons y ys -> f y (foldr ys f seed) -- foldr

@@ -50,6 +50,7 @@ import Data.Bifunctor
 import Data.Foldable
 import Data.List
 import Data.List.Extra (allSame, nubOrd)
+import Data.Function (on)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
@@ -325,7 +326,7 @@ simplifyConstraint' _ _ (Subtype env (ScalarT (DatatypeT name (tArg:tArgs) pArgs
 simplifyConstraint' _ _ (Subtype env (ScalarT (DatatypeT name [] (pArg:pArgs)) fml) (ScalarT (DatatypeT name' [] (pArg':pArgs')) fml') consistent label)
   = do
       let variances = _predVariances ((env ^. datatypes) Map.! name)
-      let isContra = variances !! (length variances - length pArgs - 1) -- Is pArg contravariant?
+      let isContra = (variances !!! "simplifyConstraint'") (length variances - length pArgs - 1) -- Is pArg contravariant?
       if isContra
         then simplifyConstraint (Subtype env (int $ pArg') (int $ pArg) consistent label)
         else simplifyConstraint (Subtype env (int $ pArg) (int $ pArg') consistent label)
@@ -358,7 +359,7 @@ simplifyConstraint' _ _ c@(WellFormedCond _ _) = simpleConstraints %= (c :)
 simplifyConstraint' _ _ c@(WellFormedMatchCond _ _) = simpleConstraints %= (c :)
 
 -- Intersection type
--- RHS: (T <: A; T <: B) ==> T <: A /\ B
+-- RHS: T <: A /\ B gets broken into T <: A and T <: B
 simplifyConstraint' _ _ (Subtype env subT superT@(AndT l r) consistent label) = do
   simplifyConstraint (Subtype env subT l consistent (label ++ "+l"))
   simplifyConstraint (Subtype env subT r consistent (label ++ "+r"))
@@ -398,8 +399,20 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
   -- Run Solve for the C1..Cn constraints, and remove those disjunctions that would be false.
   writeLog 3 $ text "running the superTArg <: ((subTArg1 AND C1) OR ... OR .. (subTArgN AND C2))"
   let Just unionOfArgs = foldr unionConstraint Nothing conjunctArgs
+
+  let argsGroupedByDt = groupBy ((==) `on` fst) $ sortBy (compare `on` fst) conjunctArgs
+  forM_ argsGroupedByDt $ \args -> do
+
+    -- G, -C1..Ci |- superTArg <: ((subTArg1 AND (Cj OR ..c_k) ) (for each distinct subTArg)
+    let constraintRest = concatMap (map snd) $ filter (args /=) argsGroupedByDt
+    let notRest = Set.fromList $ map (Unary Not) constraintRest
+    let Just unionOfArgs = foldr unionConstraint Nothing args
+    let env' = over assumptions (Set.union notRest) env
+    simplifyConstraint $ Subtype env' superTArg unionOfArgs consisent (label ++ "+arg-world-union")
+
+    -- undefined
   -- G |- superTArg <: ((subTArg1 AND C1) OR ... OR .. (subTArgN AND C2))
-  simplifyConstraint $ Subtype env superTArg unionOfArgs consisent (label ++ "+arg-world-union")
+  -- simplifyConstraint $ Subtype env superTArg unionOfArgs consisent (label ++ "+arg-world-union")
   where
     unionConstraint (t,cUnknown) Nothing = Just $ addRefinement t cUnknown
     unionConstraint (t,cUnknown) (Just rest) = Just $ UnionT (addRefinement t cUnknown) rest
@@ -429,11 +442,11 @@ simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label
     <+> squotes (pretty superT) <+> parens (text label)
 
 -- Otherwise (shape mismatch): fail
-simplifyConstraint' _ _ (Subtype _ t t' _ label) =
-  throwError $ text  "Cannot match shape"
-    <+> squotes (pretty $ shape t) <+> text ":" <+> pretty t
-    $+$ text "with shape" <+> squotes (pretty $ shape t') <+> text ":" <+> pretty t'
-    $+$ text "from label" <+> squotes (text label)
+simplifyConstraint' _ _ c@(Subtype _ t t' _ label) = simpleConstraints %= (c :)
+  -- throwError $ text  "Cannot match shape"
+  --   <+> squotes (pretty $ shape t) <+> text ":" <+> pretty t
+  --   $+$ text "with shape" <+> squotes (pretty $ shape t') <+> text ":" <+> pretty t'
+  --   $+$ text "from label" <+> squotes (text label)
 
 -- | Unify type variable @a@ with type @t@ or fail if @a@ occurs in @t@
 unify :: Monad s => Environment -> Id -> TypeSkeleton Formula -> StateT TypingState (ReaderT TypingParams (ExceptT ErrorMessage s)) ()

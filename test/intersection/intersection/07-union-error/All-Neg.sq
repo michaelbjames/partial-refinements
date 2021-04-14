@@ -1,0 +1,44 @@
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+type Nat = {Int | _v >= 0}
+
+
+-- This isn't strong enough to synthesize.
+-- It's missing cases for when the input list isn't entire negative or natural.
+allNeg :: (xs:{List {Int | _v < 0} | len _v > 0} -> {Bool | _v == True}) ^
+          (xs:{List {Int | _v < 0} | len _v == 0} -> {Bool | _v == True}) ^
+          (xs:{List Nat| len _v > 0} -> {Bool|_v==False})
+allNeg = \xs.
+  match xs with
+    Nil -> True
+    Cons y ys -> if y >= 0
+      then False -- Cannot synthesize this expression.
+      else allNeg ys
+
+{-
+This works with EitherOr, but not algorithmiclaurent (or any complex one)
+
+Cannot decompose RHS union, at least one has a nested refinement that does not match the rest. '{List {Int|U2}|U3}' <: '({List {Int|_v < 0}|C0}) \/ (({List {Int|_v >= 0}|len _v > 0 && C1}) \/ ({List Int|C2}))' (instantiate-isect-LHS+arg-world-union)
+  when checking
+  allNeg :: x4:_ -> {Bool|_v == True}
+  in
+  \xs .
+    match xs with
+      Cons y ys ->
+        if y >= 0
+          then False
+          else allNeg ??
+
+
+
+
+
+----------------------
+(T1->T1') /\ (T2->T2') /\ T3 <: T?
+-}

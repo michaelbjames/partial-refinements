@@ -10,6 +10,15 @@ termination measure len :: List a -> {Int | _v >= 0} where
 
 plus :: x:Int -> y:Int -> {Int | _v == (x+y)}
 
+
+{-
+Works with either-or, but not the infer strategies:
+Error:
+Cannot decompose RHS union, at least one has a nested refinement
+that does not match the rest:
+'{List {Int|U1}|U2}' <: '({List Int|C0}) \/ ({List {Int|_v == 3}|C1})'
+  (instantiate-isect-LHS+arg-world-union)
+-}
 sum :: (xs: List Int -> Int) ^
 	   (xs: List {Int| _v == 3} -> {Int | _v == (3 * len xs)})
 sum = \xs.

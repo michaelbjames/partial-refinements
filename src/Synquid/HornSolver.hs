@@ -282,7 +282,7 @@ optimalValuationsBFS :: MonadSMT s => Int -> Set Formula -> Set Formula -> Formu
 optimalValuationsBFS maxSize quals lhs rhs = map qualsAt <$> filterSubsets (check . qualsAt) (length qualsList)
   where
     qualsList = Set.toList quals
-    qualsAt = Set.map (qualsList !!)
+    qualsAt = Set.map (qualsList !!! "optimalValuationsBFS")
     check val = let
                   n = Set.size val
                   lhs' = conjunction lhs `andClean` conjunction val

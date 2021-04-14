@@ -1,3 +1,11 @@
+data Nat where
+  Z :: Nat
+  S :: Nat -> Nat
+
+termination measure dec :: Nat -> {Int | _v >= 0} where
+  Z -> 0
+  S m -> 1 + dec m
+
 data List a where
 	Nil :: List a
 	Cons :: x: a -> xs: List a -> List a
@@ -11,18 +19,10 @@ data Maybe a where
   Just :: a -> Maybe a
 
 
-{-
-Checks, with top 3, not the last one.
--}
-
 list_last :: (xs:List Int -> Maybe Int) ^
-  (xs:{List Int | len _v == 0} -> {Maybe Int | _v == Nothing}) ^
+  (xs:{List Int| len _v == 0} -> {Maybe Int | _v == Nothing}) ^
+  (xs:{List Int | _v == (Cons 3 (Cons 1 Nil))} -> {Maybe Int | _v == Just 1}) ^
   (xs:{List Int | _v == (Cons 1 Nil)} -> {Maybe Int | _v == Just 1})
-
-  -- This last refinement causes it to fail
-  -- (xs:{List {Int | _v == 1} | len _v > 0} -> {Maybe Int | _v == Nothing})
-  -- It does not fail with a concrete example
-  -- (xs:{List Int | _v == Cons 1 Nil} -> {Maybe Int | _v == Nothing})
 list_last = \xs .
   match xs with
     Nil -> Nothing

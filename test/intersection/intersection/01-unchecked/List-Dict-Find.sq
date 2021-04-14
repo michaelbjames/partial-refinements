@@ -24,8 +24,8 @@ measure insert :: x: a -> List a -> {List a|True} where
 {-
 Not strong enough
 -}
-find :: (List (Pair Int Int) -> Int -> Int ->  Int) ^
-        ({List (Pair Int Int) | len _v == 0} -> Int -> default: Int -> {Int | _v == default})
+find :: (haystack:List (Pair Int Int) -> needle:Int -> foobar:Int ->  Int) ^
+        (haystack:{List (Pair Int Int) | len _v == 0} -> needle:Int -> foobar: Int -> {Int | _v == foobar})
 find = \haystack. \needle. \def.
   match haystack with
     Nil -> def

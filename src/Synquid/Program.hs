@@ -439,7 +439,7 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
 
     contentProperties (mName, MeasureDef (DataS _ vars) a _ _ _) = case elemIndex a vars of
       Nothing -> Nothing
-      Just i -> let (ScalarT elemT fml) = tArgs !! i -- @mName@ "returns" one of datatype's parameters: transfer the refinement onto the value of the measure
+      Just i -> let (ScalarT elemT fml) = (tArgs !!! "allMeasurePostconditions-content") i -- @mName@ "returns" one of datatype's parameters: transfer the refinement onto the value of the measure
                 in let
                     elemSort = toSort elemT
                     measureApp = Pred elemSort mName [Var (toSort baseT) valueVarName]
@@ -448,7 +448,8 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
 
     elemProperties (mName, MeasureDef (DataS _ vars) (SetS a) _ _ _) = case elemIndex a vars of
       Nothing -> Nothing
-      Just i -> let (ScalarT elemT fml) = tArgs !! i -- @mName@ is a set of datatype "elements": add an axiom that every element of the set has that property
+      Just i -> let prntr = Debug.Trace.trace $ unwords ["a: ", show a, " vars: ", show vars, " baseT:", show baseT]
+                    (ScalarT elemT fml) = ((prntr tArgs) !!! "allMeasurePostconditions-elem") i -- @mName@ is a set of datatype "elements": add an axiom that every element of the set has that property
                 in if fml == ftrue || fml == ffalse || not (Set.null $ unknownsOf fml)
                     then Nothing
                     else  let

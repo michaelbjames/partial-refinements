@@ -7,7 +7,7 @@ import Synquid.Logic
 import Synquid.Type
 import Synquid.Program
 import Synquid.SolverMonad
-import Synquid.Util ( bothM, debug, ifM, partitionM, Id )
+import Synquid.Util ( bothM, debug, ifM, partitionM, Id, (!!!) )
 import Synquid.Pretty (brackets,  text, Pretty(pretty), ($+$), (<+>), (</>), commaSep )
 import Z3.Monad hiding (Z3Env, newEnv, Sort)
 import qualified Z3.Base as Z3
@@ -114,9 +114,9 @@ assert' ast = do
                   [ast]
                   _true
     s <- astToString ast
-    -- debug 2 (text "[MonadSMT]: isSat:" </> text s) $
+    debug 2 (text "[MonadSMT]: isSat:" </> text s) $
     -- debug 3 (text "[MonadSMT]: Z3 query:" </> text str) $
-    assert ast
+      assert ast
 
 convertDatatypes :: Map Id RSchema -> [(Id, DatatypeDef)] -> Z3State ()
 convertDatatypes _ [] = return ()
@@ -485,7 +485,7 @@ toAST expr = case expr of
 
     findDecl cName decls = do
       declNames <- mapM (getDeclName >=> getSymbolString) decls
-      return $ decls !! fromJust (elemIndex cName declNames)
+      return $ (decls !!! "findDecl") (fromJust (elemIndex cName declNames))
 
     -- | Sort as Z3 sees it
     asZ3Sort s = case s of
