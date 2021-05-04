@@ -12,6 +12,7 @@ import Synquid.Explorer
 import Synquid.Util
 import Synquid.Pretty
 import Synquid.Resolver
+import Synquid.Types
 
 import qualified Data.Set as Set
 import Data.Set (Set)
@@ -140,12 +141,14 @@ reconstructI' env t@(LetT x tDef tBody) impl =
   reconstructI' (addVariable x tDef env) tBody impl
 reconstructI' env t@(AndT l r) impl = do
   logItFrom "reconstructI'" $ text "AndT checking Left branch:" <+> pretty l
+  typingState . topLevelGoal .= l
   left <- reconstructI' env l impl
   left' <- flip insertAuxSolutions left <$> use solvedAuxGoals
   let impl' = content (eraseTypes left')
   logItFrom "reconstructI'" $ text "reconstructI' AndT Left program checks:" <+> (pretty left')
   logItFrom "reconstructI'" $ text "reconstructI' AndT Right branch: " <+> pretty r
   reconstructI' env r impl'
+  typingState . topLevelGoal .= r
   logItFrom "reconstructI'" $ text "reconstructI' AndT Left checks against Right:" <+> (pretty left)
   writeLog 2 $ text "reconstructI' AndT complete"
   return left
@@ -289,9 +292,7 @@ reconstructE' env typ (PSymbol name) = do
           msum choices
 
         {- Base rule -}
-        InferMedian -> baseRule t'
-        LaurentBCD -> baseRule t'
-        AlgorithmicLaurent -> baseRule t'
+        _ -> baseRule t'
       where
         baseRule t' = do
           symbolUseCount %= Map.insertWith (+) name 1

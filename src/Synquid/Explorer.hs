@@ -13,6 +13,7 @@ import qualified Synquid.TypeConstraintSolver as TCSolver
 import Synquid.Util
 import Synquid.Pretty
 import Synquid.Tokens
+import Synquid.Types
 
 import Data.Maybe
 import Data.List
@@ -38,14 +39,6 @@ data FixpointStrategy =
   | FirstArgument     -- ^ Fixpoint decreases the first well-founded argument
   | AllArguments      -- ^ Fixpoint decreases the lexicographical tuple of all well-founded argument in declaration order
   | Nonterminating    -- ^ Fixpoint without termination check
-
--- | How to deal with intersections at Var rule sites?
-data IntersectStrategy =
-    EitherOr         -- ^ Try to check with only one of the intersected types
-  | InferMedian      -- ^ Find some supertype that is not an intersection itself
-  | LaurentBCD       -- ^ Use the Laurent BCD subtyping rule for intersection types.
-  | AlgorithmicLaurent  -- ^ Like Laurent BCD, but on functions, build up co-domain checks to avoid a powerset
-  deriving (Data, Eq, Ord, Show)
 
 -- | Choices for the order of e-term enumeration
 data PickSymbolStrategy = PickDepthFirst | PickInterleave
@@ -585,7 +578,8 @@ throwErrorWithDescription msg = do
 -- | Record type error and backtrack
 throwError :: MonadHorn s => ErrorMessage -> Explorer s a
 throwError e = do
-  writeLog 2 $ text "TYPE ERROR:" <+> plain (emDescription e)
+  currentGoal <- use $ typingState . topLevelGoal
+  writeLog 2 $ text "TYPE ERROR:" </> text "from world:" <+> pretty currentGoal </> text "with error:" <+> plain (emDescription e)
   lift . lift . lift $ typeErrors %= (e :)
   mzero
 
@@ -660,6 +654,17 @@ instantiate env sch top argNames = do
       intersectionStrat <- asks . view $ _1 . intersectStrategy
       go subst pSubst intersectionStrat argNames t
 
+    constrainBottom subst pSubst intersectionStrat argNames t = do
+      medianType <- freshFromIntersect env t
+      -- let medianType = shape t
+      unless (isFunctionType medianType) $
+        error "varInferMedian: Goal type not a function!"
+      addConstraint $ WellFormed env medianType
+      addConstraint $ Subtype env t medianType False "instantiate-isect-LHS"
+      -- The G |- medianType <: goalType happens back in the PSymbol rule
+      -- medianType <- varInferMedian env t
+      go subst pSubst intersectionStrat argNames medianType
+
     go subst pSubst intersectionStrat argNames t@(FunctionT x tArg tRes) = do
       writeLog 3 (text "go: argNames" <+> (pretty argNames) <+> text "type:" <+> (pretty t))
       x' <- case argNames of
@@ -667,27 +672,14 @@ instantiate env sch top argNames = do
               (argName : _) -> return argName
       liftM2 (FunctionT x') (go subst pSubst intersectionStrat [] tArg) (go subst pSubst intersectionStrat (drop 1 argNames) (renameVar (isBoundTV subst) x x' tArg tRes))
 
-    go subst pSubst intersectionStrat@InferMedian argNames t@AndT{} = do
-      medianType <- freshFromIntersect env t
-      -- let medianType = shape t
-      unless (isFunctionType medianType) $
-        error "varInferMedian: Goal type not a function!"
-      addConstraint $ WellFormed env medianType
-      addConstraint $ Subtype env t medianType False "instantiate-isect-LHS"
-      -- The G |- medianType <: goalType happens back in the PSymbol rule
-      -- medianType <- varInferMedian env t
-      go subst pSubst intersectionStrat argNames medianType
+    go subst pSubst intersectionStrat@InferMedian argNames t@AndT{} =
+      constrainBottom subst pSubst intersectionStrat argNames t
 
     go subst pSubst intersectionStrat@AlgorithmicLaurent argNames t@AndT{} = do
-      medianType <- freshFromIntersect env t
-      -- let medianType = shape t
-      unless (isFunctionType medianType) $
-        error "varInferMedian: Goal type not a function!"
-      addConstraint $ WellFormed env medianType
-      addConstraint $ Subtype env t medianType False "instantiate-isect-LHS"
-      -- The G |- medianType <: goalType happens back in the PSymbol rule
-      -- medianType <- varInferMedian env t
-      go subst pSubst intersectionStrat argNames medianType
+      constrainBottom subst pSubst intersectionStrat argNames t
+
+    go subst pSubst intersectionStrat@GuardedPowerset argNames t@AndT{} = do
+      constrainBottom subst pSubst intersectionStrat argNames t
 
     -- Use a Laurent-presentation of BCD to infer a median type from some
     -- subset of the intersected types.

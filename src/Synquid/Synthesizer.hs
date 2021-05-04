@@ -50,7 +50,8 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _typeQualsGen = typeQuals,
                         _predQualsGen = predQuals,
                         _tcSolverSplitMeasures = _splitMeasures explorerParams,
-                        _tcSolverLogLevel = _explorerLogLevel explorerParams
+                        _tcSolverLogLevel = _explorerLogLevel explorerParams,
+                        _tcIntersection = explorerParams ^. intersectStrategy
                       }
       in reconstruct explorerParams typingParams goal
 

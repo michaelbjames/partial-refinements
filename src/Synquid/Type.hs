@@ -286,7 +286,7 @@ addRefinement (ScalarT base fml) fml' = if isVarRefinement fml'
 addRefinement (LetT x tDef tBody) fml = LetT x tDef (addRefinement tBody fml)
 addRefinement t (BoolLit True) = t
 addRefinement AnyT _ = AnyT
-addRefinement t _ = error $ "addRefinement: applied to function type"
+addRefinement t _ = error $ "addRefinement: applied to function type: " ++ show t
 
 -- | Conjoin refinement to the return type
 addRefinementToLast t@(ScalarT _ _) fml = addRefinement t fml

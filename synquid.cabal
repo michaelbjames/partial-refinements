@@ -35,6 +35,7 @@ executable synquid
                     , Synquid.TypeChecker
                     , Synquid.Tokens
                     , Synquid.Type
+                    , Synquid.Types
                     , Synquid.Util
                     , Synquid.Z3
 

@@ -33,7 +33,8 @@ module Synquid.TypeConstraintSolver (
   finalizeProgram,
   initEnv,
   allScalars,
-  condQualsGen
+  condQualsGen,
+  topLevelGoal
 ) where
 
 import Synquid.Logic
@@ -44,12 +45,15 @@ import Synquid.Pretty
 import Synquid.SolverMonad
 import Synquid.Util
 import Synquid.Resolver (addAllVariables)
+import Synquid.Types
+
 
 import Data.Maybe
 import Data.Bifunctor
 import Data.Foldable
 import Data.List
 import Data.List.Extra (allSame, nubOrd)
+import Data.Function
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
@@ -70,7 +74,8 @@ data TypingParams = TypingParams {
   _typeQualsGen :: Environment -> Formula -> [Formula] -> QSpace,   -- ^ Qualifier generator for types
   _predQualsGen :: Environment -> [Formula] -> [Formula] -> QSpace, -- ^ Qualifier generator for bound predicates
   _tcSolverSplitMeasures :: Bool,
-  _tcSolverLogLevel :: Int    -- ^ How verbose logging is
+  _tcSolverLogLevel :: Int,    -- ^ How verbose logging is
+  _tcIntersection :: IntersectStrategy
 }
 
 makeLenses ''TypingParams
@@ -86,6 +91,7 @@ data TypingState = TypingState {
   _initEnv :: Environment,                      -- ^ Initial environment
   _idCount :: Map String Int,                   -- ^ Number of unique identifiers issued so far
   _isFinal :: Bool,                             -- ^ Has the entire program been seen?
+  _topLevelGoal :: RType,                          -- ^ The current top-level goal
   -- Temporary state:
   _simpleConstraints :: [Constraint],           -- ^ Typing constraints that cannot be simplified anymore and can be converted to horn clauses or qualifier maps
   _hornClauses :: [(Formula, Id)],              -- ^ Horn clauses generated from subtyping constraints
@@ -114,6 +120,7 @@ initTypingState env schema = do
     _candidates = [initCand],
     _initEnv = env,
     _idCount = Map.empty,
+    _topLevelGoal = toMonotype schema,
     _isFinal = False,
     _simpleConstraints = [],
     _hornClauses = [],
@@ -364,45 +371,55 @@ simplifyConstraint' _ _ (Subtype env subT superT@(AndT l r) consistent label) = 
   simplifyConstraint (Subtype env subT r consistent (label ++ "+r"))
 -- LHS: A /\ B <: T ... Assert the intersection is a function
 simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superTArg superTRet) consisent@False label) = do
+  intersectionStrategy <- asks _tcIntersection
   let conjuncts = intersectionToList isect
   unless (isFunctionType . head $ conjuncts) $
     throwError $ text  "Cannot subtype intersection of non-function" <+> squotes (pretty isect) $+$ text "with " <+> squotes (pretty superT)
-  conjunctsWithConstraints <- forM conjuncts (\t -> do
-    constraintName <- freshId "C"
-    let c = Unknown Map.empty constraintName
-    -- Set the qualifier map to just False (True is an implicit other option)
-    addQuals constraintName (toSpace Nothing [BoolLit False])
-    return (t,c))
-  let conjunctArgs = map (first argType) conjunctsWithConstraints
-  when (any (isIntersection . fst) conjunctArgs) $
-    throwError $ text  "Intersection of functions, whose arguments are intersections!" <+> squotes (pretty isect) $+$ text "<(??):" <+> squotes (pretty superT)
-  --       cUnknown <- Unknown Map.empty <$> freshId "C"
-  -- addConstraint $ WellFormedCond env cUnknown
-  -- let newEnv = addAssumption cUnknown env
 
-  -- Bind the argument in the environement, and generate a new subtyping constraint
-  -- G, x: (AndT subTArg1 superTArg), C1 |- [x/y]subTRet <: superTRet
-  forM_ (zip conjunctsWithConstraints [1..]) $ \((FunctionT x subTArg subTRet, constraint), idx) -> do
-    let env' = addAssumption constraint env
-    let subTArg' = addRefinement subTArg constraint
-    if isScalarType subTArg
-    then simplifyConstraint $
-      Subtype (addVariable y (AndT subTArg' superTArg) env')
-        (renameVar (isBound env') x y subTArg' subTRet)
-        superTRet
-        consisent (label ++ "+ret-world-" ++ show idx)
-    else error "argument is not a scalar!"
-      -- simplifyConstraint $  -- The argument is a HOF. Not sure if this is right.
-      -- Subtype env subTRet superTRet consisent label
+  case intersectionStrategy of
+    GuardedPowerset -> do
+      conjunctsWithConstraints <- forM conjuncts (\t -> do
+        constraintName <- freshId "C"
+        let c = Unknown Map.empty constraintName
+        -- Set the qualifier map to just False (True is an implicit other option)
+        addQuals constraintName (toSpace Nothing [BoolLit False])
+        return (t,c))
+      let conjunctArgs = map (first argType) conjunctsWithConstraints
+      when (any (isIntersection . fst) conjunctArgs) $
+        throwError $ text  "Intersection of functions, whose arguments are intersections!" <+> squotes (pretty isect) $+$ text "<(??):" <+> squotes (pretty superT)
+      --       cUnknown <- Unknown Map.empty <$> freshId "C"
 
-  -- Run Solve for the C1..Cn constraints, and remove those disjunctions that would be false.
-  writeLog 3 $ text "running the superTArg <: ((subTArg1 AND C1) OR ... OR .. (subTArgN AND C2))"
-  let Just unionOfArgs = foldr unionConstraint Nothing conjunctArgs
-  -- G |- superTArg <: ((subTArg1 AND C1) OR ... OR .. (subTArgN AND C2))
-  simplifyConstraint $ Subtype env superTArg unionOfArgs consisent (label ++ "+arg-world-union")
-  where
-    unionConstraint (t,cUnknown) Nothing = Just $ addRefinement t cUnknown
-    unionConstraint (t,cUnknown) (Just rest) = Just $ UnionT (addRefinement t cUnknown) rest
+      -- codomain
+      -- Bind the argument in the environement, and generate a new subtyping constraint
+      -- G, y: (AndT subTArg1 superTArg), C1 |- [y/x]subTRet <: superTRet
+      forM_ (zip conjunctsWithConstraints [1..]) $ \((FunctionT x subTArg subTRet, constraint), idx) -> do
+        let env' = addGuard constraint env
+        if isScalarType subTArg
+        then simplifyConstraint $
+          Subtype (addVariable y (AndT subTArg superTArg) env')
+            (renameVar (isBound env') x y subTArg subTRet)
+            superTRet
+            consisent (label ++ "+ret-world-" ++ show idx)
+        else error "argument is not a scalar!"
+          -- simplifyConstraint $  -- The argument is a HOF. Not sure if this is right.
+          -- Subtype env subTRet superTRet consisent label
+      -- try to solve for what you can rn
+
+      -- domain
+      -- Get the powerset of each constraint and its matching constraint
+      let jConjuncts = (zipWith (\(a,b) c -> (a,b,c)) conjunctArgs [1..]) &
+                        Set.fromList & Set.powerSet & Set.delete Set.empty & Set.toList &
+                        map Set.toList
+      forM_ jConjuncts $ \conjunctConstraintSubset -> do
+        let (args, inConstraints, worldIdxs) = unzip3 conjunctConstraintSubset
+        let worldId = intercalate "," (map show worldIdxs)
+        let unionOfArgs = foldr1 UnionT args
+        let outConstraints = filter (`notElem` inConstraints) (map snd conjunctsWithConstraints)
+        let negatedOutConstraints = map fnot outConstraints
+        let constraints = foldr1 (|&|) $ inConstraints ++ negatedOutConstraints
+        let env' = addGuard constraints env
+
+        simplifyConstraint $ Subtype env' superTArg unionOfArgs consisent (label ++ "+arg-world-union-" ++ worldId)
 
 
 -- Union Type
@@ -411,19 +428,30 @@ simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label
   | l == r  && l == subT = return ()
   -- Everyone's on the same basetype, we can push the Union into the refinement
   | (not . isFunctionType $ subT)
-    -- TODO: Skipping subT becuase it isn't decided yet,
-    -- we'll make sure it has the same shape as the other two.
-    -- This won't always be the case, say in a 3-way union where
-    -- && baseTypeOf l == baseTypeOf subT
     && allSame (map baseTypeOf $ unionToList superT) = do
       let fmls = concatMap allRefinementsOf' $ unionToList superT
       let (ScalarT repB _) = head $ unionToList superT
       let newSuperT = ScalarT repB (foldr1 (|||) fmls)
       simplifyConstraint (Subtype env subT newSuperT consistent (label ++ "+pushed-into-refinement"))
-  | not $ allSame (map baseTypeOf $ unionToList superT) = throwError $
-    text "Cannot decompose RHS union, at least one has a nested refinement that does not match the rest."
-    <+> squotes (pretty subT) <+> text "<:"
-    <+> squotes (pretty superT) <+> parens (text label)
+  | not $ allSame (map baseTypeOf $ unionToList superT) = do
+    intersectionStrategy <- asks _tcIntersection
+    case intersectionStrategy of
+      GuardedPowerset -> do
+        -- All constraints in the environment should be for this current union.
+        -- I think.
+        -- So force all the constraints to be false.
+        -- Generate a horn clause of /\ C => False
+        let constraints = env ^. subtypeGuards & Set.toList
+        let lhsConstraints = foldr1 (|&|) constraints
+        let clause = lhsConstraints |=>| ffalse
+        let label' = label ++ "+falsify"
+        hornClauses %= ((clause, label'):)
+        writeLog 3 $ text "[simplifyConstraint]:[union]" <+> pretty c <+> pretty clause <+> parens (text label')
+      _ -> do
+        throwError $
+          text "Cannot decompose RHS union, at least one has a nested refinement that does not match the rest."
+          <+> squotes (pretty subT) <+> text "<:"
+          <+> squotes (pretty superT) <+> parens (text label)
   | otherwise = throwError $ text "Cannot decompose RHS union"
     <+> squotes (pretty subT) <+> text "<:"
     <+> squotes (pretty superT) <+> parens (text label)
@@ -510,11 +538,6 @@ processConstraint c@(Subtype env (ScalarT baseTL l) (ScalarT baseTR r) False lab
       let c' = Subtype env (ScalarT baseTL lhs) (ScalarT baseTR rhs) False label
       writeLog 3 $ text "addSplitConstraint" <+> pretty c'
       simpleConstraints %= (c' :)
--- processConstraint (Subtype env (ScalarT baseTl l) unionR@UnionT{} False label) | allSame (map baseTypeOf $ unionToList unionR)
---   = do
---     let disjunctTypes = unionToList unionR
---     -- ([[G]] /\ l) ==> (U1 \/ U2 ... \/ UN)
---     error "foo"
 
 processConstraint (Subtype env (ScalarT baseTL l) (ScalarT baseTR r) True label) | baseTL == baseTR
   = do
@@ -605,9 +628,10 @@ embedding env vars vvBase includeQuantified = do
     tass <- use typeAssignment
     pass <- use predAssignment
     qmap <- use qualifierMap
-    let ass = Set.map (substitutePredicate pass) $ (env ^. assumptions)
+    let guards = env ^. subtypeGuards
+    let ass = Set.map (substitutePredicate pass) (env ^. assumptions)
     let allVars = vars `Set.union` potentialVars qmap (conjunction ass)
-    return $ addBindings env tass pass qmap ass allVars
+    return $ addBindings env tass pass qmap (Set.union ass guards) allVars
   where
     addBindings env tass pass qmap fmls vars =
       if Set.null vars

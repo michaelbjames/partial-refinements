@@ -236,6 +236,7 @@ data Environment = Environment {
   _usedScrutinees :: [RProgram],           -- ^ Program terms that has already been scrutinized
   _unfoldedVars :: Set Id,                 -- ^ In eager match mode, datatype variables that can be scrutinized
   _letBound :: Set Id,                     -- ^ Subset of symbols that are let-bound
+  _subtypeGuards :: Set Formula,           -- ^ Used in GuardedSubtype intersection strategy. These formulae are only positive or negative unknown
   -- | Constant part:
   _constants :: Set Id,                    -- ^ Subset of symbols that are constants
   _datatypes :: Map Id DatatypeDef,        -- ^ Datatype definitions
@@ -263,6 +264,7 @@ emptyEnv = Environment {
   _usedScrutinees = [],
   _unfoldedVars = Set.empty,
   _letBound = Set.empty,
+  _subtypeGuards = Set.empty,
   _constants = Set.empty,
   _globalPredicates = Map.empty,
   _datatypes = Map.empty,
@@ -416,6 +418,9 @@ addAssumption f = assumptions %~ Set.insert f
 -- | 'addScrutinee' @p env@ : @env@ with @p@ marked as having been scrutinized already
 addScrutinee :: RProgram -> Environment -> Environment
 addScrutinee p = usedScrutinees %~ (p :)
+
+addGuard :: Formula -> Environment -> Environment
+addGuard f = subtypeGuards %~ Set.insert f
 
 allPredicates env = Map.fromList (map (\(PredSig pName argSorts resSort) -> (pName, resSort:argSorts)) (env ^. boundPredicates)) `Map.union` (env ^. globalPredicates)
 
