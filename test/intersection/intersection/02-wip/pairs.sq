@@ -16,8 +16,7 @@ termination measure len :: List a -> {Int | _v >= 0} where
 --           ((len xs <= 1) ==> (_v == xs)) }
 
 
-pairs :: (f:(a -> a -> a) -> xs:{List a | len _v > 1} -> {List a |
-                (2 * len _v >= len xs) && (len _v < len xs)}) ^
+pairs :: (f:(a -> a -> a) -> xs:{List a | len _v > 1}  -> {List a | (2 * len _v >= len xs) && (len _v < len xs)}) ^
          (f:(a -> a -> a) -> xs:{List a | len _v <= 1} -> {List a | _v == xs})
 pairs = \f. \xs.
     match xs with

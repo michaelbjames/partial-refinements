@@ -12,7 +12,7 @@ data Maybe a where
 
 
 {-
-Checks, with top 3, not the last one.
+
 -}
 
 list_last ::

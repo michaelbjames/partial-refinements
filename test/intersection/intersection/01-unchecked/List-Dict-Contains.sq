@@ -28,18 +28,18 @@ an example.
 Note: use -f allarguments or -f nonterminating; since the List must come second
 but it's decreasing.
 -}
-contains :: (Int -> List (Pair Int b) -> Bool) ^
+contains :: -- (Int -> List (Pair Int b) -> Bool) ^
             -- Empty list trivially doesn't contain anything
-            (Int -> {List (Pair Int b) | len _v == 0} -> {Bool | _v == False}) ^
+            -- (Int -> {List (Pair Int b) | len _v == 0} -> {Bool | _v == False}) ^
             -- The list where x is in every element definitely contains x
             -- This causes a checking problem when included
             (x: Int -> {List (Pair {Int | _v == x} b) | len _v > 0} -> {Bool | _v == True}) ^
             -- The list where x is in no element definitely does not contains x
             -- This causes a checking problem when included
-            (x: Int -> {List (Pair {Int | _v != x} b) | len _v > 0} -> {Bool | _v == False}) ^
+            (x: Int -> List (Pair {Int | _v != x} b) -> {Bool | _v == False})
             -- Lastly we need an example to force a recursive call
             -- This causes a checking problem when included
-            (x: {Int | _v != 0} -> {List (Pair Int Int) | _v == (Cons (Pair 0 0) (Cons (Pair x 0) Nil))} -> {Bool | _v == True})
+            -- (x: {Int | _v != 0} -> {List (Pair Int Int) | _v == (Cons (Pair 0 0) (Cons (Pair x 0) Nil))} -> {Bool | _v == True})
 
 contains = \needle. \haystack.
   match haystack with

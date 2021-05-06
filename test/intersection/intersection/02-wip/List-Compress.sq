@@ -24,7 +24,7 @@ type CList a = PList a <{!(_0 in heads _1)}>
 
 
 {-
-
+!! index too large. Somewhere...
 -}
 compress ::
   -- The output is always shorter or equal to the input

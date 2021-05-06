@@ -1,0 +1,54 @@
+{-
+Are there and even number of Trues in a list of Bools?
+-}
+
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+not :: p:Bool -> {Bool | _v == !p}
+
+-- {-
+-- It will check WITHOUT the first, more general type.
+-- -}
+list_even_parity :: (xs:List Bool -> Bool) ^
+  (xs: {List {Bool | _v == True}| len _v == 2 || len _v == 0} -> {Bool | _v == True}) ^
+  (xs: {List {Bool | _v == True}| len _v == 3 || len _v == 1} -> {Bool | _v == False})
+  -- (xs: {List {Bool | _v == False} | len _v > 0} -> {Bool | _v == False})
+list_even_parity = \xs.
+  match xs with
+    Nil -> True
+    Cons y ys -> if y
+      then not (list_even_parity ys)
+      else list_even_parity ys
+
+{-
+1st world!
+not (list_even_parity ys)
+^^^^^^^^^^^^^^^^^^^^^^^^^ problem line
+not - ok
+
+list_even_parity - ok
+[solveTypeConstraints]: Solved Candidates:
+[0.2.1.0: [C1 -> {False}, C2 -> {}, C3 -> {}, U1 -> {}, U2 -> {_v == True}, U3 -> {len _v == 2 || len _v == 0}, U4 -> {}] (#valid: 13, #invalid: 0)
+,0.2.1.1: [C1 -> {False}, C2 -> {}, C3 -> {}, U1 -> {}, U2 -> {_v == True}, U3 -> {len _v == 3 || len _v == 1}, U4 -> {}] (#valid: 13, #invalid: 0)
+,0.2.0: [C1 -> {False}, C2 -> {}, C3 -> {}, U1 -> {}, U2 -> {_v == False}, U3 -> {}, U4 -> {}] (#valid: 12, #invalid: 1)
+,0.0: [C1 -> {}, C2 -> {}, C3 -> {False}, U1 -> {}, U2 -> {}, U3 -> {}, U4 -> {}] (#valid: 12, #invalid: 1)
+,0.1: [C1 -> {}, C2 -> {False}, C3 -> {}, U1 -> {}, U2 -> {}, U3 -> {}, U4 -> {}] (#valid: 12, #invalid: 1)]
+Checking OK: list_even_parity :: x3:_ -> Bool in
+\xs .
+  match xs with
+    Cons y ys ->
+      if y
+        then not (?? ??)
+        else (?? :: Bool)
+[reconstructE'-Var-Base] Checked: list_even_parity::x2:_ -> Bool against x3:{List {Bool|U1}|U2} -> {Bool|[xs -> x3]U3}
+
+MISSING solution: C1->{}, C2,C3->{False}, why?
+
+ys - fail
+-}
