@@ -610,7 +610,9 @@ fresh :: MonadHorn s => Environment -> RType -> Explorer s RType
 fresh env t = runInSolver $ TCSolver.fresh env t
 
 freshFromIntersect :: MonadHorn s => Environment -> RType -> Explorer s RType
-freshFromIntersect env t = runInSolver $ TCSolver.freshFromIntersect env t
+freshFromIntersect env t = do
+  currentGoal <- use $ typingState . topLevelGoal
+  runInSolver $ TCSolver.freshFromIntersect env t currentGoal
 
 -- | Return the current valuation of @u@;
 -- in case there are multiple solutions,

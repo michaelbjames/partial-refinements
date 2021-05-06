@@ -147,8 +147,8 @@ reconstructI' env t@(AndT l r) impl = do
   let impl' = content (eraseTypes left')
   logItFrom "reconstructI'" $ text "reconstructI' AndT Left program checks:" <+> (pretty left')
   logItFrom "reconstructI'" $ text "reconstructI' AndT Right branch: " <+> pretty r
-  reconstructI' env r impl'
   typingState . topLevelGoal .= r
+  reconstructI' env r impl'
   logItFrom "reconstructI'" $ text "reconstructI' AndT Left checks against Right:" <+> (pretty left)
   writeLog 2 $ text "reconstructI' AndT complete"
   return left

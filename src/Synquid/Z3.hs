@@ -99,10 +99,10 @@ instance MonadSMT Z3State where
         Unsat -> debug 2 (text "SMT CHECK" <+> pretty fml <+> text "UNSAT") $ return False
         Sat -> do
           debug 2 (text "SMT CHECK" <+> pretty fml <+> text "SAT") $ return True
-          model <- solverGetModel
-          satModelStr <- modelToString model
-          debug 2 (brackets (text "isSat") <> text ": SAT model:" </> text satModelStr) $
-            return True
+          -- model <- solverGetModel
+          -- satModelStr <- modelToString model
+          -- debug 2 (brackets (text "isSat") <> text ": SAT model:" </> text satModelStr) $
+          -- return True
         -- _ -> error $ unwords ["isValid: Z3 returned Unknown for", show fml]
         _ -> debug 2 (text "SMT CHECK" <+> pretty fml <+> text "UNKNOWN treating as SAT") $ return True
 

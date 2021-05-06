@@ -331,7 +331,7 @@ instance Pretty MeasureDef where
 
 prettyBinding (name, typ) = text name <+> operator "::" <+> pretty typ
 
-prettyAssumptions env = commaSep (map pretty (Set.toList $ env ^. assumptions))
+prettyAssumptions env = commaSep (map pretty (Set.toList ((env ^. assumptions) `Set.union` (env ^. subtypeGuards))))
 prettyBindings env = commaSep (map pretty (Map.keys $ removeDomain (env ^. constants) (allSymbols env)))
 -- prettyBindings env = hMapDoc pretty pretty (removeDomain (env ^. constants) (allSymbols env))
 -- prettyBindings env = empty
@@ -350,12 +350,12 @@ instance Show SortConstraint where
   show = show . pretty
 
 prettyConstraint :: Constraint -> Doc
-prettyConstraint (Subtype env t1 t2 False label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "<:" <+> pretty t2 <+> parens (text label)
-prettyConstraint (Subtype env t1 t2 True label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "/\\" <+> pretty t2 <+> parens (text label)
-prettyConstraint (WellFormed env t) = prettyBindings env <+> operator "|-" <+> pretty t
-prettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
-prettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
-prettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
+prettyConstraint (Subtype env t1 t2 False label) = hang 4 $ pretty env <+> operator "|-" </> pretty t1 <+> operator "<:" <+> pretty t2 <+> parens (text label)
+prettyConstraint (Subtype env t1 t2 True label) = hang 4 $ pretty env <+> operator "|-" </> pretty t1 <+> operator "/\\" <+> pretty t2 <+> parens (text label)
+prettyConstraint (WellFormed env t) = hang 4 $ prettyBindings env <+> operator "|-" </> pretty t
+prettyConstraint (WellFormedCond env c) = hang 4 $ prettyBindings env <+> operator "|-" </> pretty c
+prettyConstraint (WellFormedMatchCond env c) = hang 4 $ prettyBindings env <+> operator "|- (match)" </> pretty c
+prettyConstraint (WellFormedPredicate _ sorts p) = hang 4 $ operator "|-" </> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
 
 instance Pretty Constraint where
   pretty = prettyConstraint

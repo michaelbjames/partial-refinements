@@ -64,6 +64,7 @@ import Control.Monad.Trans.Except
 import Control.Applicative hiding (empty)
 import Control.Lens hiding (both)
 import Debug.Trace
+import Development.Placeholders
 
 {- Interface -}
 
@@ -366,9 +367,10 @@ simplifyConstraint' _ _ c@(WellFormedMatchCond _ _) = simpleConstraints %= (c :)
 
 -- Intersection type
 -- RHS: (T <: A; T <: B) ==> T <: A /\ B
-simplifyConstraint' _ _ (Subtype env subT superT@(AndT l r) consistent label) = do
-  simplifyConstraint (Subtype env subT l consistent (label ++ "+l"))
-  simplifyConstraint (Subtype env subT r consistent (label ++ "+r"))
+simplifyConstraint' _ _ (Subtype env subT superT@(AndT l r) consistent label) = -- $(todo "this shouldn't happen")
+  do
+    simplifyConstraint (Subtype env subT l consistent (label ++ "+l"))
+    simplifyConstraint (Subtype env subT r consistent (label ++ "+r"))
 -- LHS: A /\ B <: T ... Assert the intersection is a function
 simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superTArg superTRet) consisent@False label) = do
   intersectionStrategy <- asks _tcIntersection
@@ -439,14 +441,14 @@ simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label
       GuardedPowerset -> do
         -- All constraints in the environment should be for this current union.
         -- I think.
-        -- So force all the constraints to be false.
+        -- So force at least one of the constraints to be false.
         -- Generate a horn clause of /\ C => False
         let constraints = env ^. subtypeGuards & Set.toList
         let lhsConstraints = foldr1 (|&|) constraints
         let clause = lhsConstraints |=>| ffalse
         let label' = label ++ "+falsify"
         hornClauses %= ((clause, label'):)
-        writeLog 3 $ text "[simplifyConstraint]:[union]" <+> pretty c <+> pretty clause <+> parens (text label')
+        writeLog 3 $ text "[simplifyConstraint]:[union]" <+> pretty c </> pretty clause <+> parens (text label')
       _ -> do
         throwError $
           text "Cannot decompose RHS union, at least one has a nested refinement that does not match the rest."
@@ -457,11 +459,23 @@ simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label
     <+> squotes (pretty superT) <+> parens (text label)
 
 -- Otherwise (shape mismatch): fail
-simplifyConstraint' _ _ (Subtype _ t t' _ label) =
-  throwError $ text  "Cannot match shape"
-    <+> squotes (pretty $ shape t) <+> text ":" <+> pretty t
-    $+$ text "with shape" <+> squotes (pretty $ shape t') <+> text ":" <+> pretty t'
-    $+$ text "from label" <+> squotes (text label)
+simplifyConstraint' _ _ (Subtype env t t' _ label)
+  | Set.size (_subtypeGuards env) > 0 = do
+    intersectionStrategy <- asks _tcIntersection
+    case intersectionStrategy of
+      GuardedPowerset -> do
+        let constraints = env ^. subtypeGuards & Set.toList
+        let lhsConstraints = foldr1 (|&|) constraints
+        let clause = lhsConstraints |=>| ffalse
+        let label' = label ++ "+falsify"
+        hornClauses %= ((clause, label'):)
+      _ -> defaultCase
+  | otherwise = defaultCase
+    where
+      defaultCase = throwError $ text  "Cannot match shape"
+        <+> squotes (pretty $ shape t) <+> text ":" <+> pretty t
+        $+$ text "with shape" <+> squotes (pretty $ shape t') <+> text ":" <+> pretty t'
+        $+$ text "from label" <+> squotes (text label)
 
 -- | Unify type variable @a@ with type @t@ or fail if @a@ occurs in @t@
 unify :: Monad s => Environment -> Id -> TypeSkeleton Formula -> StateT TypingState (ReaderT TypingParams (ExceptT ErrorMessage s)) ()
@@ -675,7 +689,7 @@ potentialVars qmap fml = Set.map varName $ varsOf $ bottomValuation qmap fml
 -- | 'freshId' @prefix@ : fresh identifier starting with @prefix@
 freshId :: Monad s => String -> TCSolver s String
 freshId prefix = do
-  i <- uses idCount (Map.findWithDefault 0 prefix)
+  i <- uses idCount (Map.findWithDefault 1 prefix)
   idCount %= Map.insert prefix (i + 1)
   return $ prefix ++ show i
 
@@ -728,12 +742,16 @@ freshPred env sorts = do
   let args = zipWith Var sorts deBrujns
   return $ Pred BoolS p' args
 
-freshFromIntersect env (AndT l r) = freshFromIntersect env l
-freshFromIntersect env (FunctionT x tArg tRes) = do
-  tArg' <- freshFromIntersect env tArg
-  tRes' <- freshFromIntersect env tRes
+freshFromIntersect env t@(AndT l r) goalType = do
+  let goalShapes = intersectionToList t & filter (on (==) shape goalType)
+  case listToMaybe goalShapes of
+    Nothing -> $(todo "Specification has a shape mismatch")
+    Just t' -> fresh env t'
+freshFromIntersect env (FunctionT x tArg tRes) (FunctionT gx goalArg goalRes) = do
+  tArg' <- freshFromIntersect env tArg goalArg
+  tRes' <- freshFromIntersect env tRes goalRes
   return $ FunctionT x tArg' tRes'
-freshFromIntersect env t@(ScalarT _ _) = fresh env t
+freshFromIntersect env t@(ScalarT _ _) goalType = fresh env t
 
 addTypeAssignment tv t = typeAssignment %= Map.insert tv t
 addPredAssignment p fml = predAssignment %= Map.insert p fml
