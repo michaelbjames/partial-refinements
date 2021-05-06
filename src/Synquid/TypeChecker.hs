@@ -297,9 +297,15 @@ reconstructE' env typ (PSymbol name) = do
         baseRule t' = do
           symbolUseCount %= Map.insertWith (+) name 1
           let p = Program (PSymbol name) t'
-          case Map.lookup name (env ^. shapeConstraints) of
-              Nothing -> return ()
-              Just sc -> addConstraint $ Subtype env (refineBot env $ shape t') (refineTop env sc) False "var-shape-match"
+          -- 2021-05-05(MJ): We're removing this check, becuase
+          -- 1. the way we permit shape-mismatches comes from having guarded subtypes.
+          --    without guards, a shape-mismatch is an actual error. This check has
+          --    no guards.
+          -- 2. It's not documented in Synquid's paper. Nadia couldn't recall what it
+          --    was for in the first place. Perhaps to ensure termination of the TCing?
+          -- case Map.lookup name (env ^. shapeConstraints) of
+          --     Nothing -> return ()
+          --     Just sc -> addConstraint $ Subtype env (refineBot env $ shape t') (refineTop env sc) False "var-shape-match"
           checkE env typ p
           logItFrom "reconstructE'-Var-Base" (text "Checked:" <+> (pretty name) <> (text "::") <> (pretty typ) <+> (text "against") <+> (pretty t'))
           return p

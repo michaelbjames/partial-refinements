@@ -13,6 +13,8 @@ import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
+
+import Control.Arrow
 import Control.Monad
 import Control.Lens hiding (set)
 import Development.Placeholders
@@ -266,17 +268,53 @@ type SSchema = SchemaSkeleton ()
 -- | Refined schemas
 type RSchema = SchemaSkeleton Formula
 
--- | Forget refinements of a type
+-- | What is the essential structure of the type?
+-- Remove the refinements, preserve the arrow structure,
+-- and infer the least common generalization.
 shape :: RType -> SType
-shape (ScalarT (DatatypeT name tArgs pArgs) _) = ScalarT (DatatypeT name (map shape tArgs) (replicate (length pArgs) ())) ()
-shape (ScalarT IntT _) = ScalarT IntT ()
-shape (ScalarT BoolT _) = ScalarT BoolT ()
-shape (ScalarT (TypeVarT _ a) _) = ScalarT (TypeVarT Map.empty a) ()
-shape (FunctionT x tArg tFun) = FunctionT x (shape tArg) (shape tFun)
-shape (LetT _ _ t) = shape t
--- shape (AndT l r) = AndT (shape l) (shape r)
-shape (AndT l r) = shape l
-shape AnyT = AnyT
+shape (AndT l r) = antiUnify (removeRefinement l) (removeRefinement r) Map.empty & fst
+shape t = removeRefinement t
+
+-- | Remove the refinement, but keep the same constructor structure.
+removeRefinement :: RType -> SType
+removeRefinement (ScalarT (DatatypeT name tArgs pArgs) _) = ScalarT (DatatypeT name (map removeRefinement tArgs) (replicate (length pArgs) ())) ()
+removeRefinement (ScalarT IntT _) = ScalarT IntT ()
+removeRefinement (ScalarT BoolT _) = ScalarT BoolT ()
+removeRefinement (ScalarT (TypeVarT _ a) _) = ScalarT (TypeVarT Map.empty a) ()
+removeRefinement (FunctionT x tArg tFun) = FunctionT x (removeRefinement tArg) (removeRefinement tFun)
+removeRefinement (LetT _ _ t) = removeRefinement t
+removeRefinement (AndT l r) = AndT (removeRefinement l) (removeRefinement r)
+removeRefinement AnyT = AnyT
+
+-- Implementation taken from James et al. 2020
+antiUnify :: SType -> SType -> Map (SType, SType) Id -> (SType, Map (SType, SType) Id)
+antiUnify (AndT ll lr) r st = uncurry (antiUnify r) (antiUnify ll lr st)
+antiUnify l (AndT rl rr) st = uncurry (antiUnify l) (antiUnify rl rr st)
+antiUnify (FunctionT x lArg lRet) (FunctionT y rArg rRet) st =
+    let (tArg, st1) = antiUnify lArg rArg st
+        (tRet, st2) = antiUnify lRet rRet st1
+     in (FunctionT x tArg tRet, st2)
+antiUnify (ScalarT (DatatypeT n lArgs _) _) (ScalarT (DatatypeT m rArgs _) _) st
+    | n == m && length lArgs == length rArgs =
+        let (tArgs, stFinal) =
+                foldr
+                    (\(lTCon, rTCon) (resCon, st') -> first (\x -> resCon ++ [x]) (antiUnify lTCon rTCon st'))
+                    ([], st)
+                    (zip lArgs rArgs)
+         in (ScalarT (DatatypeT n tArgs []) (), stFinal)
+antiUnify l r st
+    | l == r = (l, st)
+    | (l, r) `Map.member` st = (ScalarT (TypeVarT Map.empty (st Map.! (l, r))) (), st)
+    | otherwise =
+        let newKeyname = mkFreshIdSafe (Map.elems st) 0
+            st' = Map.insert (l, r) newKeyname st
+         in (ScalarT (TypeVarT Map.empty newKeyname) (), st')
+  where
+    mkFreshIdSafe ks idx =
+        if ("T" ++ show idx) `elem` ks
+            then mkFreshIdSafe ks (idx + 1)
+            else "T" ++ show idx
+
 
 -- | Conjoin refinement to a type
 addRefinement :: TypeSkeleton Formula -> Formula -> TypeSkeleton Formula
