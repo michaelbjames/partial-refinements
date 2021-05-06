@@ -18,6 +18,7 @@ import Control.Arrow
 import Control.Monad
 import Control.Lens hiding (set)
 import Development.Placeholders
+import GHC.Stack
 
 {- Type skeletons -}
 
@@ -43,6 +44,7 @@ isScalarType (ScalarT _ _) = True
 isScalarType (LetT _ _ _) = True
 isScalarType _ = False
 
+baseTypeOf :: HasCallStack => TypeSkeleton r -> BaseType r
 baseTypeOf (ScalarT baseT _) = baseT
 baseTypeOf (LetT _ _ t) = baseTypeOf t
 baseTypeOf _ = error "baseTypeOf: applied to a function type"

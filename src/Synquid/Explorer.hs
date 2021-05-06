@@ -658,7 +658,6 @@ instantiate env sch top argNames = do
 
     constrainBottom subst pSubst intersectionStrat argNames t = do
       medianType <- freshFromIntersect env t
-      -- let medianType = shape t
       unless (isFunctionType medianType) $
         error "varInferMedian: Goal type not a function!"
       addConstraint $ WellFormed env medianType

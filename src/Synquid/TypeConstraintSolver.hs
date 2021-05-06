@@ -396,15 +396,12 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
       -- G, y: (AndT subTArg1 superTArg), C1 |- [y/x]subTRet <: superTRet
       forM_ (zip conjunctsWithConstraints [1..]) $ \((FunctionT x subTArg subTRet, constraint), idx) -> do
         let env' = addGuard constraint env
-        if isScalarType subTArg
-        then simplifyConstraint $
+        simplifyConstraint $
           Subtype (addVariable y (AndT subTArg superTArg) env')
             (renameVar (isBound env') x y subTArg subTRet)
             superTRet
             consisent (label ++ "+ret-world-" ++ show idx)
-        else error "argument is not a scalar!"
-          -- simplifyConstraint $  -- The argument is a HOF. Not sure if this is right.
-          -- Subtype env subTRet superTRet consisent label
+
       -- try to solve for what you can rn
 
       -- domain
@@ -428,14 +425,17 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
 simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label)
   -- Reflexivity
   | l == r  && l == subT = return ()
+  -- Union Redundancy
+  | allSame (unionToList superT) = simplifyConstraint (Subtype env subT (head (unionToList superT)) consistent label)
   -- Everyone's on the same basetype, we can push the Union into the refinement
   | (not . isFunctionType $ subT)
-    && allSame (map baseTypeOf $ unionToList superT) = do
+    && allSame (map removeRefinement $ unionToList superT) = do
       let fmls = concatMap allRefinementsOf' $ unionToList superT
       let (ScalarT repB _) = head $ unionToList superT
       let newSuperT = ScalarT repB (foldr1 (|||) fmls)
       simplifyConstraint (Subtype env subT newSuperT consistent (label ++ "+pushed-into-refinement"))
-  | not $ allSame (map baseTypeOf $ unionToList superT) = do
+  -- Disjuncts are all different shapes, we have to make a choice.
+  | not $ allSame (map removeRefinement $ unionToList superT) = do
     intersectionStrategy <- asks _tcIntersection
     case intersectionStrategy of
       GuardedPowerset -> do
