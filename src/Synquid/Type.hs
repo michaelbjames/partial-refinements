@@ -270,6 +270,19 @@ type SSchema = SchemaSkeleton ()
 -- | Refined schemas
 type RSchema = SchemaSkeleton Formula
 
+testType :: TypeSkeleton Formula
+testType = AndT t2 t3
+  where
+    myint = ScalarT IntT ftrue
+    mybool = ScalarT BoolT ftrue
+    t1 = FunctionT "x" myint myint
+    t2 = FunctionT "x"
+      (ScalarT (DatatypeT "Pair" [myint, mybool, mybool] []) ftrue)
+      (ScalarT (DatatypeT "Pair" [myint, mybool, mybool] []) ftrue)
+    t3 = FunctionT "x"
+      (ScalarT (DatatypeT "Pair" [mybool, myint, mybool] []) ftrue)
+      (ScalarT (DatatypeT "Pair" [mybool, myint, mybool] []) ftrue)
+
 -- | What is the essential structure of the type?
 -- Remove the refinements, preserve the arrow structure,
 -- and infer the least common generalization.
@@ -300,7 +313,7 @@ antiUnify (ScalarT (DatatypeT n lArgs _) _) (ScalarT (DatatypeT m rArgs _) _) st
     | n == m && length lArgs == length rArgs =
         let (tArgs, stFinal) =
                 foldr
-                    (\(lTCon, rTCon) (resCon, st') -> first (\x -> resCon ++ [x]) (antiUnify lTCon rTCon st'))
+                    (\(lTCon, rTCon) (resCon, st') -> first (:resCon) (antiUnify lTCon rTCon st'))
                     ([], st)
                     (zip lArgs rArgs)
          in (ScalarT (DatatypeT n tArgs []) (), stFinal)
