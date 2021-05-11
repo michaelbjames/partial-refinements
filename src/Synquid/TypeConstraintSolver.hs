@@ -140,10 +140,14 @@ solveTypeConstraints = do
   scs <- use simpleConstraints
   writeLog 3 (text "Simple Constraints" $+$ (vsep $ map pretty scs))
 
+  writeLog 3 (text "---Processing All Predicates---")
   processAllPredicates
+  writeLog 3 (text "---Processing All Constraints---")
   processAllConstraints
+  writeLog 3 (text "---Generating All Horn Clauses---")
   generateAllHornClauses
 
+  writeLog 3 (text "---Solving All Horn Clauses---")
   solveHornClauses
   -- TODO: Re-enable this:
   -- There are no checks that the user DIDNT disable this.
@@ -426,37 +430,47 @@ simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label
   -- Reflexivity
   | l == r  && l == subT = return ()
   -- Union Redundancy
-  | allSame (unionToList superT) = simplifyConstraint (Subtype env subT (head (unionToList superT)) consistent label)
-  -- Everyone's on the same basetype, we can push the Union into the refinement
-  | (not . isFunctionType $ subT)
-    && allSame (map removeRefinement $ unionToList superT) = do
+  | allSame (unionToList superT) = simplifyConstraint (Subtype env subT (head (unionToList superT)) consistent (label++"+redundant-union"))
+  -- If the supertype contains a function then we have to make a choice between them.
+  -- Since we got past the Redundancy rule, we know not all functions are the same.
+  -- TODO: I'm making an implcit assumption that we'll never union a function and non-function.
+  -- It doesn't matter here, but worth noting
+  | any isFunctionType $ unionToList superT = makeChoice
+  -- Disjuncts are not all the same shape, we have to make a choice.
+  | not $ allSame (map baseTypeOf $ unionToList superT) = makeChoice
+  -- Each disjunct has the same basetype (i.e., [Bool|True]|len==0 ~ [Bool|True]|len > 0),
+  -- we can push the Union into the refinement. But not when the inner types do not match up.
+  | allSame (map baseTypeOf $ unionToList superT) = mergeRefinements
+
+  | otherwise = throwError $ text "Cannot decompose RHS union"
+    <+> squotes (pretty subT) <+> text "<:"
+    <+> squotes (pretty superT) <+> parens (text label)
+  where
+    makeChoice = do
+      intersectionStrategy <- asks _tcIntersection
+      case intersectionStrategy of
+        GuardedPowerset -> do
+          -- All constraints in the environment should be for this current union.
+          -- I think.
+          -- So force at least one of the constraints to be false.
+          -- Generate a horn clause of /\ C => False
+          let constraints = env ^. subtypeGuards & Set.toList
+          let lhsConstraints = foldr1 (|&|) constraints
+          let clause = lhsConstraints |=>| ffalse
+          let label' = label ++ "+falsify"
+          hornClauses %= ((clause, label'):)
+          writeLog 3 $ text "[simplifyConstraint]:[union]" <+> pretty c </> pretty clause <+> parens (text label')
+        _ -> do
+          throwError $
+            text "Cannot decompose RHS union, at least one has a nested refinement that does not match the rest."
+            <+> squotes (pretty subT) <+> text "<:"
+            <+> squotes (pretty superT) <+> parens (text label)
+    mergeRefinements = do
       let fmls = concatMap allRefinementsOf' $ unionToList superT
       let (ScalarT repB _) = head $ unionToList superT
       let newSuperT = ScalarT repB (foldr1 (|||) fmls)
       simplifyConstraint (Subtype env subT newSuperT consistent (label ++ "+pushed-into-refinement"))
-  -- Disjuncts are all different shapes, we have to make a choice.
-  | not $ allSame (map removeRefinement $ unionToList superT) = do
-    intersectionStrategy <- asks _tcIntersection
-    case intersectionStrategy of
-      GuardedPowerset -> do
-        -- All constraints in the environment should be for this current union.
-        -- I think.
-        -- So force at least one of the constraints to be false.
-        -- Generate a horn clause of /\ C => False
-        let constraints = env ^. subtypeGuards & Set.toList
-        let lhsConstraints = foldr1 (|&|) constraints
-        let clause = lhsConstraints |=>| ffalse
-        let label' = label ++ "+falsify"
-        hornClauses %= ((clause, label'):)
-        writeLog 3 $ text "[simplifyConstraint]:[union]" <+> pretty c </> pretty clause <+> parens (text label')
-      _ -> do
-        throwError $
-          text "Cannot decompose RHS union, at least one has a nested refinement that does not match the rest."
-          <+> squotes (pretty subT) <+> text "<:"
-          <+> squotes (pretty superT) <+> parens (text label)
-  | otherwise = throwError $ text "Cannot decompose RHS union"
-    <+> squotes (pretty subT) <+> text "<:"
-    <+> squotes (pretty superT) <+> parens (text label)
+
 
 -- Otherwise (shape mismatch): fail
 simplifyConstraint' _ _ (Subtype env t t' _ label)
@@ -472,10 +486,11 @@ simplifyConstraint' _ _ (Subtype env t t' _ label)
       _ -> defaultCase
   | otherwise = defaultCase
     where
-      defaultCase = throwError $ text  "Cannot match shape"
-        <+> squotes (pretty $ shape t) <+> text ":" <+> pretty t
-        $+$ text "with shape" <+> squotes (pretty $ shape t') <+> text ":" <+> pretty t'
-        $+$ text "from label" <+> squotes (text label)
+      defaultCase =
+        throwError $ text  "Cannot match shape, unresolvable subtype:"
+        $+$ squotes (pretty $ shape t) <+> text ":" <+> pretty t
+        <+> text "</:" <+> squotes (pretty $ shape t') <+> text ":" <+> pretty t'
+        <+> text "from label" <+> squotes (text label)
 
 -- | Unify type variable @a@ with type @t@ or fail if @a@ occurs in @t@
 unify :: Monad s => Environment -> Id -> TypeSkeleton Formula -> StateT TypingState (ReaderT TypingParams (ExceptT ErrorMessage s)) ()
