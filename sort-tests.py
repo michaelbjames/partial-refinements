@@ -18,7 +18,7 @@ Tree-Fold.sq: 05-impossible | No change.
 '''
 
 SYNQUID = "stack run -- synquid"
-BASE_ARGS = "-c=False -f nonterminating"
+BASE_ARGS = "-c=False -b -f nonterminating"
 
 TIMEOUT_SEC = 10
 
@@ -34,6 +34,17 @@ WORKING_DIRS = [WIP_DIR, CHECKS_DIR, SYNTH_DIR, FAILS_DIR]
 SUCCESS_STATUS = 'success_STATUS'
 TIMEOUT_STATUS = 'timeout'
 FAILED_STATUS = 'failed'
+
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 FNULL = open(os.devnull, 'w')
 
@@ -75,8 +86,11 @@ def worker(subdir, filename, return_dict=None):
 
 def print_status(status):
     for (filename, (old_dir, new_dir)) in status:
+        new_dir_str = new_dir
+        if new_dir == CHECKS_DIR:
+            new_dir_str = f"{bcolors.OKGREEN}{new_dir}"
         if new_dir != old_dir:
-            print(f"{filename}: {old_dir} -> {new_dir}")
+            print(f"{filename}: {bcolors.WARNING}{old_dir} -> {new_dir_str}{bcolors.ENDC}")
         else:
             print(f"{filename}: {old_dir} | No change.")
 
@@ -86,12 +100,19 @@ def main():
     manager = Manager()
     return_dict = manager.dict()
 
+    print("building project...", end="")
+    subprocess.run("stack build", shell=True)
+    print("done")
+
     for subdir in WORKING_DIRS:
         for filename in os.listdir(os.path.join(BASE_TEST_PATH, subdir)):
             worklist.append((subdir, filename, return_dict))
 
+    print(f"Running with: synquid {BASE_ARGS}")
+    print("running testing benchmarks...", end="")
     with Pool() as pool:
         pool.starmap(worker, worklist)
+    print("done")
 
     print_status(sorted(return_dict.items()))
 

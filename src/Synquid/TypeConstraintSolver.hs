@@ -399,7 +399,7 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
       -- Bind the argument in the environement, and generate a new subtyping constraint
       -- G, y: (AndT subTArg1 superTArg), C1 |- [y/x]subTRet <: superTRet
       forM_ (zip conjunctsWithConstraints [1..]) $ \((FunctionT x subTArg subTRet, constraint), idx) -> do
-        let env' = addGuard constraint env
+        let env' = addPositiveGuard [constraint] env
         simplifyConstraint $
           Subtype (addVariable y (AndT subTArg superTArg) env')
             (renameVar (isBound env') x y subTArg subTRet)
@@ -419,10 +419,10 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
         let unionOfArgs = foldr1 UnionT args
         let outConstraints = filter (`notElem` inConstraints) (map snd conjunctsWithConstraints)
         let negatedOutConstraints = map fnot outConstraints
-        let constraints = foldr1 (|&|) $ inConstraints ++ negatedOutConstraints
-        let env' = addGuard constraints env
+        let env' = addPositiveGuard inConstraints env
+        let env'' = addNegativeGuard negatedOutConstraints env'
 
-        simplifyConstraint $ Subtype env' superTArg unionOfArgs consisent (label ++ "+arg-world-union-" ++ worldId)
+        simplifyConstraint $ Subtype env'' superTArg unionOfArgs consisent (label ++ "+arg-world-union-" ++ worldId)
 
 
 -- Union Type
@@ -454,8 +454,9 @@ simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label
           -- I think.
           -- So force at least one of the constraints to be false.
           -- Generate a horn clause of /\ C => False
-          let constraints = env ^. subtypeGuards & Set.toList
-          let lhsConstraints = foldr1 (|&|) constraints
+          let constraints = env ^. subtypeGuards
+          let (posFmls, negFmls) = both Set.toList constraints
+          let lhsConstraints = foldr1 (|&|) (posFmls ++ negFmls)
           let clause = lhsConstraints |=>| ffalse
           let label' = label ++ "+falsify"
           hornClauses %= ((clause, label'):)
@@ -470,16 +471,23 @@ simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label
       let (ScalarT repB _) = head $ unionToList superT
       let newSuperT = ScalarT repB (foldr1 (|||) fmls)
       simplifyConstraint (Subtype env subT newSuperT consistent (label ++ "+pushed-into-refinement"))
+      -- let (posFmls, negFmls) = env ^. subtypeGuards & both Set.toList
+      -- forM_ negFmls $ \negFml -> do
+      --   let lhsConstraint = foldr1 (|&|) posFmls
+      --   let clause = lhsConstraint |=>| negFml
+      --   let label' = label ++ "+exclusivity"
+      --   hornClauses %= ((clause, label'):)
 
 
 -- Otherwise (shape mismatch): fail
 simplifyConstraint' _ _ (Subtype env t t' _ label)
-  | Set.size (_subtypeGuards env) > 0 = do
+  | Set.size (fst $ _subtypeGuards env) > 0 = do
     intersectionStrategy <- asks _tcIntersection
     case intersectionStrategy of
       GuardedPowerset -> do
-        let constraints = env ^. subtypeGuards & Set.toList
-        let lhsConstraints = foldr1 (|&|) constraints
+        let constraints = env ^. subtypeGuards
+        let (posFmls, negFmls) = both Set.toList constraints
+        let lhsConstraints = foldr1 (|&|) (posFmls ++ negFmls)
         let clause = lhsConstraints |=>| ffalse
         let label' = label ++ "+falsify"
         hornClauses %= ((clause, label'):)
@@ -657,7 +665,7 @@ embedding env vars vvBase includeQuantified = do
     tass <- use typeAssignment
     pass <- use predAssignment
     qmap <- use qualifierMap
-    let guards = env ^. subtypeGuards
+    let guards = env ^. subtypeGuards & uncurry Set.union
     let ass = Set.map (substitutePredicate pass) (env ^. assumptions)
     let allVars = vars `Set.union` potentialVars qmap (conjunction ass)
     return $ addBindings env tass pass qmap (Set.union ass guards) allVars

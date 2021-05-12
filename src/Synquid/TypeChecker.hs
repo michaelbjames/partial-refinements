@@ -57,7 +57,7 @@ reconstructFix (Goal funName env (Monotype typ) impl depth _ synth) = do
   let pvs = env ^. boundPredicates
   let predGeneralized sch = if predPolymorphic then foldr ForallP sch pvs else sch -- Version of @t'@ generalized in bound predicate variables of the enclosing function
   let typeGeneralized sch = if polymorphic then foldr ForallT sch tvs else sch -- Version of @t'@ generalized in bound type variables of the enclosing function
-  let env' = foldr (\(f, t) -> addPolyVariable f (typeGeneralized . predGeneralized . Monotype $ t) . (trace ("insertSC: " ++ f) $ shapeConstraints %~ Map.insert f (shape typ'))) env recCalls
+  let env' = foldr (\(f, t) -> addPolyVariable f (typeGeneralized . predGeneralized . Monotype $ t) . (shapeConstraints %~ Map.insert f (shape typ'))) env recCalls
   let ctx p = if null recCalls then p else Program (PFix (map fst recCalls) p) typ'
   p <- inContext ctx  $ reconstructI env' typ' impl
   return $ ctx p

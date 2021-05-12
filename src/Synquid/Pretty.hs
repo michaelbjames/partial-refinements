@@ -331,7 +331,10 @@ instance Pretty MeasureDef where
 
 prettyBinding (name, typ) = text name <+> operator "::" <+> pretty typ
 
-prettyAssumptions env = commaSep (map pretty (Set.toList ((env ^. assumptions) `Set.union` (env ^. subtypeGuards))))
+prettyAssumptions env = let
+    constraints = env ^. subtypeGuards & uncurry Set.union
+  in
+    commaSep (map pretty (Set.toList ((env ^. assumptions) `Set.union` constraints)))
 prettyBindings env = commaSep (map pretty (Map.keys $ removeDomain (env ^. constants) (allSymbols env)))
 -- prettyBindings env = hMapDoc pretty pretty (removeDomain (env ^. constants) (allSymbols env))
 -- prettyBindings env = empty
