@@ -15,13 +15,13 @@ snoc ::
 		(xs: {List Int| _v == (Cons 2 Nil)} -> x: {Int | _v == 1} -> {List Int | _v == (Cons 2 (Cons 1 Nil))}) ^
 		(xs: {List Int| _v == (Cons 3 (Cons 2 Nil))} -> x: {Int | _v == 1} -> {List Int | _v == (Cons 3 (Cons 2 (Cons 1 Nil)))}) ^
 		(xs: {List Int| _v == (Nil)} -> x: {Int | _v == 1} -> {List Int | _v == (Cons 1 Nil)})
-snoc = \xs. \x.
-	match xs with
-		Nil -> ??
-		Cons y ys -> ??
 -- snoc = \xs. \x.
 -- 	match xs with
--- 		Nil -> Cons x Nil
--- 		Cons y ys -> Cons y (snoc ys x)
+-- 		Nil -> ??
+-- 		Cons y ys -> ??
+snoc = \xs. \x.
+	match xs with
+		Nil -> Cons x Nil
+		Cons y ys -> Cons y (snoc ys x)
 
 

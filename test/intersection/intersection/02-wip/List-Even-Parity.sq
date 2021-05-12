@@ -27,10 +27,24 @@ list_even_parity = \xs.
       else list_even_parity ys
 
 {-
-1st world!
-not (list_even_parity ys)
-^^^^^^^^^^^^^^^^^^^^^^^^^ problem line
-not - ok
+BFS - goal: (xs:List Bool -> Bool)
+
+[greatestFixPoint]:Candidates (1)
+  0.0: [C1 -> {}, C2 -> {}, C3 -> {False}, U1 -> {}, U2 -> {}, U3 -> {}, U4 -> {}] (#valid: 14, #invalid: 1)
+
+[runInSolver] Type Checker returned error:
+TYPE ERROR:
+from world: xs:List Bool -> Bool
+with error: Cannot find sufficiently strong refinements
+when checking
+ys :: {List {Bool|_v == True}|len _v == 2 || len _v == 0}
+in
+\xs .
+  match xs with
+    Cons y ys ->
+      if y
+        then not (list_even_parity ys)
+        else (?? :: Bool)
 
 list_even_parity - ok
 [solveTypeConstraints]: Solved Candidates:
@@ -51,4 +65,23 @@ Checking OK: list_even_parity :: x3:_ -> Bool in
 MISSING solution: C1->{}, C2,C3->{False}, why?
 
 ys - fail
+
+
+
+With Marco:
+does it find a solution?
+[strengthen]: Diffs: (1)
+[C1 -> {}, C2 -> {}, C3 -> {}]
+[solveTypeConstraints]: Solved Candidates:
+[0.1: [C1 -> {}, C2 -> {False}, C3 -> {}, U1 -> {}, U2 -> {}, U3 -> {}, U4 -> {}] (#valid: 13, #invalid: 0)
+,0.0: [C1 -> {}, C2 -> {}, C3 -> {False}, U1 -> {}, U2 -> {}, U3 -> {}, U4 -> {}] (#valid: 12, #invalid: 1)]
+Checking OK: list_even_parity :: x3:_ -> Bool in
+\xs .
+  match xs with
+    Cons y ys ->
+      if y
+        then not (?? ??)
+        else (?? :: Bool)
+[reconstructE'-Var-Base] Checked: list_even_parity::x3:_ -> Bool against x4:{List {Bool|U2}|U3} -> {Bool|[xs -> x4]U4}
+schema: List Bool
 -}

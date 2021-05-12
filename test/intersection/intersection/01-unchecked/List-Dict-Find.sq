@@ -22,9 +22,12 @@ measure insert :: x: a -> List a -> {List a|True} where
 
 
 {-
-Not strong enough
+This hangs, but IDK where. VSCode won't tell me.
+It gets stuck in the call:
+solveHornClauses in TypeConstraintSolver:251
+`refine` in HornSolver:107
 -}
-find :: (List (Pair Int Int) -> Int -> Int ->  Int) ^
+find :: (List (Pair Int b) -> Int -> b -> b) ^
         ({List (Pair Int Int) | len _v == 0} -> Int -> default: Int -> {Int | _v == default})
 find = \haystack. \needle. \def.
   match haystack with

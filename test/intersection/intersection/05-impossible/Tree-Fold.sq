@@ -17,7 +17,9 @@ measure telems :: BinaryTree a -> Set a where
 
 {-
 I believe this spec must produce this function. However we cannot type check
-this right now. This possibly comes from instantiating the `c` type variable to a function
+this right now.
+Synquid has an instantiation restriction. A type variable like "c" cannot be
+a function.
 -}
 foldBinaryTree :: (BinaryTree a ->
                   nodeFun: (a -> c -> b) ->
