@@ -3,6 +3,7 @@
 import os
 import subprocess
 from multiprocessing import Pool, Manager
+import sys
 
 '''
 Show the changes among our existing benchmarks.
@@ -15,12 +16,16 @@ All-Neg.sq: 02-wip -> 05-impossible
 List-Compress.sq: 02-wip -> 05-impossible
 List-Even-Parity.sq: 02-wip -> 03-checks
 Tree-Fold.sq: 05-impossible | No change.
+
+[Usage]:
+
+sort-tests.py <synquid args>
 '''
 
 SYNQUID = "stack run -- synquid"
-BASE_ARGS = "-c=False -b -f nonterminating"
+BASE_ARGS = "-c=False -f nonterminating"
 
-TIMEOUT_SEC = 10
+TIMEOUT_SEC = 15
 
 BASE_TEST_PATH = "test/intersection/intersection/"
 
@@ -48,8 +53,8 @@ class bcolors:
 
 FNULL = open(os.devnull, 'w')
 
-def run_file(filepath):
-    cmd = ' '.join([SYNQUID, BASE_ARGS, filepath])
+def run_file(filepath, args):
+    cmd = ' '.join([SYNQUID, args, filepath])
     try:
         subprocess.run(cmd, timeout=TIMEOUT_SEC,
             check=True, shell=True,
@@ -76,9 +81,9 @@ def is_synquid_file(filename):
     filename[-3:] == ".sq"
 
 
-def worker(subdir, filename, return_dict=None):
+def worker(subdir, filename, return_dict, args):
     filepath = os.path.join(BASE_TEST_PATH, subdir, filename)
-    status = run_file(filepath)
+    status = run_file(filepath, args)
     new_dir = sort_dir(subdir, status)
 
     if return_dict is not None:
@@ -96,6 +101,8 @@ def print_status(status):
 
 
 def main():
+    extra_args = sys.argv[1:]
+    args = f"{BASE_ARGS} {' '.join(extra_args)}"
     worklist = []
     manager = Manager()
     return_dict = manager.dict()
@@ -106,9 +113,9 @@ def main():
 
     for subdir in WORKING_DIRS:
         for filename in os.listdir(os.path.join(BASE_TEST_PATH, subdir)):
-            worklist.append((subdir, filename, return_dict))
+            worklist.append((subdir, filename, return_dict, args))
 
-    print(f"Running with: synquid {BASE_ARGS}")
+    print(f"Running with: synquid {args}")
     print("running testing benchmarks...", end="")
     with Pool() as pool:
         pool.starmap(worker, worklist)

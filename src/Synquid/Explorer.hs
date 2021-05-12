@@ -667,7 +667,6 @@ instantiate env sch top argNames = do
       go subst pSubst intersectionStrat argNames medianType
 
     go subst pSubst intersectionStrat argNames t@(FunctionT x tArg tRes) = do
-      writeLog 3 (text "go: argNames" <+> (pretty argNames) <+> text "type:" <+> (pretty t))
       x' <- case argNames of
               [] -> freshVar env "x"
               (argName : _) -> return argName
