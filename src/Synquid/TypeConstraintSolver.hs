@@ -181,7 +181,7 @@ getViolatingLabels = do
     nest 2 $ text "Nonterminal Horn clauses" $+$ vsep (map (\(fml, l) -> text l <> text ":" <+> pretty fml) nontermClauses),
     nest 2 $ text "QMap" $+$ pretty qmap])
 
-  newCand <- head <$> (lift . lift . lift $ refineCandidates (map fst nontermClauses) qmap (instantiateConsAxioms env Nothing) cands)
+  newCand <- head <$> (lift . lift . lift $ refineCandidates nontermClauses qmap (instantiateConsAxioms env Nothing) cands)
   candidates .= [newCand]
   invalidTerminals <- filterM (isInvalid newCand (instantiateConsAxioms env Nothing)) termClauses
   return $ Set.fromList $ map snd invalidTerminals
@@ -248,7 +248,7 @@ solveHornClauses = do
   qmap <- use qualifierMap
   cands <- use candidates
   env <- use initEnv
-  cands' <- lift . lift . lift $ refineCandidates (map fst clauses) qmap (instantiateConsAxioms env Nothing) cands
+  cands' <- lift . lift . lift $ refineCandidates clauses qmap (instantiateConsAxioms env Nothing) cands
 
   when (null cands') (throwError $ text "Cannot find sufficiently strong refinements")
   candidates .= cands'
@@ -418,10 +418,8 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
         let worldId = intercalate "," (map show worldIdxs)
         let unionOfArgs = foldr1 UnionT args
         let outConstraints = filter (`notElem` inConstraints) (map snd conjunctsWithConstraints)
-        let negatedOutConstraints = map fnot outConstraints
         let env' = addPositiveGuard inConstraints env
-        let env'' = addNegativeGuard negatedOutConstraints env'
-
+        let env'' = addNegativeGuard outConstraints env'
         simplifyConstraint $ Subtype env'' superTArg unionOfArgs consisent (label ++ "+arg-world-union-" ++ worldId)
 
 
@@ -430,7 +428,8 @@ simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label
   -- Reflexivity
   | l == r  && l == subT = return ()
   -- Union Redundancy
-  | allSame (unionToList superT) = simplifyConstraint (Subtype env subT (head (unionToList superT)) consistent (label++"+redundant-union"))
+  | allSame (unionToList superT) =
+      simplifyConstraint (Subtype env subT (head (unionToList superT)) consistent (label++"+redundant-union"))
   -- If the supertype contains a function then we have to make a choice between them.
   -- Since we got past the Redundancy rule, we know not all functions are the same.
   -- TODO: I'm making an implcit assumption that we'll never union a function and non-function.
@@ -454,13 +453,7 @@ simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label
           -- I think.
           -- So force at least one of the constraints to be false.
           -- Generate a horn clause of /\ C => False
-          let constraints = env ^. subtypeGuards
-          let (posFmls, negFmls) = both Set.toList constraints
-          let lhsConstraints = foldr1 (|&|) (posFmls ++ negFmls)
-          let clause = lhsConstraints |=>| ffalse
-          let label' = label ++ "+falsify"
-          hornClauses %= ((clause, label'):)
-          writeLog 3 $ text "[simplifyConstraint]:[union]" <+> pretty c </> pretty clause <+> parens (text label')
+          mkHornGuard c env (label ++ "+union-choice-exclusivity")
         _ -> do
           throwError $
             text "Cannot decompose RHS union, at least one has a nested refinement that does not match the rest."
@@ -474,23 +467,16 @@ simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label
       -- let (posFmls, negFmls) = env ^. subtypeGuards & both Set.toList
       -- forM_ negFmls $ \negFml -> do
       --   let lhsConstraint = foldr1 (|&|) posFmls
-      --   let clause = lhsConstraint |=>| negFml
-      --   let label' = label ++ "+exclusivity"
+      --   let clause = lhsConstraint |=>| (fnot negFml)
+      --   let label' = label ++ "+merged-union-exclusivity"
       --   hornClauses %= ((clause, label'):)
 
-
 -- Otherwise (shape mismatch): fail
-simplifyConstraint' _ _ (Subtype env t t' _ label)
+simplifyConstraint' _ _ c@(Subtype env t t' _ label)
   | Set.size (fst $ _subtypeGuards env) > 0 = do
     intersectionStrategy <- asks _tcIntersection
     case intersectionStrategy of
-      GuardedPowerset -> do
-        let constraints = env ^. subtypeGuards
-        let (posFmls, negFmls) = both Set.toList constraints
-        let lhsConstraints = foldr1 (|&|) (posFmls ++ negFmls)
-        let clause = lhsConstraints |=>| ffalse
-        let label' = label ++ "+falsify"
-        hornClauses %= ((clause, label'):)
+      GuardedPowerset -> mkHornGuard c env (label ++ "+shape-exclusivity")
       _ -> defaultCase
   | otherwise = defaultCase
     where
@@ -499,6 +485,15 @@ simplifyConstraint' _ _ (Subtype env t t' _ label)
         $+$ squotes (pretty $ shape t) <+> text ":" <+> pretty t
         <+> text "</:" <+> squotes (pretty $ shape t') <+> text ":" <+> pretty t'
         <+> text "from label" <+> squotes (text label)
+
+mkHornGuard c env label = do
+  let constraints = env ^. subtypeGuards
+  let (posFmls, negFmls) = both Set.toList constraints
+  let lhsConstraints = foldr1 (|&|) posFmls
+  let rhsConstraints = foldr1 (|||) (defaultList negFmls ffalse)
+  let clause = lhsConstraints |=>| rhsConstraints
+  hornClauses %= ((clause, label):)
+  writeLog 3 $ text "[simplifyConstraint]:" <+> pretty c </> pretty clause <+> parens (text label)
 
 -- | Unify type variable @a@ with type @t@ or fail if @a@ occurs in @t@
 unify :: Monad s => Environment -> Id -> TypeSkeleton Formula -> StateT TypingState (ReaderT TypingParams (ExceptT ErrorMessage s)) ()

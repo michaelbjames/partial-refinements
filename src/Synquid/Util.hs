@@ -21,6 +21,9 @@ type Id = String
 
 (|>) = (&)
 
+defaultList [] y = [y]
+defaultList xs _ = xs
+
 uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
 uncurry3 f (x, y, z) = f x y z
 
