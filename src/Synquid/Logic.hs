@@ -4,6 +4,7 @@
 module Synquid.Logic where
 
 import Synquid.Util
+import Synquid.Types.Logic
 
 import Data.Tuple
 import Data.List
@@ -17,10 +18,6 @@ import Control.Monad
 import Data.List.Extra (nubOrd)
 
 {- Sorts -}
-
--- | Sorts
-data Sort = BoolS | IntS | VarS Id | DataS Id [Sort] | SetS Sort | AnyS
-  deriving (Show, Eq, Ord)
 
 isSetS (SetS _) = True
 isSetS _ = False
@@ -83,50 +80,7 @@ unifySorts boundTvs = unifySorts' Map.empty
     unifySorts' subst (x: _) (y: _)
       = Left (x, y)
 
--- | Constraints generated during formula resolution
-data SortConstraint = SameSort Sort Sort  -- Two sorts must be the same
-  | IsOrd Sort                            -- Sort must have comparisons
 
--- | Predicate signature: name and argument sorts
-data PredSig = PredSig {
-  predSigName :: Id,
-  predSigArgSorts :: [Sort],
-  predSigResSort :: Sort
-} deriving (Show, Eq, Ord)
-
-{- Formulas of the refinement logic -}
-
--- | Unary operators
-data UnOp = Neg | Not
-  deriving (Show, Eq, Ord)
-
--- | Binary operators
-data BinOp =
-    Times | Plus | Minus |          -- ^ Int -> Int -> Int
-    Eq | Neq |                      -- ^ a -> a -> Bool
-    Lt | Le | Gt | Ge |             -- ^ Int -> Int -> Bool
-    And | Or | Implies | Iff |      -- ^ Bool -> Bool -> Bool
-    Union | Intersect | Diff |      -- ^ Set -> Set -> Set
-    Member | Subset                 -- ^ Int/Set -> Set -> Bool
-  deriving (Show, Eq, Ord)
-
--- | Variable substitution
-type Substitution = Map Id Formula
-
--- | Formulas of the refinement logic
-data Formula =
-  BoolLit Bool |                      -- ^ Boolean literal
-  IntLit Integer |                    -- ^ Integer literal
-  SetLit Sort [Formula] |             -- ^ Set literal ([1, 2, 3])
-  Var Sort Id |                       -- ^ Input variable (universally quantified first-order variable)
-  Unknown Substitution Id |           -- ^ Predicate unknown (with a pending substitution)
-  Unary UnOp Formula |                -- ^ Unary expression
-  Binary BinOp Formula Formula |      -- ^ Binary expression
-  Ite Formula Formula Formula |       -- ^ If-then-else expression
-  Pred Sort Id [Formula] |            -- ^ Logic function application
-  Cons Sort Id [Formula] |            -- ^ Constructor application
-  All Formula Formula                 -- ^ Universal quantification
-  deriving (Show, Eq, Ord)
 
 dontCare = "_"
 valueVarName = "_v"

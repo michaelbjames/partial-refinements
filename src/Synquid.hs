@@ -5,7 +5,7 @@ module Main where
 import Synquid.Logic
 import Synquid.Type
 import Synquid.Program
-import Synquid.Error
+import Synquid.Types.Error
 import Synquid.Pretty
 import Synquid.Parser
 import Synquid.Resolver (resolveDecls)
@@ -15,7 +15,10 @@ import Synquid.TypeConstraintSolver
 import Synquid.Explorer
 import Synquid.Synthesizer
 import Synquid.HtmlOutput
-import Synquid.Types
+import Synquid.Types.Logic
+import Synquid.Types.Program
+import Synquid.Types.Type
+import Synquid.Types.Rest
 
 import Control.Monad
 import Control.Lens ((^.))

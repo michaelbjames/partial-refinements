@@ -13,6 +13,10 @@ module Synquid.HornSolver (
 import Synquid.Logic
 import Synquid.SolverMonad
 import Synquid.Util
+import Synquid.Types.Logic
+import Synquid.Types.Program
+import Synquid.Types.Type
+import Synquid.Types.Rest
 import Synquid.Pretty
 
 import Data.Function

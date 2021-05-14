@@ -5,6 +5,10 @@ module Synquid.Z3 (Z3State, evalZ3State) where
 
 import Synquid.Logic
 import Synquid.Type
+import Synquid.Types.Logic
+import Synquid.Types.Program
+import Synquid.Types.Type
+import Synquid.Types.Rest
 import Synquid.Program
 import Synquid.SolverMonad
 import Synquid.Util ( bothM, debug, ifM, partitionM, Id )

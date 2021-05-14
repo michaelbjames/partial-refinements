@@ -6,14 +6,17 @@ module Synquid.Explorer where
 import Synquid.Logic
 import Synquid.Type hiding (set)
 import Synquid.Program
-import Synquid.Error
+import Synquid.Types.Error
 import Synquid.SolverMonad
 import Synquid.TypeConstraintSolver hiding (freshId, freshVar, fresh, freshFromIntersect)
 import qualified Synquid.TypeConstraintSolver as TCSolver
 import Synquid.Util
 import Synquid.Pretty
 import Synquid.Tokens
-import Synquid.Types
+import Synquid.Types.Logic
+import Synquid.Types.Program
+import Synquid.Types.Type
+import Synquid.Types.Rest
 
 import Data.Maybe
 import Data.List

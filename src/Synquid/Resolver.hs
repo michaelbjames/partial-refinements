@@ -5,8 +5,12 @@ module Synquid.Resolver (resolveDecls, resolveRefinement, resolveRefinedType, ad
 
 import Synquid.Logic
 import Synquid.Type
+import Synquid.Types.Logic
+import Synquid.Types.Program
+import Synquid.Types.Type
+import Synquid.Types.Rest
 import Synquid.Program
-import Synquid.Error
+import Synquid.Types.Error
 import Synquid.Pretty
 import Synquid.Util
 import Control.Applicative

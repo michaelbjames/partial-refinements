@@ -5,6 +5,8 @@ module Synquid.Type where
 import Synquid.Logic
 import Synquid.Tokens
 import Synquid.Util
+import Synquid.Types.Logic
+import Synquid.Types.Type
 
 import Data.Maybe
 import Data.Either
@@ -20,20 +22,6 @@ import Control.Lens hiding (set)
 import Development.Placeholders
 import GHC.Stack
 
-{- Type skeletons -}
-
-data BaseType r = BoolT | IntT | DatatypeT Id [TypeSkeleton r] [r] | TypeVarT Substitution Id
-  deriving (Show, Eq, Ord)
-
--- | Type skeletons (parametrized by refinements)
-data TypeSkeleton r =
-  ScalarT (BaseType r) r |
-  FunctionT Id (TypeSkeleton r) (TypeSkeleton r) |
-  LetT Id (TypeSkeleton r) (TypeSkeleton r) |
-  AndT (TypeSkeleton r) (TypeSkeleton r) |
-  UnionT (TypeSkeleton r) (TypeSkeleton r) |
-  AnyT
-  deriving (Show, Eq, Ord)
 
 contextual x tDef (FunctionT y tArg tRes) = FunctionT y (contextual x tDef tArg) (contextual x tDef tRes)
 contextual _ _ AnyT = AnyT
@@ -164,13 +152,6 @@ varRefinement x s = Var s valueVarName |=| Var s x
 isVarRefinement (Binary Eq (Var _ v) (Var _ _)) = v == valueVarName
 isVarRefinement _ = False
 
--- | Polymorphic type skeletons (parametrized by refinements)
-data SchemaSkeleton r =
-  Monotype (TypeSkeleton r) |
-  ForallT Id (SchemaSkeleton r) |       -- Type-polymorphic
-  ForallP PredSig (SchemaSkeleton r)    -- Predicate-polymorphic
-  deriving (Show, Eq, Ord)
-
 toMonotype :: SchemaSkeleton r -> TypeSkeleton r
 toMonotype (Monotype t) = t
 toMonotype (ForallT _ t) = toMonotype t
@@ -255,20 +236,6 @@ typeVarsOf (FunctionT _ tArg tRes) = typeVarsOf tArg `Set.union` typeVarsOf tRes
 typeVarsOf (LetT _ tDef tBody) = typeVarsOf tDef `Set.union` typeVarsOf tBody
 typeVarsOf (AndT l r) = typeVarsOf l `Set.union` typeVarsOf r
 typeVarsOf _ = Set.empty
-
-{- Refinement types -}
-
--- | Unrefined typed
-type SType = TypeSkeleton ()
-
--- | Refined types
-type RType = TypeSkeleton Formula
-
--- | Unrefined schemas
-type SSchema = SchemaSkeleton ()
-
--- | Refined schemas
-type RSchema = SchemaSkeleton Formula
 
 testType :: TypeSkeleton Formula
 testType = AndT t2 t3

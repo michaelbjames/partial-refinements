@@ -5,9 +5,13 @@ module Synquid.Program where
 
 import Synquid.Logic
 import Synquid.Type as Type
+import Synquid.Types.Logic
+import Synquid.Types.Program
+import Synquid.Types.Type
+import Synquid.Types.Rest
 import Synquid.Tokens
 import Synquid.Util
-import Synquid.Error
+import Synquid.Types.Error
 
 import Data.Bifunctor
 import Data.Maybe
@@ -22,44 +26,6 @@ import Control.Lens as Lens
 import Debug.Trace
 import Development.Placeholders (todo)
 
-{- Program terms -}
-
--- | One case inside a pattern match expression
-data Case t = Case {
-  constructor :: Id,      -- ^ Constructor name
-  argNames :: [Id],       -- ^ Bindings for constructor arguments
-  expr :: Program t       -- ^ Result of the match in this case
-} deriving (Show, Eq, Ord, Functor)
-
--- | Program skeletons parametrized by information stored symbols, conditionals, and by node types
-data BareProgram t =
-  PSymbol Id |                                -- ^ Symbol (variable or constant)
-  PApp (Program t) (Program t) |              -- ^ Function application
-  PFun Id (Program t) |                       -- ^ Lambda abstraction
-  PIf (Program t) (Program t) (Program t) |   -- ^ Conditional
-  PMatch (Program t) [Case t] |               -- ^ Pattern match on datatypes
-  PFix [Id] (Program t) |                     -- ^ Fixpoint
-  PLet Id (Program t) (Program t) |           -- ^ Let binding
-  PHole |                                     -- ^ Hole (program to fill in)
-  PErr                                        -- ^ Error
-  deriving (Show, Eq, Ord, Functor)
-
--- | Programs annotated with types
-data Program t = Program {
-  content :: BareProgram t,
-  typeOf :: t
-} deriving (Show, Functor)
-
-instance Eq (Program t) where
-  (==) (Program l _) (Program r _) = l == r
-
-instance Ord (Program t) where
-  (<=) (Program l _) (Program r _) = l <= r
-
--- | Untyped programs
-type UProgram = Program RType
--- | Refinement-typed programs
-type RProgram = Program RType
 
 untyped c = Program c AnyT
 uHole = untyped PHole
@@ -192,87 +158,6 @@ renameAsImpl isBound = renameAsImpl' Map.empty
     renameAsImpl' subst  p (AndT l r) = AndT (renameAsImpl' subst p l) (renameAsImpl' subst p r)
     renameAsImpl' subst  _ t = substituteInType isBound subst t
 
-{- Top-level definitions -}
-
--- | User-defined datatype representation
-data DatatypeDef = DatatypeDef {
-  _typeParams :: [Id],              -- ^ Type parameters
-  _predParams :: [PredSig],         -- ^ Signatures of predicate parameters
-  _predVariances :: [Bool],         -- ^ For each predicate parameter, whether it is contravariant
-  _constructors :: [Id],            -- ^ Constructor names
-  _wfMetric :: Maybe Id             -- ^ Name of the measure that serves as well founded termination metric
-} deriving (Show, Eq, Ord)
-
-makeLenses ''DatatypeDef
-
--- | One case in a measure definition: constructor name, arguments, and body
-data MeasureCase = MeasureCase Id [Id] Formula
-  deriving (Show, Eq, Ord)
-
-type MeasureDefaults = [(Id, Sort)]
-
--- | User-defined measure function representation
-data MeasureDef = MeasureDef {
-  _inSort :: Sort,
-  _outSort :: Sort,
-  _definitions :: [MeasureCase],
-  _constantArgs :: MeasureDefaults,
-  _postcondition :: Formula
-} deriving (Show, Eq, Ord)
-
-makeLenses ''MeasureDef
-
-type ArgMap = Map Id [Set Formula] -- All possible constant arguments of measures with multiple arguments
-
-{- Evaluation environment -}
-
--- | Typing environment
-data Environment = Environment {
-  -- | Variable part:
-  _symbols :: Map Int (Map Id RSchema),    -- ^ Variables and constants (with their refinement types), indexed by arity
-  _boundTypeVars :: [Id],                  -- ^ Bound type variables
-  _boundPredicates :: [PredSig],           -- ^ Argument sorts of bound abstract refinements
-  _assumptions :: Set Formula,             -- ^ Unknown assumptions
-  _shapeConstraints :: Map Id SType,       -- ^ For polymorphic recursive calls, the shape their types must have
-  _usedScrutinees :: [RProgram],           -- ^ Program terms that has already been scrutinized
-  _unfoldedVars :: Set Id,                 -- ^ In eager match mode, datatype variables that can be scrutinized
-  _letBound :: Set Id,                     -- ^ Subset of symbols that are let-bound
-  _subtypeGuards :: (Set Formula, Set Formula),           -- ^ Used in GuardedSubtype intersection strategy. These formulae are only (positive, negative)
-  -- | Constant part:
-  _constants :: Set Id,                    -- ^ Subset of symbols that are constants
-  _datatypes :: Map Id DatatypeDef,        -- ^ Datatype definitions
-  _globalPredicates :: Map Id [Sort],      -- ^ Signatures (resSort:argSorts) of module-level logic functions (measures, predicates)
-  _measures :: Map Id MeasureDef,          -- ^ Measure definitions
-  _typeSynonyms :: Map Id ([Id], RType),   -- ^ Type synonym definitions
-  _unresolvedConstants :: Map Id RSchema   -- ^ Unresolved types of components (used for reporting specifications with macros)
-} deriving (Show)
-
-makeLenses ''Environment
-
-instance Eq Environment where
-  (==) e1 e2 = (e1 ^. symbols) == (e2 ^. symbols) && (e1 ^. assumptions) == (e2 ^. assumptions)
-
-instance Ord Environment where
-  (<=) e1 e2 = (e1 ^. symbols) <= (e2 ^. symbols) && (e1 ^. assumptions) <= (e2 ^. assumptions)
-
--- | Empty environment
-emptyEnv = Environment {
-  _symbols = Map.empty,
-  _boundTypeVars = [],
-  _boundPredicates = [],
-  _assumptions = Set.empty,
-  _shapeConstraints = Map.empty,
-  _usedScrutinees = [],
-  _unfoldedVars = Set.empty,
-  _letBound = Set.empty,
-  _subtypeGuards = (Set.empty, Set.empty),
-  _constants = Set.empty,
-  _globalPredicates = Map.empty,
-  _datatypes = Map.empty,
-  _measures = Map.empty,
-  _typeSynonyms = Map.empty,
-  _unresolvedConstants = Map.empty
-}
 
 -- | 'symbolsOfArity' @n env@: all symbols of arity @n@ in @env@
 symbolsOfArity n env = Map.findWithDefault Map.empty n (env ^. symbols)
@@ -494,50 +379,6 @@ refineBot env (FunctionT x tArg tFun) = FunctionT x (refineTop env tArg) (refine
 refineBot env (AndT l r) = AndT (refineBot env l) (refineBot env r)
 
 {- Input language declarations -}
-
--- | Constructor signature: name and type
-data ConstructorSig = ConstructorSig Id RType
-  deriving (Show, Eq)
-
-constructorName (ConstructorSig name _) = name
-
-data BareDeclaration =
-  TypeDecl Id [Id] RType |                                  -- ^ Type name, variables, and definition
-  FuncDecl Id RSchema |                                     -- ^ Function name and signature
-  DataDecl Id [Id] [(PredSig, Bool)] [ConstructorSig] |     -- ^ Datatype name, type parameters, predicate parameters, and constructor definitions
-  MeasureDecl Id Sort Sort Formula [MeasureCase] MeasureDefaults Bool |     -- ^ Measure name, input sort, output sort, postcondition, definition cases, and whether this is a termination metric
-  PredDecl PredSig |                                        -- ^ Module-level predicate
-  QualifierDecl [Formula] |                                 -- ^ Qualifiers
-  MutualDecl [Id] |                                         -- ^ Mutual recursion group
-  InlineDecl Id [Id] Formula |                              -- ^ Inline predicate
-  SynthesisGoal Id UProgram                                 -- ^ Name and template for the function to reconstruct
-  deriving (Show, Eq)
-
-type Declaration = Pos BareDeclaration
-
-isSynthesisGoal (Pos _ (SynthesisGoal _ _)) = True
-isSynthesisGoal _ = False
-
-{- Misc -}
-
--- | Typing constraints
-data Constraint = Subtype Environment RType RType Bool Id
-  | WellFormed Environment RType
-  | WellFormedCond Environment Formula
-  | WellFormedMatchCond Environment Formula
-  | WellFormedPredicate Environment [Sort] Id
-  deriving (Show, Eq, Ord)
-
--- | Synthesis goal
-data Goal = Goal {
-  gName :: Id,                  -- ^ Function name
-  gEnvironment :: Environment,  -- ^ Enclosing environment
-  gSpec :: RSchema,             -- ^ Specification
-  gImpl :: UProgram,            -- ^ Implementation template
-  gDepth :: Int,                -- ^ Maximum level of auxiliary goal nesting allowed inside this goal
-  gSourcePos :: SourcePos,      -- ^ Source Position,
-  gSynthesize :: Bool           -- ^ Synthesis flag (false implies typechecking only)
-} deriving (Show, Eq, Ord)
 
 
 unresolvedType env ident = (env ^. unresolvedConstants) Map.! ident

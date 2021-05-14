@@ -40,12 +40,15 @@ module Synquid.TypeConstraintSolver (
 import Synquid.Logic
 import Synquid.Type hiding (set)
 import Synquid.Program
-import Synquid.Error
+import Synquid.Types.Error
 import Synquid.Pretty
 import Synquid.SolverMonad
 import Synquid.Util
 import Synquid.Resolver (addAllVariables)
-import Synquid.Types
+import Synquid.Types.Logic
+import Synquid.Types.Program
+import Synquid.Types.Type
+import Synquid.Types.Rest
 
 
 import Data.Maybe

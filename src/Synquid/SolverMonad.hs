@@ -2,7 +2,9 @@
 module Synquid.SolverMonad where
 
 import Synquid.Logic
-import Synquid.Program
+import Synquid.Types.Logic
+import Synquid.Types.Rest
+
 import Data.Map
 import Data.Set
 import Control.Applicative

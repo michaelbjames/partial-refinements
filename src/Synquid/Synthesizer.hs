@@ -4,6 +4,10 @@ module Synquid.Synthesizer (synthesize) where
 import Synquid.Util
 import Synquid.Logic
 import Synquid.Type
+import Synquid.Types.Logic
+import Synquid.Types.Program
+import Synquid.Types.Type
+import Synquid.Types.Rest
 import Synquid.Program
 import Synquid.SolverMonad
 import Synquid.HornSolver

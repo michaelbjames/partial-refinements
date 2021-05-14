@@ -5,8 +5,11 @@ module Synquid.Parser (parseFromFile, parseProgram, toErrorMessage) where
 
 import Synquid.Logic
 import Synquid.Type
+import Synquid.Types.Logic
+import Synquid.Types.Program
+import Synquid.Types.Type
 import Synquid.Program
-import Synquid.Error
+import Synquid.Types.Error
 import Synquid.Tokens
 import Synquid.Util
 

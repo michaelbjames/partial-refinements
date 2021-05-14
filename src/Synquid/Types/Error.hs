@@ -1,4 +1,4 @@
-module Synquid.Error (
+module Synquid.Types.Error (
   Pos(..)
   ,SourcePos
   ,sourceLine
@@ -11,6 +11,7 @@ module Synquid.Error (
 
 import Text.PrettyPrint.ANSI.Leijen
 import Text.Parsec.Pos
+    ( sourceColumn, sourceLine, sourceName, SourcePos, initialPos )
 
 -- | Anything with a source position attached
 data Pos a = Pos {
