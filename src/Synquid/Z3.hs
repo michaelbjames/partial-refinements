@@ -11,7 +11,7 @@ import Synquid.Types.Type
 import Synquid.Types.Rest
 import Synquid.Program
 import Synquid.SolverMonad
-import Synquid.Util ( bothM, debug, ifM, partitionM, Id )
+import Synquid.Util ( bothM, ifM, partitionM, Id )
 import Synquid.Pretty (brackets,  text, Pretty(pretty), ($+$), (<+>), (</>), commaSep )
 import Z3.Monad hiding (Z3Env, newEnv, Sort)
 import qualified Z3.Base as Z3
@@ -119,8 +119,8 @@ assert' ast = do
                   _true
     s <- astToString ast
     -- debug 2 (text "[MonadSMT]: isSat:" </> text s) $
-    -- debug 3 (text "[MonadSMT]: Z3 query:" </> text str) $
-    assert ast
+    debug 3 (text "[MonadSMT]: Z3 query:" </> text str) $
+      assert ast
 
 convertDatatypes :: Map Id RSchema -> [(Id, DatatypeDef)] -> Z3State ()
 convertDatatypes _ [] = return ()
@@ -509,7 +509,7 @@ getAllMUSs assumption mustHave fmls = do
   let allFmls = mustHave : fmls
   (controlLits, controlLitsAux) <- unzip <$> mapM getControlLits allFmls
 
-  traceShow (text "getAllMUSs" $+$ text "assumption:" <+> pretty assumption $+$ text "must have:" <+> pretty mustHave $+$ text "fmls:" <+> pretty fmls) $ return ()
+  debug 2 (text "getAllMUSs" $+$ text "assumption:" <+> pretty assumption $+$ text "must have:" <+> pretty mustHave $+$ text "fmls:" <+> pretty fmls) $ return ()
   fmlToAST assumption >>= assert
   condAssumptions <- mapM fmlToAST allFmls >>= zipWithM mkImplies controlLits
   mapM_ assert $ condAssumptions
@@ -617,3 +617,9 @@ getAllMUSs' controlLitsAux mustHave cores = do
           maximize' (checked ++ setRest) unsetRest
 
     debugOutput label fmls = debug 2 (text label <+> pretty fmls) $ return ()
+
+-- | 'debugOutLevel' : Level above which debug output is ignored
+debugOutLevel = 3
+
+-- | 'debug' @level msg@ : output @msg@ at level @level@
+debug level msg = if level <= debugOutLevel then traceShow msg else id

@@ -351,26 +351,6 @@ setToPredicate x (Binary Diff sl sr) = Binary And (setToPredicate x sl) (Unary N
 setToPredicate x (Ite c t e) = Ite c (setToPredicate x t) (setToPredicate x e)
 setToPredicate x s = Binary Member x s
 
-{- Qualifiers -}
-
--- | Search space for valuations of a single unknown
-data QSpace = QSpace {
-    _qualifiers :: [Formula],         -- ^ Qualifiers
-    _maxCount :: Int                  -- ^ Maximum number of qualifiers in a valuation
-  } deriving (Show, Eq, Ord)
-
-makeLenses ''QSpace
-
-emptyQSpace = QSpace [] 0
-
-toSpace mbN quals = let quals' = nubOrd quals in
-  case mbN of
-    Nothing -> QSpace quals' (length quals')
-    Just n -> QSpace quals' n
-
--- | Mapping from unknowns to their search spaces
-type QMap = Map Id QSpace
-
 -- | 'lookupQuals' @qmap g u@: get @g@ component of the search space for unknown @u@ in @qmap@
 lookupQuals :: QMap -> Getter QSpace a -> Formula -> a
 lookupQuals qmap g (Unknown _ u) = case Map.lookup u qmap of
@@ -383,15 +363,6 @@ lookupQualsSubst qmap u@(Unknown s _) = concatMap go $ map (substitute s) (looku
     go u@(Unknown _ _) = lookupQualsSubst qmap u
     go fml = [fml]
 
-type ExtractAssumptions = Formula -> Set Formula
-
-{- Solutions -}
-
--- | Valuation of a predicate unknown as a set of qualifiers
-type Valuation = Set Formula
-
--- | Mapping from predicate unknowns to their valuations
-type Solution = Map Id Valuation
 
 -- | 'topSolution' @qmap@ : top of the solution lattice (maps every unknown in the domain of @qmap@ to the empty set of qualifiers)
 topSolution :: QMap -> Solution
@@ -422,25 +393,3 @@ applySolution sol fml = case fml of
 -- | 'merge' @sol sol'@ : element-wise conjunction of @sol@ and @sol'@
 merge :: Solution -> Solution -> Solution
 merge sol sol' = Map.unionWith Set.union sol sol'
-
-{- Solution Candidates -}
-
--- | Solution candidate
-data Candidate = Candidate {
-    solution :: Solution,
-    validConstraints :: Set Formula,
-    invalidConstraints :: Set Formula,
-    label :: String
-  } deriving (Show)
-
-initialCandidate = Candidate Map.empty Set.empty Set.empty "0"
-
-instance Eq Candidate where
-  (==) c1 c2 = Map.filter (not . Set.null) (solution c1) == Map.filter (not . Set.null) (solution c2) &&
-               validConstraints c1 == validConstraints c2 &&
-               invalidConstraints c1 == invalidConstraints c2
-
-instance Ord Candidate where
-  (<=) c1 c2 = Map.filter (not . Set.null) (solution c1) <= Map.filter (not . Set.null) (solution c2) &&
-               validConstraints c1 <= validConstraints c2 &&
-               invalidConstraints c1 <= invalidConstraints c2

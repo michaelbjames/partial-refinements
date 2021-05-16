@@ -48,6 +48,9 @@ import Synquid.Resolver (addAllVariables)
 import Synquid.Types.Logic
 import Synquid.Types.Program
 import Synquid.Types.Type
+import Synquid.Types.Params
+import Synquid.Types.Explorer
+import Synquid.Types.Solver
 import Synquid.Types.Rest
 
 
@@ -69,44 +72,6 @@ import Control.Lens hiding (both)
 import Debug.Trace
 import Development.Placeholders
 
-{- Interface -}
-
--- | Parameters of type constraint solving
-data TypingParams = TypingParams {
-  _condQualsGen :: Environment -> [Formula] -> QSpace,              -- ^ Qualifier generator for conditionals
-  _matchQualsGen :: Environment -> [Formula] -> QSpace,             -- ^ Qualifier generator for match scrutinees
-  _typeQualsGen :: Environment -> Formula -> [Formula] -> QSpace,   -- ^ Qualifier generator for types
-  _predQualsGen :: Environment -> [Formula] -> [Formula] -> QSpace, -- ^ Qualifier generator for bound predicates
-  _tcSolverSplitMeasures :: Bool,
-  _tcSolverLogLevel :: Int,    -- ^ How verbose logging is
-  _tcIntersection :: IntersectStrategy
-}
-
-makeLenses ''TypingParams
-
--- | State of type constraint solving
-data TypingState = TypingState {
-  -- Persistent state:
-  _typingConstraints :: [Constraint],           -- ^ Typing constraints yet to be converted to horn clauses
-  _typeAssignment :: TypeSubstitution,          -- ^ Current assignment to free type variables
-  _predAssignment :: Substitution,              -- ^ Current assignment to free predicate variables  _qualifierMap :: QMap,
-  _qualifierMap :: QMap,                        -- ^ Current state space for predicate unknowns
-  _candidates :: [Candidate],                   -- ^ Current set of candidate liquid assignments to unknowns
-  _initEnv :: Environment,                      -- ^ Initial environment
-  _idCount :: Map String Int,                   -- ^ Number of unique identifiers issued so far
-  _isFinal :: Bool,                             -- ^ Has the entire program been seen?
-  _topLevelGoal :: RType,                          -- ^ The current top-level goal
-  -- Temporary state:
-  _simpleConstraints :: [Constraint],           -- ^ Typing constraints that cannot be simplified anymore and can be converted to horn clauses or qualifier maps
-  _hornClauses :: [(Formula, Id)],              -- ^ Horn clauses generated from subtyping constraints
-  _consistencyChecks :: [Formula],              -- ^ Formulas generated from type consistency constraints
-  _errorContext :: (SourcePos, Doc)             -- ^ Information to be added to all type errors
-}
-
-makeLenses ''TypingState
-
--- | Computations that solve type constraints, parametrized by the the horn solver @s@
-type TCSolver s = StateT TypingState (ReaderT TypingParams (ExceptT ErrorMessage s))
 
 -- | 'runTCSolver' @params st go@ : execute a typing computation @go@ with typing parameters @params@ in a typing state @st@
 runTCSolver :: TypingParams -> TypingState -> TCSolver s a -> s (Either ErrorMessage (a, TypingState))
@@ -251,7 +216,10 @@ solveHornClauses = do
   qmap <- use qualifierMap
   cands <- use candidates
   env <- use initEnv
-  cands' <- lift . lift . lift $ refineCandidates clauses qmap (instantiateConsAxioms env Nothing) cands
+  let consaxms = (instantiateConsAxioms env Nothing)
+  writeLog 3 $ text "instantiated cons axioms"
+  cands' <- lift . lift . lift $ refineCandidates clauses qmap consaxms cands
+  writeLog 3 $ text "refinedCandidates"
 
   when (null cands') (throwError $ text "Cannot find sufficiently strong refinements")
   candidates .= cands'
@@ -666,35 +634,39 @@ embedding env vars vvBase includeQuantified = do
     let guards = env ^. subtypeGuards & uncurry Set.union
     let ass = Set.map (substitutePredicate pass) (env ^. assumptions)
     let allVars = vars `Set.union` potentialVars qmap (conjunction ass)
-    return $ addBindings env tass pass qmap (Set.union ass guards) allVars
+    return $ addBindings env tass pass qmap (Set.union ass guards) allVars Set.empty
   where
-    addBindings env tass pass qmap fmls vars =
+    addBindings env tass pass qmap fmls vars seenVars =
       if Set.null vars
         then fmls
-        else let (x, rest) = Set.deleteFindMin vars in
+        else let (x, rest) = Set.deleteFindMin vars
+                 seen' = Set.insert x seenVars
+              in
               case Map.lookup x (allSymbols env) of
                 Nothing ->
                   let posts = Set.fromList $ if x == valueVarName
                         then allMeasurePostconditions includeQuantified vvBase env
                         else []
-                   in addBindings env tass pass qmap (posts `Set.union` fmls) rest -- Variable not found (useful to ignore value variables)
+                   in addBindings env tass pass qmap (posts `Set.union` fmls) rest seen' -- Variable not found (useful to ignore value variables)
                 Just (Monotype t) -> case typeSubstitute tass t of
-                  ScalarT baseT fml ->
-                    let fmls' = Set.fromList $ map (substitute (Map.singleton valueVarName (Var (toSort baseT) x)) . substitutePredicate pass)
-                                          (fml : allMeasurePostconditions includeQuantified baseT env) in
-                    let newVars = Set.delete x $ setConcatMap (potentialVars qmap) fmls' in
-                    addBindings env tass pass qmap (fmls `Set.union` fmls') (rest `Set.union` newVars)
-                  LetT y tDef tBody -> addBindings (addVariable x tBody . addVariable y tDef . removeVariable x $ env) tass pass qmap fmls vars
+                  ScalarT baseT fml -> let
+                    fmls' = Set.fromList $ map (substitute (Map.singleton valueVarName (Var (toSort baseT) x)) . substitutePredicate pass)
+                                          (fml : allMeasurePostconditions includeQuantified baseT env)
+                    newVars = Set.delete x $ setConcatMap (potentialVars qmap) fmls'
+                    newVars' = Set.difference newVars seenVars
+                    in
+                    addBindings env tass pass qmap (fmls `Set.union` fmls') (rest `Set.union` newVars') seen'
+                  LetT y tDef tBody -> addBindings (addVariable x tBody . addVariable y tDef . removeVariable x $ env) tass pass qmap fmls vars seenVars
                   AnyT -> Set.singleton ffalse
                   AndT l r -> let
                     envl = addVariable x l (removeVariable x env)
                     envr = addVariable x r (removeVariable x env)
-                    leftBound = addBindings envl tass pass qmap fmls (Set.singleton x)
-                    rightBound = addBindings envr tass pass qmap fmls vars
+                    leftBound = addBindings envl tass pass qmap fmls (Set.singleton x) seenVars
+                    rightBound = addBindings envr tass pass qmap fmls vars seenVars
                     in
                       leftBound `Set.union` rightBound
                   t -> error $ unwords ["embedding: encountered non-scalar variable", x, "in 0-arity bucket, with type", show $ pretty t]
-                Just sch -> addBindings env tass pass qmap fmls rest -- TODO: why did this work before?
+                Just sch -> addBindings env tass pass qmap fmls rest seen' -- TODO: why did this work before?
     allSymbols = symbolsOfArity 0
 
 bottomValuation :: QMap -> Formula -> Formula
@@ -865,18 +837,6 @@ finalizeProgram p = do
   pass <- use predAssignment
   sol <- uses candidates (solution . head)
   return $ fmap (typeApplySolution sol . typeSubstitutePred pass . typeSubstitute tass) p
-
-
-constraintsForEq = Set.fromList ["a", "u"]
-instance Eq TypingState where
-  (==) st1 st2 = (restrictDomain constraintsForEq (_idCount st1) == restrictDomain constraintsForEq (_idCount st2)) &&
-                  _typeAssignment st1 == _typeAssignment st2 &&
-                  _candidates st1 == _candidates st2
-
-instance Ord TypingState where
-  (<=) st1 st2 = (restrictDomain constraintsForEq (_idCount st1) <= restrictDomain constraintsForEq (_idCount st2)) &&
-                _typeAssignment st1 <= _typeAssignment st2 &&
-                _candidates st1 <= _candidates st2
 
 writeLog level msg = do
   maxLevel <- asks _tcSolverLogLevel

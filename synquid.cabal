@@ -21,24 +21,27 @@ executable synquid
   main-is:            Synquid.hs
 
   other-modules:      Synquid.HtmlOutput
+                    , Synquid.Explorer
+                    , Synquid.HornSolver
                     , Synquid.Logic
                     , Synquid.Parser
                     , Synquid.Pretty
                     , Synquid.Program
                     , Synquid.Resolver
                     , Synquid.SolverMonad
-                    , Synquid.HornSolver
-                    , Synquid.TypeConstraintSolver
-                    , Synquid.Explorer
                     , Synquid.Synthesizer
-                    , Synquid.TypeChecker
                     , Synquid.Tokens
                     , Synquid.Type
-                    , Synquid.Types.Logic
-                    , Synquid.Types.Program
-                    , Synquid.Types.Type
-                    , Synquid.Types.Rest
+                    , Synquid.TypeChecker
+                    , Synquid.TypeConstraintSolver
                     , Synquid.Types.Error
+                    , Synquid.Types.Explorer
+                    , Synquid.Types.Logic
+                    , Synquid.Types.Params
+                    , Synquid.Types.Program
+                    , Synquid.Types.Rest
+                    , Synquid.Types.Solver
+                    , Synquid.Types.Type
                     , Synquid.Util
                     , Synquid.Z3
 

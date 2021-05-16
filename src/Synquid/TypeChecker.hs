@@ -14,6 +14,8 @@ import Synquid.Pretty
 import Synquid.Resolver
 import Synquid.Types.Logic
 import Synquid.Types.Program
+import Synquid.Types.Params
+import Synquid.Types.Explorer
 import Synquid.Types.Type
 import Synquid.Types.Rest
 

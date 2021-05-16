@@ -181,9 +181,6 @@ set n = ScalarT (DatatypeT setTypeName [tvar] [])
     tvar = ScalarT (TypeVarT Map.empty n) ftrue
 setAll n = (set n) ftrue
 
--- | Mapping from type variables to types
-type TypeSubstitution = Map Id RType
-
 asSortSubst :: TypeSubstitution -> SortSubstitution
 asSortSubst = Map.map (toSort . baseTypeOf)
 

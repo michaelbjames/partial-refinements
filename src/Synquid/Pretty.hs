@@ -59,6 +59,8 @@ import Synquid.Types.Logic
 import Synquid.Types.Program
 import Synquid.Types.Type
 import Synquid.Types.Rest
+import Synquid.Types.Explorer
+import Synquid.Types.Solver
 import Synquid.Types.Error
 import Synquid.Program
 import Synquid.Tokens
@@ -149,6 +151,9 @@ instance Pretty Sort where
   pretty (DataS name args) = text name <+> hsep (map (hlParens . pretty) args)
   pretty AnyS = operator "?"
 
+instance Pretty MemoKey where
+  -- pretty (MemoKey arity t d st) = pretty env <+> text "|-" <+> hsep (replicate arity (text "? ->")) <+> pretty t <+> text "AT" <+> pretty d
+  pretty (MemoKey arity t st d) = hsep (replicate arity (text "? ->")) <+> pretty t <+> text "AT" <+> pretty d <+> parens (pretty (st ^. typingState . candidates))
 
 instance Pretty PredSig where
   pretty (PredSig p argSorts resSort) = hlAngles $ text p <+> text "::" <+> hsep (map (\s -> pretty s <+> text "->") argSorts) <+> pretty resSort

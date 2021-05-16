@@ -16,6 +16,8 @@ import Synquid.Explorer
 import Synquid.Synthesizer
 import Synquid.HtmlOutput
 import Synquid.Types.Logic
+import Synquid.Types.Params
+import Synquid.Types.Explorer
 import Synquid.Types.Program
 import Synquid.Types.Type
 import Synquid.Types.Rest

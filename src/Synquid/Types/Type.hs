@@ -1,8 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TupleSections #-}
 
 module Synquid.Types.Type where
 
@@ -53,3 +49,6 @@ type SSchema = SchemaSkeleton ()
 
 -- | Refined schemas
 type RSchema = SchemaSkeleton Formula
+
+-- | Mapping from type variables to types
+type TypeSubstitution = Map Id RType

@@ -16,6 +16,8 @@ import qualified Data.Set as Set
 import Synquid.Types.Error
 import Synquid.Util
 
+import Data.List.Extra
+
 {- Formulas of the refinement logic -}
 
 -- | Unary operators
@@ -89,3 +91,57 @@ data PredSig = PredSig
     , predSigResSort :: Sort
     }
     deriving (Show, Eq, Ord)
+
+{- Qualifiers -}
+
+-- | Search space for valuations of a single unknown
+data QSpace = QSpace {
+    _qualifiers :: [Formula],         -- ^ Qualifiers
+    _maxCount :: Int                  -- ^ Maximum number of qualifiers in a valuation
+  } deriving (Show, Eq, Ord)
+
+makeLenses ''QSpace
+
+emptyQSpace = QSpace [] 0
+
+
+toSpace mbN quals = let quals' = nubOrd quals in
+  case mbN of
+    Nothing -> QSpace quals' (length quals')
+    Just n -> QSpace quals' n
+
+-- | Mapping from unknowns to their search spaces
+type QMap = Map Id QSpace
+
+type ExtractAssumptions = Formula -> Set Formula
+
+{- Solutions -}
+
+-- | Valuation of a predicate unknown as a set of qualifiers
+type Valuation = Set Formula
+
+-- | Mapping from predicate unknowns to their valuations
+type Solution = Map Id Valuation
+
+
+{- Solution Candidates -}
+
+-- | Solution candidate
+data Candidate = Candidate {
+    solution :: Solution,
+    validConstraints :: Set Formula,
+    invalidConstraints :: Set Formula,
+    label :: String
+  } deriving (Show)
+
+initialCandidate = Candidate Map.empty Set.empty Set.empty "0"
+
+instance Eq Candidate where
+  (==) c1 c2 = Map.filter (not . Set.null) (solution c1) == Map.filter (not . Set.null) (solution c2) &&
+               validConstraints c1 == validConstraints c2 &&
+               invalidConstraints c1 == invalidConstraints c2
+
+instance Ord Candidate where
+  (<=) c1 c2 = Map.filter (not . Set.null) (solution c1) <= Map.filter (not . Set.null) (solution c2) &&
+               validConstraints c1 <= validConstraints c2 &&
+               invalidConstraints c1 <= invalidConstraints c2
