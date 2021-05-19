@@ -4,6 +4,7 @@ import os
 import subprocess
 from multiprocessing import Pool, Manager
 import sys
+import csv
 
 '''
 Show the changes among our existing benchmarks.
@@ -27,7 +28,7 @@ BASE_ARGS = "-c=False -f nonterminating"
 
 TIMEOUT_SEC = 15
 
-BASE_TEST_PATH = "test/intersection/intersection/"
+BASE_TEST_PATH = "./test/intersection/intersection/"
 
 WIP_DIR = "02-wip"
 CHECKS_DIR = "03-checks"
@@ -36,9 +37,15 @@ FAILS_DIR = "05-impossible"
 
 WORKING_DIRS = [WIP_DIR, CHECKS_DIR, SYNTH_DIR, FAILS_DIR]
 
-SUCCESS_STATUS = 'success_STATUS'
+SUCCESS_STATUS = 'success'
 TIMEOUT_STATUS = 'timeout'
 FAILED_STATUS = 'failed'
+
+DEFAULT_CSV_NAME = "benchmark_status.csv"
+
+OLD_DIR = 'old_dir'
+NEW_DIR = 'new_dir'
+STATUS = 'status'
 
 class bcolors:
     HEADER = '\033[95m'
@@ -87,10 +94,15 @@ def worker(subdir, filename, return_dict, args):
     new_dir = sort_dir(subdir, status)
 
     if return_dict is not None:
-        return_dict[filename] = (subdir, new_dir)
+        return_dict[filename] = {
+            OLD_DIR: subdir,
+            NEW_DIR: new_dir,
+            STATUS: status}
 
 def print_status(status):
-    for (filename, (old_dir, new_dir)) in status:
+    for (filename, st) in status:
+        new_dir = st[NEW_DIR]
+        old_dir = st[OLD_DIR]
         new_dir_str = new_dir
         if new_dir == CHECKS_DIR:
             new_dir_str = f"{bcolors.OKGREEN}{new_dir}"
@@ -98,6 +110,15 @@ def print_status(status):
             print(f"{filename}: {bcolors.WARNING}{old_dir} -> {new_dir_str}{bcolors.ENDC}")
         else:
             print(f"{filename}: {old_dir} | No change.")
+
+
+def write_status_csv(statuses, filename):
+    with open(filename, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile, quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(["Filename", "Status"])
+        for (filename, st) in statuses:
+            status = st[STATUS]
+            writer.writerow([filename, status])
 
 
 def main():
@@ -121,7 +142,9 @@ def main():
         pool.starmap(worker, worklist)
     print("done")
 
-    print_status(sorted(return_dict.items()))
+    statuses = sorted(return_dict.items())
+    print_status(statuses)
+    write_status_csv(statuses, DEFAULT_CSV_NAME)
 
 if __name__ == '__main__':
     main()
