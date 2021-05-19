@@ -634,39 +634,39 @@ embedding env vars vvBase includeQuantified = do
     let guards = env ^. subtypeGuards & uncurry Set.union
     let ass = Set.map (substitutePredicate pass) (env ^. assumptions)
     let allVars = vars `Set.union` potentialVars qmap (conjunction ass)
-    return $ addBindings env tass pass qmap (Set.union ass guards) allVars Set.empty
+    let bindings = addBindings env tass pass qmap (Set.union ass guards) allVars
+    return bindings
   where
-    addBindings env tass pass qmap fmls vars seenVars =
+    addBindings env tass pass qmap fmls vars =
       if Set.null vars
         then fmls
         else let (x, rest) = Set.deleteFindMin vars
-                 seen' = Set.insert x seenVars
               in
               case Map.lookup x (allSymbols env) of
                 Nothing ->
                   let posts = Set.fromList $ if x == valueVarName
                         then allMeasurePostconditions includeQuantified vvBase env
                         else []
-                   in addBindings env tass pass qmap (posts `Set.union` fmls) rest seen' -- Variable not found (useful to ignore value variables)
+                   in addBindings env tass pass qmap (posts `Set.union` fmls) rest -- Variable not found (useful to ignore value variables)
                 Just (Monotype t) -> case typeSubstitute tass t of
                   ScalarT baseT fml -> let
                     fmls' = Set.fromList $ map (substitute (Map.singleton valueVarName (Var (toSort baseT) x)) . substitutePredicate pass)
                                           (fml : allMeasurePostconditions includeQuantified baseT env)
-                    newVars = Set.delete x $ setConcatMap (potentialVars qmap) fmls'
-                    newVars' = Set.difference newVars seenVars
+                    newFmls = Set.difference fmls' fmls
+                    newVars = Set.delete x $ setConcatMap (potentialVars qmap) newFmls
                     in
-                    addBindings env tass pass qmap (fmls `Set.union` fmls') (rest `Set.union` newVars') seen'
-                  LetT y tDef tBody -> addBindings (addVariable x tBody . addVariable y tDef . removeVariable x $ env) tass pass qmap fmls vars seenVars
+                    addBindings env tass pass qmap (fmls `Set.union` newFmls) (rest `Set.union` newVars)
+                  LetT y tDef tBody -> addBindings (addVariable x tBody . addVariable y tDef . removeVariable x $ env) tass pass qmap fmls vars
                   AnyT -> Set.singleton ffalse
                   AndT l r -> let
                     envl = addVariable x l (removeVariable x env)
                     envr = addVariable x r (removeVariable x env)
-                    leftBound = addBindings envl tass pass qmap fmls (Set.singleton x) seenVars
-                    rightBound = addBindings envr tass pass qmap fmls vars seenVars
+                    leftBound = addBindings envl tass pass qmap fmls (Set.singleton x)
+                    rightBound = addBindings envr tass pass qmap fmls vars
                     in
                       leftBound `Set.union` rightBound
                   t -> error $ unwords ["embedding: encountered non-scalar variable", x, "in 0-arity bucket, with type", show $ pretty t]
-                Just sch -> addBindings env tass pass qmap fmls rest seen' -- TODO: why did this work before?
+                Just sch -> addBindings env tass pass qmap fmls rest -- TODO: why did this work before?
     allSymbols = symbolsOfArity 0
 
 bottomValuation :: QMap -> Formula -> Formula
