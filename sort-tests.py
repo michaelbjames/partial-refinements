@@ -24,7 +24,7 @@ sort-tests.py <synquid args>
 '''
 
 SYNQUID = "stack run -- synquid"
-BASE_ARGS = "-c=False -f nonterminating"
+BASE_ARGS = "-c=False"
 
 TIMEOUT_SEC = 15
 
