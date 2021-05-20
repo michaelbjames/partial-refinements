@@ -727,6 +727,7 @@ fresh env (ScalarT baseT _) = do
     freshBase baseT = return baseT
 fresh env (FunctionT x tArg tFun) =
   liftM2 (FunctionT x) (fresh env tArg) (fresh env tFun)
+-- fresh env (AndT l r) = fresh env (fst $ antiUnify' ftrue l r Map.empty)
 fresh env t =  let (env', t') = embedContext env t in fresh env' t'
 
 freshPred env sorts = do
@@ -735,10 +736,12 @@ freshPred env sorts = do
   let args = zipWith Var sorts deBrujns
   return $ Pred BoolS p' args
 
+-- Get a fresh, non-intersection type. When the intersection has many different
+-- shapes in it, produce a fresh type matching some goal shape.
 freshFromIntersect env t@(AndT l r) goalType = do
-  let goalShapes = intersectionToList t & filter (on (==) shape goalType)
+  let goalShapes = intersectionToList t & filter (on arrowEq shape goalType)
   case listToMaybe goalShapes of
-    Nothing -> $(todo "Specification has a shape mismatch")
+    Nothing -> error $ "Specification has a shape mismatch. Nothing matches:\n" ++ (show $ shape goalType) ++ "\nfrom:\n" ++ (show $ map shape $ intersectionToList t)
     Just t' -> fresh env t'
 freshFromIntersect env (FunctionT x tArg tRes) (FunctionT gx goalArg goalRes) = do
   tArg' <- freshFromIntersect env tArg goalArg

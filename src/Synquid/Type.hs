@@ -23,6 +23,26 @@ import Development.Placeholders
 import GHC.Stack
 
 
+btEq :: BaseType a -> BaseType b -> Bool
+btEq BoolT BoolT = True
+btEq IntT IntT = True
+btEq (TypeVarT _ x) (TypeVarT _ y) = x == y
+btEq (DatatypeT name1 args1 _) (DatatypeT name2 args2 _) =
+  (name1 == name2) &&
+  (length args1) == (length args2) &&
+  (foldr (\(al, ar) -> (&&) (arrowEq al ar)) True (zip args1 args2))
+btEq _ _ = False
+
+arrowEq :: TypeSkeleton a -> TypeSkeleton b -> Bool
+arrowEq (ScalarT bt1 _) (ScalarT bt2 _) = btEq bt1 bt2
+arrowEq (FunctionT x arg1 ret1) (FunctionT y arg2 ret2) =
+  arrowEq arg1 arg2 && arrowEq ret1 ret2
+arrowEq (LetT{}) (LetT{}) = error "arrowEq on contextual type"
+arrowEq (UnionT{}) (UnionT{}) = error "arrowEq on Union type"
+arrowEq (AndT l r) (AndT l' r') = arrowEq l l' && arrowEq r r'
+arrowEq AnyT AnyT = True
+arrowEq _ _ = False
+
 contextual x tDef (FunctionT y tArg tRes) = FunctionT y (contextual x tDef tArg) (contextual x tDef tRes)
 contextual _ _ AnyT = AnyT
 contextual x tDef t = LetT x tDef t
@@ -251,7 +271,7 @@ testType = AndT t2 t3
 -- Remove the refinements, preserve the arrow structure,
 -- and infer the least common generalization.
 shape :: RType -> SType
-shape (AndT l r) = antiUnify (removeRefinement l) (removeRefinement r) Map.empty & fst
+shape (AndT l r) = antiUnify (removeRefinement l) (removeRefinement r)
 shape t = removeRefinement t
 
 -- | Remove the refinement, but keep the same constructor structure.
@@ -265,29 +285,30 @@ removeRefinement (LetT _ _ t) = removeRefinement t
 removeRefinement (AndT l r) = AndT (removeRefinement l) (removeRefinement r)
 removeRefinement AnyT = AnyT
 
+-- antiUnify :: Ord a => TypeSkeleton a -> TypeSkeleton a -> TypeSkeleton a
+antiUnify t1 t2 = antiUnify' () t1 t2 Map.empty & fst
 -- Implementation taken from James et al. 2020
-antiUnify :: SType -> SType -> Map (SType, SType) Id -> (SType, Map (SType, SType) Id)
-antiUnify (AndT ll lr) r st = uncurry (antiUnify r) (antiUnify ll lr st)
-antiUnify l (AndT rl rr) st = uncurry (antiUnify l) (antiUnify rl rr st)
-antiUnify (FunctionT x lArg lRet) (FunctionT y rArg rRet) st =
-    let (tArg, st1) = antiUnify lArg rArg st
-        (tRet, st2) = antiUnify lRet rRet st1
+antiUnify' def (AndT ll lr) r st = uncurry (antiUnify' def r) (antiUnify' def ll lr st)
+antiUnify' def l (AndT rl rr) st = uncurry (antiUnify' def l) (antiUnify' def rl rr st)
+antiUnify' def (FunctionT x lArg lRet) (FunctionT y rArg rRet) st =
+    let (tArg, st1) = antiUnify' def lArg rArg st
+        (tRet, st2) = antiUnify' def lRet rRet st1
      in (FunctionT x tArg tRet, st2)
-antiUnify (ScalarT (DatatypeT n lArgs _) _) (ScalarT (DatatypeT m rArgs _) _) st
+antiUnify' def (ScalarT (DatatypeT n lArgs _) _) (ScalarT (DatatypeT m rArgs _) _) st
     | n == m && length lArgs == length rArgs =
         let (tArgs, stFinal) =
                 foldr
-                    (\(lTCon, rTCon) (resCon, st') -> first (:resCon) (antiUnify lTCon rTCon st'))
+                    (\(lTCon, rTCon) (resCon, st') -> first (:resCon) (antiUnify' def lTCon rTCon st'))
                     ([], st)
                     (zip lArgs rArgs)
-         in (ScalarT (DatatypeT n tArgs []) (), stFinal)
-antiUnify l r st
+         in (ScalarT (DatatypeT n tArgs (replicate (length lArgs) def)) def, stFinal)
+antiUnify' def l r st
     | l == r = (l, st)
-    | (l, r) `Map.member` st = (ScalarT (TypeVarT Map.empty (st Map.! (l, r))) (), st)
+    | (l, r) `Map.member` st = (ScalarT (TypeVarT Map.empty (st Map.! (l, r))) def, st)
     | otherwise =
         let newKeyname = mkFreshIdSafe (Map.elems st) 0
             st' = Map.insert (l, r) newKeyname st
-         in (ScalarT (TypeVarT Map.empty newKeyname) (), st')
+         in (ScalarT (TypeVarT Map.empty newKeyname) def, st')
   where
     mkFreshIdSafe ks idx =
         if ("T" ++ show idx) `elem` ks

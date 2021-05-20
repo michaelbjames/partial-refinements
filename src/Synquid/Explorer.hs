@@ -610,7 +610,7 @@ instantiate env sch top argNames = do
             let total = length tpowerset
             let t = listToIntersection ts
             writeLog 3 $ text "choice" <+> parens (text (show idx) <> text "/" <> text (show total)) <> text ":" <+> pretty t
-            medianType <- freshFromIntersect env t
+            medianType <- fresh env t
             unless (isFunctionType medianType) $
               error "varInferMedian: Goal type not a function!"
             addConstraint $ WellFormed env medianType
