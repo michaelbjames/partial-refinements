@@ -31,8 +31,6 @@ termination measure len :: List a -> {Int | _v >= 0} where
 Before we can build foldt and foldi, we need a strong enough pairs function.
 It should produce the ceil(len(xs) / 2) elements by combining them.
 
-
-Does not check
 -}
 pairs :: ((a -> a -> a) -> xs:{List a | len _v > 1} -> {List a | (2 * len _v >= len xs) && (len _v < len xs)}) ^
          ((a -> a -> a) -> xs:{List a | len _v <= 1} -> {List a | _v == xs})
@@ -43,6 +41,17 @@ pairs = \f. \xs.
       match ys with
         Nil -> Cons y ys
         Cons z zs -> Cons (f y z) (pairs f zs)
+
+foldt ::
+  ((a -> a -> a) -> a -> List a -> a) ^
+  (f:(a:Int -> b:Int -> {Int | _v == a + b}) -> z:{Int|_v == 0} -> xs: List Int -> Int)
+foldt = \f. \z. \xs.
+  match xs with
+    Nil -> z
+    Cons y ys ->
+      match ys with
+        Nil -> y
+        Cons w ws -> foldt f z (pairs f xs)
 
 
 -- foldl :: <p Int -> a -> Bool> . (f: (b -> a -> b) -> b -> List <p> a -> b) ^

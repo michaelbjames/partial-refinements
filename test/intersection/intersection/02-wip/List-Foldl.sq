@@ -1,0 +1,25 @@
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+
+{-
+foldl :: arg2:List Int -> arg1:Int -> arg0:(arg1:Int -> arg0:Int -> Int) -> Int
+[MonadSMT]: init:  (params mbqi false)
+synquid: Attempt to substitute variable arg1 bound in a function type
+CallStack (from HasCallStack):
+  error, called at src/Synquid/Type.hs:332:10 in main:Synquid.Type
+
+Sovled by adding names to the HOF argments
+-}
+
+foldl :: List Int -> Int -> (Int -> Int -> Int) -> Int
+foldl = \xs. \base. \f.
+  match xs with
+    Nil -> base
+    Cons y ys -> foldl ys (f base y) f
+    -- Cons y ys -> f base y

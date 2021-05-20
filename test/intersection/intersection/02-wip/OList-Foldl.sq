@@ -17,9 +17,9 @@ information enough to specify the DIRECTION of a fold.
 -}
 foldl :: <p :: Int -> a -> Bool> .
   (xs: OList a <p> -> f: (b -> a -> b) -> b -> b) ^
-  (xs: List a -> f: (acc:Int -> x:a -> {Int | _v == acc && p _v x}) -> seed: Int -> {Int | _v == len xs})
+  (xs: List a -> f: (acc:Int -> x:a -> {Int | _v == acc && p _v x}) -> seed:{Int|_v == len xs} -> {Int | _v == len xs})
 foldl = \xs. \f. \seed.
   match xs with
     Nil -> seed
-    Cons y ys -> foldl ys f (f seed y) -- foldl
-    -- Cons y ys -> f (foldl ys f seed) y -- foldr
+    -- Cons y ys -> foldl ys f (f seed y) -- foldl
+    Cons y ys -> f (foldl ys f seed) y -- foldr
