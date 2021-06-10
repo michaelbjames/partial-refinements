@@ -20,8 +20,10 @@ import Synquid.Types.Rest
 import Synquid.Types.Explorer
 import Synquid.Types.Params
 
+import Data.Bifunctor
 import Data.Maybe
 import Data.List
+import Data.List.Extra (allSame, nubOrd)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
@@ -40,32 +42,45 @@ import Data.Data (Data)
 -- | 'runExplorer' @eParams tParams initTS go@ : execute exploration @go@ with explorer parameters @eParams@, typing parameters @tParams@ in typing state @initTS@
 runExplorer :: (Pretty a, MonadHorn s) => ExplorerParams -> TypingParams -> Reconstructor s -> TypingState -> Explorer s a -> s (Either ErrorMessage a)
 runExplorer eParams tParams topLevel initTS go = do
-  (ress, (PersistentState _ _ errs)) <- runStateT (observeManyT 1 $ runReaderT (evalStateT go initExplorerState) (eParams, tParams, topLevel)) (PersistentState Map.empty Map.empty [])
-  case ress of
-    [] ->
-      case errs of
-        [] -> return $ Left impossible
-        -- all logged errors are in es. The error for the last program tried is the head.
-        (e:es) -> return $ Left e
-    (res : _) -> return $ Right res
+    (ress, PersistentState _ _ errs) <- runStateT
+      (observeManyT 1 $ runReaderT (evalStateT go initExplorerState)
+        (eParams, tParams, topLevel))
+      (PersistentState Map.empty Map.empty [])
+    case ress of
+        [] ->
+            case errs of
+                [] -> return $ Left impossible
+                -- all logged errors are in es. The error for the last program tried is the head.
+                (e : es) -> return $ Left e
+        (res : _) -> return $ Right res
   where
     initExplorerState = ExplorerState initTS [] Map.empty Map.empty Map.empty
-    impossible = ErrorMessage {
-        emKind = SynthesisError,
-        emPosition = _sourcePos eParams,
-        emDescription = text "Synthesis goal is impossible: components or search parameters are insufficient."
-      }
+    impossible =
+        ErrorMessage
+            { emKind = SynthesisError
+            , emPosition = _sourcePos eParams
+            , emDescription = text "Synthesis goal is impossible: components or search parameters are insufficient."
+            }
 
 -- | 'generateI' @env t@ : explore all terms that have refined type @t@ in environment @env@
 -- (top-down phase of bidirectional typechecking)
-generateI :: MonadHorn s => Environment -> RType -> Explorer s RProgram
-generateI env t@(FunctionT x tArg tRes) = do
-  let ctx = \p -> Program (PFun x p) t
-  pBody <- inContext ctx $ generateI (unfoldAllVariables $ addVariable x tArg $ env) tRes
+generateI :: MonadHorn s => [World] -> Explorer s RWProgram
+generateI envTy@((env, FunctionT{}):_) = do
+  let ts = map snd envTy
+  unless (all isFunctionType ts) (error "generateI, not all functions")
+  unless (allSame $ map argName ts) (error "the intersected functions don't all use the same arg name! They should.")
+  let x = argName $ head ts
+  let ctx = \p -> Program (PFun x p) ts
+  let tRess = map resType ts
+  let worlds' = map (\(env, FunctionT x tArg tRes) -> (unfoldAllVariables $ addVariable x tArg env, tRes)) envTy
+  pBody <- inContext ctx $ generateI worlds'
   return $ ctx pBody
-generateI env t@(AndT l r) = do
-  error "woah now."
-  logItFrom "generateI" (text "enter generateI for term" <+> pretty t)
+generateI envTy@((env, AndT{}):[]) = do
+  let flattenTypes = concatMap (intersectionToList . snd) envTy
+  let newWorlds = map (env,) flattenTypes
+  generateI newWorlds
+  -- error "woah now."
+  -- logItFrom "generateI" (text "enter generateI for term" <+> pretty t)
   -- ifte (generateI env l)
   --   (\pl -> do
   --     logItFrom "generateI" (text "got term for left of intersect:" <+> pretty pl)
@@ -76,50 +91,63 @@ generateI env t@(AndT l r) = do
   --         return pl)
   --       (mzero))
   --   (mzero)
-  pl <- generateI env l
-  logItFrom "generateI" (text "got term for left of intersect:" <+> pretty pl)
-  once $ checkE env r pl
-  logItFrom "generateI" (text "Left term typechecks against right!" <+> pretty pl)
-  pr <- generateI env r
-  logItFrom "generateI" (text "got term for right of intersect:" <+> pretty pr)
-  if pl /= pr
-    then do
-      logItFrom "generateI" (text "left-right terms not equal" </> text " L=" <+> pretty pl </> text "R=" <+> pretty pr)
-      mzero
-    else return pl
-generateI env t@(ScalarT _ _) = do
-  maEnabled <- asks . view $ _1 . abduceScrutinees -- Is match abduction enabled?
-  d <- asks . view $ _1 . matchDepth
-  maPossible <- runInSolver $ hasPotentialScrutinees env -- Are there any potential scrutinees in scope?
-  logItFrom "generateI-ScalarT" $ text "are there scrutinees?"
-  if maEnabled && d > 0 && maPossible then generateMaybeMatchIf env t else generateMaybeIf env t
+  -- pl <- generateI env l
+  -- logItFrom "generateI" (text "got term for left of intersect:" <+> pretty pl)
+  -- once $ checkE env r pl
+  -- logItFrom "generateI" (text "Left term typechecks against right!" <+> pretty pl)
+  -- pr <- generateI env r
+  -- logItFrom "generateI" (text "got term for right of intersect:" <+> pretty pr)
+  -- if pl /= pr
+  --   then do
+  --     logItFrom "generateI" (text "left-right terms not equal" </> text " L=" <+> pretty pl </> text "R=" <+> pretty pr)
+  --     mzero
+  --   else return pl
+generateI ws@((env, ScalarT{}):_) = do
+    let ts = map snd ws
+    unless (all isScalarType ts) (error "generateI, not scalars")
+    maEnabled <- asks . view $ _1 . abduceScrutinees -- Is match abduction enabled?
+    d <- asks . view $ _1 . matchDepth
+    maPossible <- runInSolver $ hasPotentialScrutinees env -- Are there any potential scrutinees in scope?
+    logItFrom "generateI-ScalarT" $ text "are there scrutinees?"
+    if maEnabled && d > 0 && maPossible then generateMaybeMatchIf ws else generateMaybeIf ws
 
 -- | Generate a possibly conditional term type @t@, depending on whether a condition is abduced
-generateMaybeIf :: MonadHorn s => Environment -> RType -> Explorer s RProgram
-generateMaybeIf env t = ifte generateThen (uncurry3 $ generateElse env t) (generateMatch env t) -- If at least one solution without a match exists, go with it and continue with the else branch; otherwise try to match
+generateMaybeIf :: MonadHorn s => [World] -> Explorer s RWProgram
+generateMaybeIf ws = ifte generateThen (uncurry3 $ generateElse ws) (generateMatch ws) -- If at least one solution without a match exists, go with it and continue with the else branch; otherwise try to match
   where
-    -- | Guess an E-term and abduce a condition for it
+--     -- | Guess an E-term and abduce a condition for it
     generateThen = do
-      cUnknown <- Unknown Map.empty <$> freshId "C"
-      addConstraint $ WellFormedCond env cUnknown
-      pThen <- cut $ generateE (addAssumption cUnknown env) t -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
-      cond <- conjunction <$> currentValuation cUnknown
-      return (cond, unknownName cUnknown, pThen)
+        envAndcUnknowns <- forM ws $ \(env, t) -> do
+            cUnknown <- Unknown Map.empty <$> freshId "C"
+            addConstraint $ WellFormedCond env cUnknown
+            return (addAssumption cUnknown env, cUnknown)
+        let (envs', cUnknowns) = unzip envAndcUnknowns
+        let ws' = zip envs' (map snd ws)
+        pThen <- cut $ generateE ws' -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
+        conds <- forM cUnknowns (fmap conjunction . currentValuation)
+        return (conds, map unknownName cUnknowns, pThen)
 
 -- | Proceed after solution @pThen@ has been found under assumption @cond@
-generateElse env t cond condUnknown pThen = if cond == ftrue
-  then return pThen -- @pThen@ is valid under no assumptions: return it
-  else do -- @pThen@ is valid under a nontrivial assumption, proceed to look for the solution for the rest of the inputs
-    pCond <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateCondition env cond
+generateElse :: MonadHorn s => [World] -> [Formula] -> [Id] -> RWProgram -> Explorer s RWProgram
+-- generateElse = $(todo "generateElse with worlds")
+generateElse ws conds condUnknowns pThen = if all (== ftrue) conds
+    then return pThen -- @pThen@ is valid under no assumptions, in all worlds: return it
+    else do -- @pThen@ is valid under a nontrivial assumption, proceed to look for the solution for the rest of the inputs
+        pCond <- inContext (\p -> Program (PIf p uHoleWorld uHoleWorld ) ts) $ generateCondition envs conds
 
-    cUnknown <- Unknown Map.empty <$> freshId "C"
-    runInSolver $ addFixedUnknown (unknownName cUnknown) (Set.singleton $ fnot cond) -- Create a fixed-valuation unknown to assume @!cond@
-    pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) $ generateI (addAssumption cUnknown env) t
-    return $ Program (PIf pCond pThen pElse) t
-    {- ifM (tryEliminateBranching pElse (runInSolver $ setUnknownRecheck (unknownName cUnknown) Set.empty (Set.singleton condUnknown)))
-      (return pElse)
-      (return $ Program (PIf pCond pThen pElse) t)
-    -}
+        cUnknowns <- replicateM (length ws) $ Unknown Map.empty <$> freshId "C"
+        runInSolver $ forM_ (zip conds cUnknowns) $ \(cond, cUnknown) -> do
+            addFixedUnknown (unknownName cUnknown) (Set.singleton $ fnot cond) -- Create a fixed-valuation unknown to assume @!cond@
+        let envs' = zipWith addAssumption cUnknowns envs
+        let ws' = zip envs' ts
+        pElse <- optionalInPartial ts $ inContext (\p -> Program (PIf pCond pThen p) ts) $ generateI ws'
+        return $ Program (PIf pCond pThen pElse) ts
+        {- ifM (tryEliminateBranching pElse (runInSolver $ setUnknownRecheck (unknownName cUnknown) Set.empty (Set.singleton condUnknown)))
+        (return pElse)
+        (return $ Program (PIf pCond pThen pElse) t)
+        -}
+    where
+        (envs, ts) = unzip ws
 
 tryEliminateBranching branch recheck =
   if isHole branch
@@ -129,103 +157,110 @@ tryEliminateBranching branch recheck =
             (const $ return True) -- constraints still hold: @branch@ is a valid solution overall
             (return False) -- constraints don't hold: the guard is essential
 
-generateCondition env fml = do
-  conjuncts <- mapM genConjunct allConjuncts
-  return $ fmap (flip addRefinement $ valBool |=| fml) (foldl1 conjoin conjuncts)
-  where
-    allConjuncts = Set.toList $ conjunctsOf fml
-    genConjunct c = if isExecutable c
-                              then return $ fmlToProgram c
-                              else cut (generateE env (ScalarT BoolT $ valBool |=| c))
-    andSymb = Program (PSymbol $ binOpTokens Map.! And) (toMonotype $ binOpType And)
-    conjoin p1 p2 = Program (PApp (Program (PApp andSymb p1) boolAll) p2) boolAll
+generateCondition :: MonadHorn s => [Environment] -> [Formula] -> Explorer s RWProgram
+generateCondition = $(todo "generateCondition with worlds")
+-- generateCondition env fml = do
+--   conjuncts <- mapM genConjunct allConjuncts
+--   return $ fmap (flip addRefinement $ valBool |=| fml) (foldl1 conjoin conjuncts)
+--   where
+--     allConjuncts = Set.toList $ conjunctsOf fml
+--     genConjunct c = if isExecutable c
+--                               then return $ fmlToProgram c
+--                               else cut (generateE env (ScalarT BoolT $ valBool |=| c))
+--     andSymb = Program (PSymbol $ binOpTokens Map.! And) (toMonotype $ binOpType And)
+--     conjoin p1 p2 = Program (PApp (Program (PApp andSymb p1) boolAll) p2) boolAll
 
 -- | If partial solutions are accepted, try @gen@, and if it fails, just leave a hole of type @t@; otherwise @gen@
-optionalInPartial :: MonadHorn s => RType -> Explorer s RProgram -> Explorer s RProgram
+optionalInPartial :: MonadHorn s => t -> Explorer s (Program t) -> Explorer s (Program t)
 optionalInPartial t gen = ifM (asks . view $ _1 . partialSolution) (ifte gen return (return $ Program PHole t)) gen
 
 -- | Generate a match term of type @t@
-generateMatch env t = do
-  d <- asks . view $ _1 . matchDepth
-  if d == 0
-    then mzero
-    else do
-      (Program p tScr) <- local (over _1 (\params -> set eGuessDepth (view scrutineeDepth params) params))
-                      $ inContext (\p -> Program (PMatch p []) t)
-                      $ generateE env anyDatatype -- Generate a scrutinee of an arbitrary type
-      let (env', tScr') = embedContext env tScr
-      let pScrutinee = Program p tScr'
+generateMatch :: MonadHorn s => [World] -> Explorer s RWProgram
+generateMatch ws = $(todo "generateMatch")
+-- generateMatch ws = do
+--   d <- asks . view $ _1 . matchDepth
+--   if d == 0
+--     then mzero
+--     else do
+--       (Program p tScr) <- local (over _1 (\params -> set eGuessDepth (view scrutineeDepth params) params))
+--                       $ inContext (\p -> Program (PMatch p []) t)
+--                       $ generateE env anyDatatype -- Generate a scrutinee of an arbitrary type
+--       let (env', tScr') = embedContext env tScr
+--       let pScrutinee = Program p tScr'
 
-      case tScr of
-        (ScalarT (DatatypeT scrDT _ _) _) -> do -- Type of the scrutinee is a datatype
-          let ctors = ((env ^. datatypes) Map.! scrDT) ^. constructors
+--       case tScr of
+--         (ScalarT (DatatypeT scrDT _ _) _) -> do -- Type of the scrutinee is a datatype
+--           let ctors = ((env ^. datatypes) Map.! scrDT) ^. constructors
 
-          let scrutineeSymbols = symbolList pScrutinee
-          let isGoodScrutinee = not (null ctors) &&                                               -- Datatype is not abstract
-                                (not $ pScrutinee `elem` (env ^. usedScrutinees)) &&              -- Hasn't been scrutinized yet
-                                (not $ head scrutineeSymbols `elem` ctors) &&                     -- Is not a value
-                                (any (not . flip Set.member (env ^. constants)) scrutineeSymbols) -- Has variables (not just constants)
-          guard isGoodScrutinee
+--           let scrutineeSymbols = symbolList pScrutinee
+--           let isGoodScrutinee = not (null ctors) &&                                               -- Datatype is not abstract
+--                                 not (pScrutinee `elem` (env ^. usedScrutinees)) &&              -- Hasn't been scrutinized yet
+--                                 not (head scrutineeSymbols `elem` ctors) &&                     -- Is not a value
+--                                 any (not . flip Set.member (env ^. constants)) scrutineeSymbols -- Has variables (not just constants)
+--           guard isGoodScrutinee
 
-          (env'', x) <- toVar (addScrutinee pScrutinee env') pScrutinee
-          (pCase, cond, condUnknown) <- cut $ generateFirstCase env'' x pScrutinee t (head ctors)                  -- First case generated separately in an attempt to abduce a condition for the whole match
-          pCases <- map fst <$> mapM (cut . generateCase (addAssumption cond env'') x pScrutinee t) (tail ctors)  -- Generate a case for each of the remaining constructors under the assumption
-          let pThen = Program (PMatch pScrutinee (pCase : pCases)) t
-          generateElse env t cond condUnknown pThen                                                               -- Generate the else branch
+--           (env'', x) <- toVar (addScrutinee pScrutinee env') pScrutinee
+--           (pCase, cond, condUnknown) <- cut $ generateFirstCase env'' x pScrutinee t (head ctors)                  -- First case generated separately in an attempt to abduce a condition for the whole match
+--           pCases <- map fst <$> mapM (cut . generateCase (addAssumption cond env'') x pScrutinee t) (tail ctors)  -- Generate a case for each of the remaining constructors under the assumption
+--           let pThen = Program (PMatch pScrutinee (pCase : pCases)) t
+--           generateElse env t cond condUnknown pThen                                                               -- Generate the else branch
 
-        _ -> mzero -- Type of the scrutinee is not a datatype: it cannot be used in a match
+--         _ -> mzero -- Type of the scrutinee is not a datatype: it cannot be used in a match
 
-generateFirstCase env scrVar pScrutinee t consName = do
-  case Map.lookup consName (allSymbols env) of
-    Nothing -> error $ show $ text "Datatype constructor" <+> text consName <+> text "not found in the environment" <+> pretty env
-    Just consSch -> do
-      consT <- instantiate env consSch True []
-      runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
-      consT' <- runInSolver $ currentAssignment consT
-      binders <- replicateM (arity consT') (freshVar env "x")
-      (syms, ass) <- caseSymbols env scrVar binders consT'
-      let caseEnv = foldr (uncurry addVariable) (addAssumption ass env) syms
+generateFirstCase :: MonadHorn s => Environment -> Formula -> Program (TypeSkeleton Formula) -> TypeSkeleton Formula -> Id -> Explorer s (Case RType, Formula, Id)
+generateFirstCase = $(todo "generateFirstCase")
+-- generateFirstCase env scrVar pScrutinee t consName = do
+--   case Map.lookup consName (allSymbols env) of
+--     Nothing -> error $ show $ text "Datatype constructor" <+> text consName <+> text "not found in the environment" <+> pretty env
+--     Just consSch -> do
+--       consT <- instantiate env consSch True []
+--       runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
+--       consT' <- runInSolver $ currentAssignment consT
+--       binders <- replicateM (arity consT') (freshVar env "x")
+--       (syms, ass) <- caseSymbols env scrVar binders consT'
+--       let caseEnv = foldr (uncurry addVariable) (addAssumption ass env) syms
 
-      ifte  (do -- Try to find a vacuousness condition:
-              deadUnknown <- Unknown Map.empty <$> freshId "C"
-              addConstraint $ WellFormedCond env deadUnknown
-              err <- inContext (\p -> Program (PMatch pScrutinee [Case consName binders p]) t) $ generateError (addAssumption deadUnknown caseEnv)
-              deadValuation <- conjunction <$> currentValuation deadUnknown
-              ifte (generateError (addAssumption deadValuation env)) (const mzero) (return ()) -- The error must be possible only in this case
-              return (err, deadValuation, unknownName deadUnknown))
-            (\(err, deadCond, deadUnknown) -> return $ (Case consName binders err, deadCond, deadUnknown))
-            (do
-              pCaseExpr <- local (over (_1 . matchDepth) (-1 +))
-                            $ inContext (\p -> Program (PMatch pScrutinee [Case consName binders p]) t)
-                            $ generateI caseEnv t
-              return $ (Case consName binders pCaseExpr, ftrue, dontCare))
+--       ifte  (do -- Try to find a vacuousness condition:
+--               deadUnknown <- Unknown Map.empty <$> freshId "C"
+--               addConstraint $ WellFormedCond env deadUnknown
+--               err <- inContext (\p -> Program (PMatch pScrutinee [Case consName binders p]) t) $ generateError (addAssumption deadUnknown caseEnv)
+--               deadValuation <- conjunction <$> currentValuation deadUnknown
+--               ifte (generateError (addAssumption deadValuation env)) (const mzero) (return ()) -- The error must be possible only in this case
+--               return (err, deadValuation, unknownName deadUnknown))
+--             (\(err, deadCond, deadUnknown) -> return $ (Case consName binders err, deadCond, deadUnknown))
+--             (do
+--               pCaseExpr <- local (over (_1 . matchDepth) (-1 +))
+--                             $ inContext (\p -> Program (PMatch pScrutinee [Case consName binders p]) t)
+--                             $ generateI caseEnv t
+--               return $ (Case consName binders pCaseExpr, ftrue, dontCare))
 
 -- | Generate the @consName@ case of a match term with scrutinee variable @scrName@ and scrutinee type @scrType@
 generateCase :: MonadHorn s => Environment -> Formula -> RProgram -> RType -> Id -> Explorer s (Case RType, Explorer s ())
-generateCase env scrVar pScrutinee t consName = do
-  case Map.lookup consName (allSymbols env) of
-    Nothing -> error $ show $ text "Datatype constructor" <+> text consName <+> text "not found in the environment" <+> pretty env
-    Just consSch -> do
-      consT <- instantiate env consSch True []
-      runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
-      consT' <- runInSolver $ currentAssignment consT
-      binders <- replicateM (arity consT') (freshVar env "x")
-      (syms, ass) <- caseSymbols env scrVar binders consT'
-      unfoldSyms <- asks . view $ _1 . unfoldLocals
+generateCase = $(todo "generateCase")
+-- generateCase env scrVar pScrutinee t consName = do
+--   case Map.lookup consName (allSymbols env) of
+--     Nothing -> error $ show $ text "Datatype constructor" <+> text consName <+> text "not found in the environment" <+> pretty env
+--     Just consSch -> do
+--       consT <- instantiate env consSch True []
+--       runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
+--       consT' <- runInSolver $ currentAssignment consT
+--       binders <- replicateM (arity consT') (freshVar env "x")
+--       (syms, ass) <- caseSymbols env scrVar binders consT'
+--       unfoldSyms <- asks . view $ _1 . unfoldLocals
 
-      cUnknown <- Unknown Map.empty <$> freshId "M"
-      runInSolver $ addFixedUnknown (unknownName cUnknown) (Set.singleton ass) -- Create a fixed-valuation unknown to assume @ass@
+--       cUnknown <- Unknown Map.empty <$> freshId "M"
+--       runInSolver $ addFixedUnknown (unknownName cUnknown) (Set.singleton ass) -- Create a fixed-valuation unknown to assume @ass@
 
-      let caseEnv = (if unfoldSyms then unfoldAllVariables else id) $ foldr (uncurry addVariable) (addAssumption cUnknown env) syms
-      pCaseExpr <- optionalInPartial t $ local (over (_1 . matchDepth) (-1 +))
-                                       $ inContext (\p -> Program (PMatch pScrutinee [Case consName binders p]) t)
-                                       $ generateError caseEnv `mplus` generateI caseEnv t
+--       let caseEnv = (if unfoldSyms then unfoldAllVariables else id) $ foldr (uncurry addVariable) (addAssumption cUnknown env) syms
+--       pCaseExpr <- optionalInPartial t $ local (over (_1 . matchDepth) (-1 +))
+--                                        $ inContext (\p -> Program (PMatch pScrutinee [Case consName binders p]) t)
+--                                        $ generateError caseEnv `mplus` generateI caseEnv t
 
-      let recheck = if disjoint (symbolsOf pCaseExpr) (Set.fromList binders)
-                      then runInSolver $ setUnknownRecheck (unknownName cUnknown) Set.empty Set.empty -- ToDo: provide duals here
-                      else mzero
+--       let recheck = if disjoint (symbolsOf pCaseExpr) (Set.fromList binders)
+--                       then runInSolver $ setUnknownRecheck (unknownName cUnknown) Set.empty Set.empty -- ToDo: provide duals here
+--                       else mzero
 
-      return (Case consName binders pCaseExpr, recheck)
+--       return (Case consName binders pCaseExpr, recheck)
 
 -- | 'caseSymbols' @scrutinee binders consT@: a pair that contains (1) a list of bindings of @binders@ to argument types of @consT@
 -- and (2) a formula that is the return type of @consT@ applied to @scrutinee@
@@ -236,210 +271,264 @@ caseSymbols env x (name : names) (FunctionT y tArg tRes) = do
   return ((name, tArg) : syms, ass)
 
 -- | Generate a possibly conditional possibly match term, depending on which conditions are abduced
-generateMaybeMatchIf :: MonadHorn s => Environment -> RType -> Explorer s RProgram
-generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplus` (generateMatch env t) -- might need to backtrack a successful match due to match depth limitation
-  where
-    -- | Guess an E-term and abduce a condition and a match-condition for it
-    generateOneBranch = do
-      matchUnknown <- Unknown Map.empty <$> freshId "M"
-      addConstraint $ WellFormedMatchCond env matchUnknown
-      condUnknown <- Unknown Map.empty <$> freshId "C"
-      addConstraint $ WellFormedCond env condUnknown
-      cut $ do
-        p0 <- generateEOrError (addAssumption matchUnknown . addAssumption condUnknown $ env) t
-        matchValuation <- Set.toList <$> currentValuation matchUnknown
-        let matchVars = Set.toList $ Set.unions (map varsOf matchValuation)
-        condValuation <- currentValuation condUnknown
-        let badError = isError p0 && length matchVars /= 1 -- null matchValuation && (not $ Set.null condValuation) -- Have we abduced a nontrivial vacuousness condition that is not a match branch?
-        writeLog 3 $ text "Match valuation" <+> pretty matchValuation <+> if badError then text ": discarding error" else empty
-        guard $ not badError -- Such vacuousness conditions are not productive (do not add to the environment assumptions and can be discovered over and over infinitely)
-        let matchConds = map (conjunction . Set.fromList . (\var -> filter (Set.member var . varsOf) matchValuation)) matchVars -- group by vars
-        d <- asks . view $ _1 . matchDepth -- Backtrack if too many matches, maybe we can find a solution with fewer
-        guard $ length matchConds <= d
-        return (matchConds, conjunction condValuation, unknownName condUnknown, p0)
+generateMaybeMatchIf :: MonadHorn s => [World] -> Explorer s RWProgram
+generateMaybeMatchIf ws = $(todo "generateMaybeMatchIf with worlds")
+-- generateMaybeMatchIf ws = (generateOneBranch >>= generateOtherBranches) `mplus` (generateMatch env t) -- might need to backtrack a successful match due to match depth limitation
+--   where
+--     -- | Guess an E-term and abduce a condition and a match-condition for it
+--     generateOneBranch = do
+--       matchUnknown <- Unknown Map.empty <$> freshId "M"
+--       addConstraint $ WellFormedMatchCond env matchUnknown
+--       condUnknown <- Unknown Map.empty <$> freshId "C"
+--       addConstraint $ WellFormedCond env condUnknown
+--       cut $ do
+--         p0 <- generateEOrError (addAssumption matchUnknown . addAssumption condUnknown $ env) t
+--         matchValuation <- Set.toList <$> currentValuation matchUnknown
+--         let matchVars = Set.toList $ Set.unions (map varsOf matchValuation)
+--         condValuation <- currentValuation condUnknown
+--         let badError = isError p0 && length matchVars /= 1 -- null matchValuation && (not $ Set.null condValuation) -- Have we abduced a nontrivial vacuousness condition that is not a match branch?
+--         writeLog 3 $ text "Match valuation" <+> pretty matchValuation <+> if badError then text ": discarding error" else empty
+--         guard $ not badError -- Such vacuousness conditions are not productive (do not add to the environment assumptions and can be discovered over and over infinitely)
+--         let matchConds = map (conjunction . Set.fromList . (\var -> filter (Set.member var . varsOf) matchValuation)) matchVars -- group by vars
+--         d <- asks . view $ _1 . matchDepth -- Backtrack if too many matches, maybe we can find a solution with fewer
+--         guard $ length matchConds <= d
+--         return (matchConds, conjunction condValuation, unknownName condUnknown, p0)
 
-    generateEOrError env typ = generateError env `mplus` generateE env typ
+--     generateEOrError env typ = generateError env `mplus` generateE env typ
 
-    -- | Proceed after solution @p0@ has been found under assumption @cond@ and match-assumption @matchCond@
-    generateOtherBranches (matchConds, cond, condUnknown, p0) = do
-      pThen <- cut $ generateMatchesFor (addAssumption cond env) matchConds p0 t
-      generateElse env t cond condUnknown pThen
+--     -- | Proceed after solution @p0@ has been found under assumption @cond@ and match-assumption @matchCond@
+--     generateOtherBranches (matchConds, cond, condUnknown, p0) = do
+--       pThen <- cut $ generateMatchesFor (addAssumption cond env) matchConds p0 t
+--       generateElse env t cond condUnknown pThen
 
-    generateMatchesFor env [] pBaseCase t = return pBaseCase
-    generateMatchesFor env (matchCond : rest) pBaseCase t = do
-      let (Binary Eq matchVar@(Var _ x) (Cons _ c _)) = matchCond
-      scrT <- runInSolver $ currentAssignment (toMonotype $ symbolsOfArity 0 env Map.! x)
-      let (ScalarT (DatatypeT scrDT _ _) _) = scrT
-      let pScrutinee = Program (PSymbol x) scrT
-      let ctors = ((env ^. datatypes) Map.! scrDT) ^. constructors
-      let env' = addScrutinee pScrutinee env
-      pBaseCase' <- cut $ inContext (\p -> Program (PMatch pScrutinee [Case c [] p]) t) $
-                            generateMatchesFor (addAssumption matchCond env') rest pBaseCase t
+--     generateMatchesFor env [] pBaseCase t = return pBaseCase
+--     generateMatchesFor env (matchCond : rest) pBaseCase t = do
+--       let (Binary Eq matchVar@(Var _ x) (Cons _ c _)) = matchCond
+--       scrT <- runInSolver $ currentAssignment (toMonotype $ symbolsOfArity 0 env Map.! x)
+--       let (ScalarT (DatatypeT scrDT _ _) _) = scrT
+--       let pScrutinee = Program (PSymbol x) scrT
+--       let ctors = ((env ^. datatypes) Map.! scrDT) ^. constructors
+--       let env' = addScrutinee pScrutinee env
+--       pBaseCase' <- cut $ inContext (\p -> Program (PMatch pScrutinee [Case c [] p]) t) $
+--                             generateMatchesFor (addAssumption matchCond env') rest pBaseCase t
 
-      let genOtherCases previousCases ctors =
-            case ctors of
-              [] -> return $ Program (PMatch pScrutinee previousCases) t
-              (ctor:rest) -> do
-                (c, recheck) <- cut $ generateCase env' matchVar pScrutinee t ctor
-                ifM (tryEliminateBranching (expr c) recheck)
-                  (return $ expr c)
-                  (genOtherCases (previousCases ++ [c]) rest)
+--       let genOtherCases previousCases ctors =
+--             case ctors of
+--               [] -> return $ Program (PMatch pScrutinee previousCases) t
+--               (ctor:rest) -> do
+--                 (c, recheck) <- cut $ generateCase env' matchVar pScrutinee t ctor
+--                 ifM (tryEliminateBranching (expr c) recheck)
+--                   (return $ expr c)
+--                   (genOtherCases (previousCases ++ [c]) rest)
 
-      genOtherCases [Case c [] pBaseCase] (delete c ctors)
+--       genOtherCases [Case c [] pBaseCase] (delete c ctors)
 
 -- | 'generateE' @env typ@ : explore all elimination terms of type @typ@ in environment @env@
 -- (bottom-up phase of bidirectional typechecking)
-generateE :: MonadHorn s => Environment -> RType -> Explorer s RProgram
-generateE env typ = do
+generateE :: MonadHorn s => [World] -> Explorer s RWProgram
+generateE ws = do
   putMemo Map.empty                                     -- Starting E-term enumeration in a new environment: clear memoization store
   d <- asks . view $ _1 . eGuessDepth
-  (Program pTerm pTyp) <- generateEUpTo env typ d                            -- Generate the E-term
+  (Program pTerm pTyps) <- generateEUpTo ws d                            -- Generate the E-term
   runInSolver $ isFinal .= True >> solveTypeConstraints >> isFinal .= False  -- Final type checking pass that eliminates all free type variables
   newGoals <- uses auxGoals (map gName)                                      -- Remember unsolved auxiliary goals
   generateAuxGoals                                                           -- Solve auxiliary goals
-  pTyp' <- runInSolver $ currentAssignment pTyp                              -- Finalize the type of the synthesized term
-  addLambdaLets pTyp' (Program pTerm pTyp') newGoals                         -- Check if some of the auxiliary goal solutions are large and have to be lifted into lambda-lets
+  pTyps' <- mapM (runInSolver . currentAssignment) pTyps                     -- Finalize the type of the synthesized term
+  addLambdaLets pTyps' (Program pTerm pTyps') newGoals                        -- Check if some of the auxiliary goal solutions are large and have to be lifted into lambda-lets
   where
-    addLambdaLets t body [] = return body
-    addLambdaLets t body (g:gs) = do
+    addLambdaLets :: MonadHorn s => TypeVector -> RWProgram -> [Id] -> Explorer s RWProgram
+    addLambdaLets ts body [] = return body
+    addLambdaLets ts body (g:gs) = do
       pAux <- uses solvedAuxGoals (Map.! g)
       if programNodeCount pAux > 5
-        then addLambdaLets t (Program (PLet g uHole body) t) gs
-        else addLambdaLets t body gs
+        then addLambdaLets ts (Program (PLet g uHoleWorld body) ts) gs
+        else addLambdaLets ts body gs
 
 -- | 'generateEUpTo' @env typ d@ : explore all applications of type shape @shape typ@ in environment @env@ of depth up to @d@
-generateEUpTo :: MonadHorn s => Environment -> RType -> Int -> Explorer s RProgram
-generateEUpTo env typ d =
-  mplus (msum $ map (generateEAt env typ) [0..d]) $
+generateEUpTo :: MonadHorn s => [World] -> Int -> Explorer s RWProgram
+generateEUpTo ws d =
+  mplus (msum $ map (generateEAt ws) [0..d]) $
         (throwErrorWithDescription (text "no more programs."))
 
 -- | 'generateEAt' @env typ d@ : explore all applications of type shape @shape typ@ in environment @env@ of depth exactly to @d@
-generateEAt :: MonadHorn s => Environment -> RType -> Int -> Explorer s RProgram
-generateEAt _ _ d | d < 0 = mzero
-generateEAt env typ d = do
+generateEAt :: MonadHorn s => [World] -> Int -> Explorer s RWProgram
+generateEAt _ d | d < 0 = mzero
+generateEAt ws d = do
   useMem <- asks . view $ _1 . useMemoization
-  if not useMem || d == 0
+  if not useMem || d == 0 || True -- TODO:MJ: REMOVE THIS TRUE PLEASE
     then do -- Do not use memoization
-      p <- enumerateAt env typ d
-      checkE env typ p
+      p <- enumerateAt ws d
+      checkE ws p
       return p
     else do -- Try to fetch from memoization store
-      startState <- get
-      let tass = startState ^. typingState . typeAssignment
-      let memoKey = MemoKey (arity typ) (shape $ typeSubstitute tass (lastType typ)) startState d
-      startMemo <- getMemo
-      case Map.lookup memoKey startMemo of
-        Just results -> do -- Found memoized results: fetch
-          logItFrom "generateEAt" (text "Fetching for:" <+> pretty memoKey $+$
-                      text "Result:" $+$ vsep (map (\(p, _) -> pretty p) results))
-          msum $ map applyMemoized results
-        Nothing -> do -- Nothing found: enumerate and memoize
-          logItFrom "generateEAt" (text "Nothing found for:" <+> pretty memoKey)
-          p <- enumerateAt env typ d
+      $(todo "generateEAt with Memoization")
+      -- startState <- get
+      -- let tass = startState ^. typingState . typeAssignment
+      -- let memoKey = MemoKey (arity typ) (shape $ typeSubstitute tass (lastType typ)) startState d
+      -- startMemo <- getMemo
+      -- case Map.lookup memoKey startMemo of
+      --   Just results -> do -- Found memoized results: fetch
+      --     logItFrom "generateEAt" (text "Fetching for:" <+> pretty memoKey $+$
+      --                 text "Result:" $+$ vsep (map (\(p, _) -> pretty p) results))
+      --     msum $ map applyMemoized results
+      --   Nothing -> do -- Nothing found: enumerate and memoize
+      --     logItFrom "generateEAt" (text "Nothing found for:" <+> pretty memoKey)
+      --     p <- enumerateAt ws d
 
-          memo <- getMemo
-          finalState <- get
-          let memo' = Map.insertWith (flip (++)) memoKey [(p, finalState)] memo
-          logItFrom "generateEAt" (text "Memoizing for:" <+> pretty memoKey <+> pretty p <+> text "::" <+> pretty (typeOf p))
+      --     memo <- getMemo
+      --     finalState <- get
+      --     let memo' = Map.insertWith (flip (++)) memoKey [(p, finalState)] memo
+      --     logItFrom "generateEAt" (text "Memoizing for:" <+> pretty memoKey <+> pretty p <+> text "::" <+> pretty (typeOf p))
 
-          putMemo memo'
+      --     putMemo memo'
 
-          checkE env typ p
-          return p
+      --     checkE ws p
+      --     return p
   where
     applyMemoized (p, finalState) = do
       put finalState
-      checkE env typ p
+      checkE ws p
       return p
 
 -- | Perform a gradual check that @p@ has type @typ@ in @env@:
 -- if @p@ is a scalar, perform a full subtyping check;
 -- if @p@ is a (partially applied) function, check as much as possible with unknown arguments
-checkE :: MonadHorn s => Environment -> RType -> RProgram -> Explorer s ()
-checkE env typ p@(Program pTerm pTyp) = do
+checkE :: MonadHorn s => [World] -> RWProgram -> Explorer s ()
+checkE ws p@(Program pTerm pTyps) = do
+  let typs = map snd ws
   ctx <- asks . view $ _1 . context
-  writeLog 2 $ text "Checking" <+> pretty p <+> text "::" <+> pretty typ <+> text "in" $+$ pretty (ctx (untyped PHole))
+  writeLog 2 $ text "Checking" <+> pretty p <+> text "::" <+> pretty typs <+> text "in" $+$ pretty (ctx $ untypedWorld PHole)
 
   -- ifM (asks $ _symmetryReduction . fst) checkSymmetry (return ())
 
   incremental <- asks . view $ _1 . incrementalChecking -- Is incremental type checking of E-terms enabled?
   consistency <- asks . view $ _1 . consistencyChecking -- Is consistency checking enabled?
 
-  when (incremental || arity typ == 0) (addConstraint $ Subtype env pTyp typ False "checkE-subtype") -- Add subtyping check, unless it's a function type and incremental checking is diasbled
-  when (consistency && arity typ > 0) (addConstraint $ Subtype env pTyp typ True "checkE-consistency") -- Add consistency constraint for function types
-  fTyp <- runInSolver $ finalizeType typ
-  logItFrom "checkE" (text "finalized type:" <+> pretty fTyp)
-  pos <- asks . view $ _1 . sourcePos
-  typingState . errorContext .= (pos, text "when checking" </> pretty p <+> text "::" <+> pretty fTyp </> text "in" $+$ pretty (ctx p))
-  runInSolver solveTypeConstraints
-  typingState . errorContext .= (noPos, empty)
-  writeLog 2 $ text "Checking OK:" <+> pretty p <+> text "::" <+> pretty fTyp <+> text "in" $+$ pretty (ctx (untyped PHole))
+  let ws' = addListToZip ws pTyps
+  forM_ ws' $ \(env, typ, pTyp) -> do
+    when (incremental || arity typ == 0) (addConstraint $ Subtype env pTyp typ False "checkE-subtype") -- Add subtyping check, unless it's a function type and incremental checking is diasbled
+    when (consistency && arity typ > 0) (addConstraint $ Subtype env pTyp typ True "checkE-consistency") -- Add consistency constraint for function types
+    fTyp <- runInSolver $ finalizeType typ
+    logItFrom "checkE" (text "finalized type:" <+> pretty fTyp)
+    pos <- asks . view $ _1 . sourcePos
+    typingState . errorContext .= (pos, text "when checking" </> pretty p <+> text "::" <+> pretty fTyp </> text "in" $+$ pretty (ctx p))
+    runInSolver solveTypeConstraints
+    typingState . errorContext .= (noPos, empty)
+    writeLog 2 $ text "Checking OK:" <+> pretty p <+> text "::" <+> pretty fTyp <+> text "in" $+$ pretty (ctx (untypedWorld PHole))
 
 
-enumerateAt :: MonadHorn s => Environment -> RType -> Int -> Explorer s RProgram
-enumerateAt env typ 0 = do
-    let symbols = Map.toList $ symbolsOfArity (arity typ) env
-    useCounts <- use symbolUseCount
-    let symbols' = filter (\(x, _) -> notElem x setConstructors) $ if arity typ == 0
-                      then sortBy (mappedCompare (\(x, _) -> (Set.member x (env ^. constants), Map.findWithDefault 0 x useCounts))) symbols
-                      else sortBy (mappedCompare (\(x, _) -> (not $ Set.member x (env ^. constants), Map.findWithDefault 0 x useCounts))) symbols
-    msum $ map pickSymbol symbols'
-  where
-    pickSymbol (name, sch) = do
-      $(todo "inferMedian type")
-      when (Set.member name (env ^. letBound)) mzero
-      t <- symbolType env name sch
-      let ts = intersectionToList t
-      let nameShape = Map.lookup name (env ^. shapeConstraints)
-      let shapes = unsequence $ intersectionToList <$> nameShape
-      let choices = (flip map) (zip ts shapes) $ \(t, s) -> do
-            let p = Program (PSymbol name) t
-            writeLog 2 $ text "Trying" <+> pretty p
-            symbolUseCount %= Map.insertWith (+) name 1
-            -- if the shape was an intersection, they should all be the same.
-            case s of
-              Nothing -> return ()
-              Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False "enum-symbol"
-            return p
-      msum choices
+checkSymbol :: MonadHorn s => [World] -> Id -> Explorer s RWProgram
+checkSymbol ws name = do
+  intersectionStrat <- asks . view $ _1 . intersectStrategy
+  ts <- forM ws $ \(env, typ) -> do
+    case lookupSymbol name (arity typ) (hasSet typ) env of
+      Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
+      Just sch -> do
+        writeLog 3 $ text "schema:" <+> (pretty sch)
+        t' <- symbolType env name sch  -- symbolType will infer a type if it's polymorphic or an intersection
+        logItFrom "reconstructE'-Var-Base" (text "symbol:" <+> (pretty name) <> (text "::") <> (pretty typ) <+> (text "symbol type:")  <+> (pretty t'))
+        case intersectionStrat of
 
-    unsequence :: Maybe [a] -> [Maybe a]
-    unsequence Nothing = [Nothing]
-    unsequence (Just y) = map Just y
+          {- Select one side of an intersection -}
+          EitherOr -> $(todo "eitherOr")
+          -- do
+          --   let ts = intersectionToList t'
+          --   let nameShape = head . intersectionToList <$> Map.lookup name (env ^. shapeConstraints)
+          --   writeLog 3 $ text "nameShape:" <+> text (show nameShape)
 
-enumerateAt env typ d = do
-  let maxArity = fst $ Map.findMax (env ^. symbols)
-  guard $ arity typ < maxArity
+          --   -- t could be an intersection, loop over choices
+          --   symbolUseCount %= Map.insertWith (+) name 1
+          --   let iterList = zip3 ts (repeat nameShape) [1..]
+          --   let choices = flip map iterList $ \(t, s, idx) -> do
+          --         -- logItFrom "reconstructE" $ brackets (text "PSymbol")
+          --         --   <> text ": making choice"
+          --         --   <+> parens ((text $ show idx) <> text "/" <> (text $ show $ length iterList))
+          --         --   <+> text "for" <+> text name
+          --         --   <> L.nest 4 (L.line <> (text "type:" <+> pretty t) L.<$> (text "shape:" <+> pretty s))
+
+          --         let p = Program (PSymbol name) t
+          --         -- if the shape was an intersection, all parts of the intersection should all have the same shape.
+          --         case s of
+          --           Nothing -> return ()
+          --           Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False "var-eitherOr-shape-match"
+          --         checkE env typ p
+          --         return p
+          --   msum choices
+
+          {- Base rule -}
+          _ -> do
+            return t'
+  symbolUseCount %= Map.insertWith (+) name 1
+  let p = Program (PSymbol name) ts
+  checkE ws p
+  return p
+
+
+enumerateAt :: MonadHorn s => [World] -> Int -> Explorer s RWProgram
+enumerateAt ws 0 = do
+    -- All symbols, for each world, of the correct arity in that world.
+    let initSymbols = concatMap (\(env, typ) -> Map.toList $ symbolsOfArity (arity typ) env) ws
+                    & nubOrd
+    -- Only those symbols that could fit by the shape.
+    symbols'' <- flip (`foldM` initSymbols) ws $ \symbols (env, typ)-> do
+      useCounts <- use symbolUseCount
+      let symbols' = filter (\(x, _) -> notElem x setConstructors) $ if arity typ == 0
+                        then sortBy (mappedCompare (\(x, _) -> (Set.member x (env ^. constants), Map.findWithDefault 0 x useCounts))) symbols
+                        else sortBy (mappedCompare (\(x, _) -> (not $ Set.member x (env ^. constants), Map.findWithDefault 0 x useCounts))) symbols
+      return symbols'
+    msum $ map (checkSymbol ws . fst) symbols''
+
+enumerateAt ws d = do
+  forM_ ws $ \(env, typ) -> do
+    let maxArity = fst $ Map.findMax (env ^. symbols)
+    guard $ arity typ < maxArity
   generateAllApps
   where
+    appParams = (True, local (over (_1 . eGuessDepth) (-1 +)))
     generateAllApps =
-      generateApp (\e t -> generateEUpTo e t (d - 1)) (\e t -> generateEAt e t (d - 1)) `mplus`
-        generateApp (\e t -> generateEAt e t d) (\e t -> generateEUpTo e t (d - 1))
+      generateApp appParams ws (\ws -> generateEUpTo ws (d - 1)) (\ws -> generateEAt ws (d - 1)) `mplus`
+        generateApp appParams ws (\ws -> generateEAt ws d) (\ws -> generateEUpTo ws (d - 1))
+        -- `mplus` $(todo "Should we also support (APP (d-1) (d))?")
 
-    generateApp genFun genArg = do
-      x <- freshId "X"
-      fun <- inContext (\p -> Program (PApp p uHole) typ)
-                $ genFun env (FunctionT x AnyT typ) -- Find all functions that unify with (? -> typ)
-      let FunctionT x tArg tRes = typeOf fun
+generateApp :: MonadHorn s =>
+  -- Some parameters to allow us to use this in synth and checking.
+  (Bool, Explorer s RWProgram -> Explorer s RWProgram) ->
+  [World] ->
+  ([World] -> Explorer s RWProgram) ->
+  ([World] -> Explorer s RWProgram) ->
+    Explorer s RWProgram
+generateApp (enableCut, ctxMod) ws genFun genArg = do
+  x <- freshId "X"
+  let retTyps = map snd ws
+  let ws' = map (second (FunctionT x AnyT)) ws
+  pFun <- inContext (\p -> Program (PApp p uHoleWorld) retTyps)
+            $ genFun ws' -- Find all functions that unify with (? -> typ)
+  -- let FunctionT x tArg tRes = typeOf fun
+  let funTypes = typeOf pFun
+  let argTypes' = map argType funTypes
+  let retTypes' = map resType funTypes
 
-      pApp <- if isFunctionType tArg
-        then do -- Higher-order argument: its value is not required for the function type, return a placeholder and enqueue an auxiliary goal
-          d <- asks . view $ _1 . auxDepth
-          when (d <= 0) $ writeLog 2 (text "Cannot synthesize higher-order argument: no auxiliary functions allowed") >> mzero
-          arg <- enqueueGoal env tArg (untyped PHole) (d - 1)
-          return $ Program (PApp fun arg) tRes
-        else do -- First-order argument: generate now
-          let mbCut = id -- if Set.member x (varsOfType tRes) then id else cut
-          arg <- local (over (_1 . eGuessDepth) (-1 +))
-                    $ inContext (\p -> Program (PApp fun p) tRes)
-                    $ mbCut (genArg env tArg)
-          writeLog 3 (text "Synthesized argument" <+> pretty arg <+> text "of type" <+> pretty (typeOf arg))
-          let tRes' = appType env arg x tRes
-          return $ Program (PApp fun arg) tRes'
-      return pApp
+  if argTypes' & head & isFunctionType
+    then do -- Higher-order argument: its value is not required for the function type, return a placeholder and enqueue an auxiliary goal
+      $(todo "HOF goals, should they be world goals? I think yes.")
+      -- d <- asks . view $ _1 . auxDepth
+      -- when (d <= 0) $ writeLog 2 (text "Cannot synthesize higher-order argument: no auxiliary functions allowed") >> mzero
+      -- arg <- enqueueGoal env tArg (untyped PHole) (d - 1)
+      -- return $ Program (PApp fun arg) tRes
+    else do -- First-order argument: generate now
+      let mbCut = id -- if (not enableCut) && Set.member x (varsOfType tRes) then id else cut
+      let argWorlds = zip (map fst ws) argTypes'
+      arg <- ctxMod
+                $ inContext (\p -> Program (PApp pFun p) retTypes')
+                $ mbCut (genArg argWorlds)
+      writeLog 3 (text "Synthesized argument" <+> pretty arg <+> text "of type" <+> pretty (typeOf arg))
+
+      let ws'' = zip (map fst ws) retTypes'
+      let tRes' = appTypes ws'' arg x
+      return $ Program (PApp pFun arg) tRes'
 
 -- | Make environment inconsistent (if possible with current unknown assumptions)
-generateError :: MonadHorn s => Environment -> Explorer s RProgram
+generateError :: MonadHorn s => Environment -> Explorer s RWProgram
 generateError env = do
   ctx <- asks . view $ _1. context
   writeLog 2 $ text "Checking Error Program" <+> pretty errorProgram <+> text "in" $+$ pretty (ctx errorProgram)
@@ -466,6 +555,18 @@ toVar env (Program _ t) = do
 appType :: Environment -> RProgram -> Id -> RType -> RType
 appType env (Program (PSymbol name) t) x tRes = substituteInType (isBound env) (Map.singleton x $ symbolAsFormula env name t) tRes
 appType env (Program _ t) x tRes = contextual x t tRes
+
+-- | 'appTypes' @ws p x@: The ws contains (env, tRes)_i. This creates
+-- a type semantically equivalent to:
+-- forall i in worlds; [p/x](w_i tRes).
+-- if @p@ is not a variable, instead of a literal substitution, use the
+-- contextual type (LET x : i-th typeOf p) in i-th tRes)_i
+appTypes :: [World] -> RWProgram -> Id -> TypeVector
+appTypes ws (Program (PSymbol name) ts) x = flip map (addListToZip ws ts) $
+    \(env, tRes, t) -> appType env (Program (PSymbol name) t) x tRes
+appTypes ws (Program _ ts) x = flip map (addListToZip ws ts) $
+    \(env, tRes, t) -> contextual x t tRes
+
 
 isPolyConstructor (Program (PSymbol name) t) = isTypeName name && (not . Set.null . typeVarsOf $ t)
 

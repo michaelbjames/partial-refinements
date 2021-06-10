@@ -1,0 +1,4 @@
+four :: {Int | _v == 4}
+
+myConst :: {Int | _v == 4}
+myConst = ??

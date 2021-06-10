@@ -455,7 +455,7 @@ typeNodeCount (ScalarT _ fml) = fmlNodeCount' fml
 typeNodeCount (FunctionT _ tArg tRes) = typeNodeCount tArg + typeNodeCount tRes
 
 -- | 'programNodeCount' @p@ : size of @p@ (in AST nodes)
-programNodeCount :: RProgram -> Int
+programNodeCount :: Program t -> Int
 programNodeCount (Program p _) = case p of
   PSymbol _ -> 1
   PApp e1 e2 -> 1 + programNodeCount e1 + programNodeCount e2

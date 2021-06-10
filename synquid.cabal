@@ -43,6 +43,7 @@ executable synquid
                     , Synquid.Types.Solver
                     , Synquid.Types.Type
                     , Synquid.Util
+                    , Synquid.Worlds
                     , Synquid.Z3
 
   other-extensions:   TemplateHaskell

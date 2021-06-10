@@ -243,7 +243,7 @@ strengthen qmap extractAssumptions fml@(Binary Implies lhs rhs) sol = do
                   setConcatMap extractAssumptions knownConjuncts `Set.union`
                   extractAssumptions rhs
 
-      -- | All possible additional valuations of @u@ that are subsets of $lhsVal@.
+    -- | All possible additional valuations of @u@ that are subsets of $lhsVal@.
     singleUnknownCandidates lhsVal u = let
           qs = lookupQualsSubst qmap u
           max = lookupQuals qmap maxCount u
@@ -251,7 +251,7 @@ strengthen qmap extractAssumptions fml@(Binary Implies lhs rhs) sol = do
           n = Set.size used
       in Set.toList $ boundedSubsets (max - n) $ (Set.fromList qs Set.\\ used) `Set.intersection` lhsVal
 
-      -- | All valid partitions of @lhsVal@ into solutions for multiple unknowns.
+    -- | All valid partitions of @lhsVal@ into solutions for multiple unknowns.
     splitLhsValuation :: Valuation -> [Solution]
     splitLhsValuation lhsVal = do
       unknownsVal <- mapM (singleUnknownCandidates lhsVal) unknownsList

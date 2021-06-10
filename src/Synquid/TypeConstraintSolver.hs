@@ -31,6 +31,7 @@ module Synquid.TypeConstraintSolver (
   currentAssignment,
   finalizeType,
   finalizeProgram,
+  finalizeWProgram,
   initEnv,
   allScalars,
   condQualsGen,
@@ -342,7 +343,7 @@ simplifyConstraint' _ _ c@(WellFormedMatchCond _ _) = simpleConstraints %= (c :)
 
 -- Intersection type
 -- RHS: (T <: A; T <: B) ==> T <: A /\ B
-simplifyConstraint' _ _ (Subtype env subT superT@(AndT l r) consistent label) = -- $(todo "this shouldn't happen")
+simplifyConstraint' _ _ (Subtype env subT superT@(AndT l r) consistent label) =
   do
     simplifyConstraint (Subtype env subT l consistent (label ++ "+l"))
     simplifyConstraint (Subtype env subT r consistent (label ++ "+r"))
@@ -840,6 +841,15 @@ finalizeProgram p = do
   pass <- use predAssignment
   sol <- uses candidates (solution . head)
   return $ fmap (typeApplySolution sol . typeSubstitutePred pass . typeSubstitute tass) p
+
+
+-- foo :: Monad s => RProgram -> TCSolver s RProgram
+finalizeWProgram :: Monad s => RWProgram -> TCSolver s RWProgram
+finalizeWProgram p = do
+  tass <- use typeAssignment
+  pass <- use predAssignment
+  sol <- uses candidates (solution . head)
+  return $ fmap (map (typeApplySolution sol . typeSubstitutePred pass . typeSubstitute tass)) p
 
 writeLog level msg = do
   maxLevel <- asks _tcSolverLogLevel

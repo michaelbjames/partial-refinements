@@ -1,0 +1,6 @@
+one :: {Int | _v == 1}
+
+add4 :: x:Int -> {Int | _v == x + 4}
+
+myConst :: {Int | _v == 5}
+myConst = add4 one

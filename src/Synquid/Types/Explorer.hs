@@ -34,7 +34,7 @@ data ExplorerParams = ExplorerParams {
   _incrementalChecking :: Bool,           -- ^ Solve subtyping constraints during the bottom-up phase
   _consistencyChecking :: Bool,           -- ^ Check consistency of function's type with the goal before exploring arguments?
   _splitMeasures :: Bool,                 -- ^ Split subtyping constraints between datatypes into constraints over each measure
-  _context :: RProgram -> RProgram,       -- ^ Context in which subterm is currently being generated (used only for logging and symmetry reduction)
+  _context :: RWProgram -> RWProgram,       -- ^ Context in which subterm is currently being generated (used only for logging and symmetry reduction)
   _useMemoization :: Bool,                -- ^ Should enumerated terms be memoized?
   _symmetryReduction :: Bool,             -- ^ Should partial applications be memoized to check for redundancy?
   _sourcePos :: SourcePos,                -- ^ Source position of the current goal
@@ -48,8 +48,8 @@ makeLenses ''ExplorerParams
 data ExplorerState = ExplorerState {
   _typingState :: TypingState,                     -- ^ Type-checking state
   _auxGoals :: [Goal],                             -- ^ Subterms to be synthesized independently
-  _solvedAuxGoals :: Map Id RProgram,              -- Synthesized auxiliary goals, to be inserted into the main program
-  _lambdaLets :: Map Id (Environment, UProgram),   -- ^ Local bindings to be checked upon use (in type checking mode)
+  _solvedAuxGoals :: Map Id RWProgram,              -- Synthesized auxiliary goals, to be inserted into the main program
+  _lambdaLets :: Map Id ([Environment], RWProgram),   -- ^ Local bindings to be checked upon use (in type checking mode)
   _symbolUseCount :: Map Id Int                    -- ^ Number of times each symbol has been used in the program so far
 } deriving (Eq, Ord)
 
@@ -86,4 +86,4 @@ type Explorer s = StateT ExplorerState (
 
 -- | This type encapsulates the 'reconstructTopLevel' function of the type checker,
 -- which the explorer calls for auxiliary goals
-newtype Reconstructor s = Reconstructor (Goal -> Explorer s RProgram)
+newtype Reconstructor s = Reconstructor (Goal -> Explorer s RWProgram)

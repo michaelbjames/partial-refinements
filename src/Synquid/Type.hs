@@ -61,11 +61,22 @@ isFunctionType (FunctionT _ _ _) = True
 -- isFunctionType (LetT _ _ t) = isFunctionType t
 isFunctionType _ = False
 
+argName (FunctionT x _ _) = x
 argType (FunctionT _ t _) = t
 resType (FunctionT _ _ t) = t
 
 isIntersection (AndT _ _) = True
 isIntersection _ = False
+
+isContextual LetT{} = True
+isContextual _ = False
+
+checkWellFormedIntersection t = let
+  topLevel = intersectionToList t
+  in
+    if or $ fmap isIntersection topLevel
+    then error "There's an intersection not on the top level. Check your type."
+    else t
 
 isUnion (UnionT _ _) = True
 isUnion _ = False

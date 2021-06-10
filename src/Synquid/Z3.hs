@@ -119,8 +119,8 @@ assert' ast = do
                   _true
     s <- astToString ast
     -- debug 2 (text "[MonadSMT]: isSat:" </> text s) $
-    debug 3 (text "[MonadSMT]: Z3 query:" </> text str) $
-      assert ast
+    -- debug 3 (text "[MonadSMT]: Z3 query:" </> text str) $
+    assert ast
 
 convertDatatypes :: Map Id RSchema -> [(Id, DatatypeDef)] -> Z3State ()
 convertDatatypes _ [] = return ()
@@ -619,7 +619,7 @@ getAllMUSs' controlLitsAux mustHave cores = do
     debugOutput label fmls = debug 2 (text label <+> pretty fmls) $ return ()
 
 -- | 'debugOutLevel' : Level above which debug output is ignored
-debugOutLevel = 3
+debugOutLevel = 1
 
 -- | 'debug' @level msg@ : output @msg@ at level @level@
 debug level msg = if level <= debugOutLevel then traceShow msg else id

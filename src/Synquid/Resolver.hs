@@ -376,10 +376,11 @@ resolveType (FunctionT x tArg tRes) =
           resolveType tRes
         return $ FunctionT x tArg' tRes'
 
-resolveType (AndT t1 t2) = do
-  t1' <- withLocalEnv $ resolveType t1
-  t2' <- resolveType t2
-  return $ AndT t1' t2'
+resolveType (AndT t1 t2) = error "resolveType AndT"
+  -- do
+  -- t1' <- withLocalEnv $ resolveType t1
+  -- t2' <- resolveType t2
+  -- return $ AndT t1' t2'
 
 resolveType AnyT = return AnyT
 

@@ -107,3 +107,5 @@ data Goal = Goal
       gSynthesize :: Bool
     }
     deriving (Show, Eq, Ord)
+
+type World = (Environment, RType)

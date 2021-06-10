@@ -57,6 +57,9 @@ bothM f (x1, x2) = do
   y2 <- f x2
   return (y1, y2)
 
+addListToZip :: [(a,b)] -> [c] -> [(a,b,c)]
+addListToZip = zipWith (curry (\((a,b), c) -> (a,b,c)))
+
 setCompare :: Ord a => Set a -> Set a -> Ordering
 setCompare x y = case compare (Set.size x) (Set.size y) of
                   EQ -> compare x y

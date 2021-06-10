@@ -28,9 +28,25 @@ import Development.Placeholders (todo)
 
 
 untyped c = Program c AnyT
+untypedWorld c = Program c [AnyT]
 uHole = untyped PHole
+uHoleWorld = untypedWorld PHole
+
 isHole (Program PHole _) = True
 isHole _ = False
+
+makeWorlds :: Environment -> RType -> [World]
+makeWorlds env typ@AndT{} = zip (repeat env) $ intersectionToList typ
+makeWorlds env typ = [(env, typ)]
+
+-- | convertToNWorlds @p n@ : takes the UNTYPED program @p@, and creates @n@
+-- type-worlds, each with the same type, from the untyped program @p@, presumably AnyT.
+convertToNWorlds :: UProgram -> Int -> RWProgram
+convertToNWorlds p n = fmap (\t -> (replicate n t)) p
+
+-- | joinWorlds @p@: Each program node's set of types are merged into one intersection.
+joinWorlds :: RWProgram -> RProgram
+joinWorlds = $(todo "join worlds")
 
 eraseTypes :: RProgram -> UProgram
 eraseTypes = fmap (const AnyT)
@@ -55,7 +71,7 @@ symbolsOf (Program p _) = case p of
   PLet x def body -> symbolsOf def `Set.union` symbolsOf body
   _ -> Set.empty
 
-errorProgram = Program PErr (vart dontCare ftrue)
+errorProgram = Program PErr [(vart dontCare ftrue)]
 isError (Program PErr _) = True
 isError _ = False
 

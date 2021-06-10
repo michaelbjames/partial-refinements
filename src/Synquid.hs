@@ -42,7 +42,7 @@ import Data.List.Split
 
 programName = "synquid"
 versionName = "0.4"
-releaseDate = fromGregorian 2016 8 11
+releaseDate = fromGregorian 2021 6 1
 
 -- | Type-check and synthesize a program, according to command-line arguments
 main = do

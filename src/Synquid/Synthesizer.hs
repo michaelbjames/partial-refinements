@@ -40,15 +40,18 @@ import Debug.Trace
 type HornSolver = FixPointSolver Z3State
 
 
--- | 'synthesize' @templGenParam consGenParams solverParams env typ templ cq tq@ : synthesize a program that has a type @typ@
+-- | 'synthesize' @templGenParam consGenParams solverParams env typ templ cq tq@ :
+-- synthesize a program that has a type @typ@
 -- in the typing environment @env@ and follows template @templ@,
 -- using conditional qualifiers @cquals@ and type qualifiers @tquals@,
--- with parameters for template generation, constraint generation, and constraint solving @templGenParam@ @consGenParams@ @solverParams@ respectively
-synthesize :: ExplorerParams -> HornSolverParams -> Goal -> [Formula] -> [Formula] -> IO (Either ErrorMessage RProgram)
-synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFixPointSolver reconstruction solverParams
+-- with parameters for template generation, constraint generation,
+-- and constraint solving @templGenParam@ @consGenParams@ @solverParams@ respectively
+synthesize :: ExplorerParams -> HornSolverParams -> Goal -> [Formula] -> [Formula] -> IO (Either ErrorMessage RWProgram)
+synthesize explorerParams solverParams goal cquals tquals =
+  evalZ3State $ evalFixPointSolver reconstruction solverParams
   where
     -- | Stream of programs that satisfy the specification or type error
-    reconstruction :: HornSolver (Either ErrorMessage RProgram)
+    reconstruction :: HornSolver (Either ErrorMessage RWProgram)
     reconstruction = let
         typingParams = TypingParams {
                         _condQualsGen = condQuals,

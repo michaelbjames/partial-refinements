@@ -52,3 +52,6 @@ type RSchema = SchemaSkeleton Formula
 
 -- | Mapping from type variables to types
 type TypeSubstitution = Map Id RType
+
+type SchemaVector = [RSchema]
+type TypeVector = [RType]

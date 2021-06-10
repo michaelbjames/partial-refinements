@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
@@ -30,7 +31,7 @@ data Case t = Case
     , -- | Result of the match in this case
       expr :: Program t
     }
-    deriving (Show, Eq, Ord, Functor)
+    deriving (Show, Eq, Ord, Functor, Foldable)
 
 -- | Program skeletons parametrized by information stored symbols, conditionals, and by node types
 data BareProgram t
@@ -52,14 +53,14 @@ data BareProgram t
       PHole
     | -- | Error
       PErr
-    deriving (Show, Eq, Ord, Functor)
+    deriving (Show, Eq, Ord, Functor, Foldable)
 
 -- | Programs annotated with types
 data Program t = Program
     { content :: BareProgram t
     , typeOf :: t
     }
-    deriving (Show, Functor)
+    deriving (Show, Functor, Foldable)
 
 instance Eq (Program t) where
     (==) (Program l _) (Program r _) = l == r
@@ -72,6 +73,9 @@ type UProgram = Program RType
 
 -- | Refinement-typed programs
 type RProgram = Program RType
+
+-- | Program with a set of types, from the worlds.
+type RWProgram = Program TypeVector
 
 -- | User-defined datatype representation
 data DatatypeDef = DatatypeDef
