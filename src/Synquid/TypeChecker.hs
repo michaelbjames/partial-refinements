@@ -18,7 +18,7 @@ import Synquid.Types.Params
 import Synquid.Types.Explorer
 import Synquid.Types.Type
 import Synquid.Types.Rest
-import Synquid.Worlds
+-- import Synquid.Worlds
 
 import qualified Data.Set as Set
 import Data.Set (Set)

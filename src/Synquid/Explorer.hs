@@ -397,6 +397,7 @@ checkE :: MonadHorn s => [World] -> RWProgram -> Explorer s ()
 checkE ws p@(Program pTerm pTyps) = do
   let typs = map snd ws
   ctx <- asks . view $ _1 . context
+  writeLog 1 empty 
   writeLog 2 $ text "Checking" <+> pretty p <+> text "::" <+> pretty typs <+> text "in" $+$ pretty (ctx $ untypedWorld PHole)
 
   -- ifM (asks $ _symmetryReduction . fst) checkSymmetry (return ())
@@ -500,12 +501,13 @@ generateApp :: MonadHorn s =>
 generateApp (enableCut, ctxMod) ws genFun genArg = do
   x <- freshId "X"
   let retTyps = map snd ws
-  let ws' = map (second (FunctionT x AnyT)) ws
+  let functionWorlds = map (second (FunctionT x AnyT)) ws
   pFun <- inContext (\p -> Program (PApp p uHoleWorld) retTyps)
-            $ genFun ws' -- Find all functions that unify with (? -> typ)
+            $ genFun functionWorlds -- Find all functions that unify with (? -> typ)
   -- let FunctionT x tArg tRes = typeOf fun
   let funTypes = typeOf pFun
   let argTypes' = map argType funTypes
+  let realArgs = map (\(FunctionT y _ _) -> y) funTypes
   let retTypes' = map resType funTypes
 
   if argTypes' & head & isFunctionType
@@ -523,8 +525,8 @@ generateApp (enableCut, ctxMod) ws genFun genArg = do
                 $ mbCut (genArg argWorlds)
       writeLog 3 (text "Synthesized argument" <+> pretty arg <+> text "of type" <+> pretty (typeOf arg))
 
-      let ws'' = zip (map fst ws) retTypes'
-      let tRes' = appTypes ws'' arg x
+      let appWorlds = zip (map fst ws) retTypes'
+      let tRes' = appTypes appWorlds arg realArgs 
       return $ Program (PApp pFun arg) tRes'
 
 -- | Make environment inconsistent (if possible with current unknown assumptions)
@@ -556,16 +558,25 @@ appType :: Environment -> RProgram -> Id -> RType -> RType
 appType env (Program (PSymbol name) t) x tRes = substituteInType (isBound env) (Map.singleton x $ symbolAsFormula env name t) tRes
 appType env (Program _ t) x tRes = contextual x t tRes
 
--- | 'appTypes' @ws p x@: The ws contains (env, tRes)_i. This creates
+-- | 'appTypes' @ws p xs@: The ws contains (env, tRes)_i. This creates
 -- a type semantically equivalent to:
--- forall i in worlds; [p/x](w_i tRes).
+-- forall i in worlds; [p/x_i](w_i tRes) if the original function had type (x_i:_ -> _) in w_i
 -- if @p@ is not a variable, instead of a literal substitution, use the
 -- contextual type (LET x : i-th typeOf p) in i-th tRes)_i
-appTypes :: [World] -> RWProgram -> Id -> TypeVector
-appTypes ws (Program (PSymbol name) ts) x = flip map (addListToZip ws ts) $
+appTypes :: [World] -> RWProgram -> [Id] -> TypeVector
+appTypes ws (Program (PSymbol name) ts) xs = 
+  let (envs, tRess) = unzip ws
+   in zipWith4 (\env tRes t x -> appType env (Program (PSymbol name) t) x tRes) envs tRess ts xs
+{-
+appTypes ws (Program (PSymbol name) ts) xs = flip map (addListToZip ws ts) $
     \(env, tRes, t) -> appType env (Program (PSymbol name) t) x tRes
-appTypes ws (Program _ ts) x = flip map (addListToZip ws ts) $
-    \(env, tRes, t) -> contextual x t tRes
+-}
+appTypes ws (Program _ ts) xs = 
+  let (envs, tRess) = unzip ws
+   in zipWith4 (\_ tRes t x -> contextual x t tRes) envs tRess ts xs
+  
+  --flip map (addListToZip ws ts) $
+  --  \(env, tRes, t) -> contextual x t tRes
 
 
 isPolyConstructor (Program (PSymbol name) t) = isTypeName name && (not . Set.null . typeVarsOf $ t)
@@ -689,7 +700,7 @@ instantiate env sch top argNames = do
 
     go subst pSubst intersectionStrat argNames t@(FunctionT x tArg tRes) = do
       x' <- case argNames of
-              [] -> freshVar env "x"
+              [] -> freshVar env "X"
               (argName : _) -> return argName
       liftM2 (FunctionT x') (go subst pSubst intersectionStrat [] tArg) (go subst pSubst intersectionStrat (drop 1 argNames) (renameVar (isBoundTV subst) x x' tArg tRes))
 
