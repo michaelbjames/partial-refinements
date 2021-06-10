@@ -427,7 +427,7 @@ checkSymbol ws name = do
       Just sch -> do
         writeLog 3 $ text "schema:" <+> (pretty sch)
         t' <- symbolType env name sch  -- symbolType will infer a type if it's polymorphic or an intersection
-        logItFrom "reconstructE'-Var-Base" (text "symbol:" <+> (pretty name) <> (text "::") <> (pretty typ) <+> (text "symbol type:")  <+> (pretty t'))
+        -- logItFrom "reconstructE'-Var-Base" (text "symbol:" <+> (pretty name) <> (text "::") <> (pretty typ) <+> (text "symbol type:")  <+> (pretty t'))
         case intersectionStrat of
 
           {- Select one side of an intersection -}
@@ -567,16 +567,9 @@ appTypes :: [World] -> RWProgram -> [Id] -> TypeVector
 appTypes ws (Program (PSymbol name) ts) xs = 
   let (envs, tRess) = unzip ws
    in zipWith4 (\env tRes t x -> appType env (Program (PSymbol name) t) x tRes) envs tRess ts xs
-{-
-appTypes ws (Program (PSymbol name) ts) xs = flip map (addListToZip ws ts) $
-    \(env, tRes, t) -> appType env (Program (PSymbol name) t) x tRes
--}
 appTypes ws (Program _ ts) xs = 
   let (envs, tRess) = unzip ws
    in zipWith4 (\_ tRes t x -> contextual x t tRes) envs tRess ts xs
-  
-  --flip map (addListToZip ws ts) $
-  --  \(env, tRes, t) -> contextual x t tRes
 
 
 isPolyConstructor (Program (PSymbol name) t) = isTypeName name && (not . Set.null . typeVarsOf $ t)
