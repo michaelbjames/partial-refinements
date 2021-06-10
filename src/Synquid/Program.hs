@@ -346,26 +346,36 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
       if fml == ftrue
         then Nothing
         else Just $ substitute (Map.singleton valueVarName (Pred outSort mName [Var (toSort baseT) valueVarName])) fml
+    
+    safeIndex xs i =
+      if i < length xs
+        then Just $ xs !! i
+        else Nothing
 
     contentProperties (mName, MeasureDef (DataS _ vars) a _ _ _) = case elemIndex a vars of
       Nothing -> Nothing
-      Just i -> let (ScalarT elemT fml) = tArgs !! i -- @mName@ "returns" one of datatype's parameters: transfer the refinement onto the value of the measure
-                in let
-                    elemSort = toSort elemT
-                    measureApp = Pred elemSort mName [Var (toSort baseT) valueVarName]
-                   in Just $ substitute (Map.singleton valueVarName measureApp) fml
+      Just i ->
+        case tArgs `safeIndex` i of
+          Nothing -> Nothing
+          Just (ScalarT elemT fml) ->
+            let elemSort = toSort elemT
+                measureApp = Pred elemSort mName [Var (toSort baseT) valueVarName]
+            in Just $ substitute (Map.singleton valueVarName measureApp) fml
     contentProperties (mName, MeasureDef {}) = Nothing
 
     elemProperties (mName, MeasureDef (DataS _ vars) (SetS a) _ _ _) = case elemIndex a vars of
       Nothing -> Nothing
-      Just i -> let (ScalarT elemT fml) = tArgs !! i -- @mName@ is a set of datatype "elements": add an axiom that every element of the set has that property
-                in if fml == ftrue || fml == ffalse || not (Set.null $ unknownsOf fml)
-                    then Nothing
-                    else  let
-                            elemSort = toSort elemT
-                            scopedVar = Var elemSort "_x"
-                            setVal = Pred (SetS elemSort) mName [Var (toSort baseT) valueVarName]
-                          in Just $ All scopedVar (fin scopedVar setVal |=>| substitute (Map.singleton valueVarName scopedVar) fml)
+      Just i ->
+        case tArgs `safeIndex` i of
+          Nothing -> Nothing
+          Just (ScalarT elemT fml) ->
+            if fml == ftrue || fml == ffalse || not (Set.null $ unknownsOf fml)
+              then Nothing
+              else 
+                let elemSort = toSort elemT
+                    scopedVar = Var elemSort "_x"
+                    setVal = Pred (SetS elemSort) mName [Var (toSort baseT) valueVarName]
+                 in Just $ All scopedVar (fin scopedVar setVal |=>| substitute (Map.singleton valueVarName scopedVar) fml)
     elemProperties (mName, MeasureDef {}) = Nothing
 allMeasurePostconditions _ _ _ = []
 
