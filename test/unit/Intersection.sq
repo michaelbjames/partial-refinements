@@ -1,0 +1,8 @@
+
+two :: {Int | _v == 2}
+
+times :: x:Int -> y:Int -> {Int | _v == x * y}
+
+foo :: (x:{Int| _v == 2} -> {Int | _v == 4})
+    ^ (x:{Int| _v == 1} -> {Int | _v == x + 1})
+foo = ??
