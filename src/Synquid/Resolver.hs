@@ -364,23 +364,20 @@ resolveType s@(ScalarT (DatatypeT name tArgs pArgs) fml) = do
 
 resolveType (ScalarT baseT fml) = ScalarT baseT <$> resolveTypeRefinement (toSort baseT) fml
 
-resolveType (FunctionT x tArg tRes) =
-  if x == valueVarName
-    then throwResError $ text valueVarName <+> text "is a reserved variable name"
-    else if x == dontCare
-      then error $ unwords ["resolveType: blank in function type", show (FunctionT x tArg tRes)] -- Should never happen
-      else do
-        tArg' <- resolveType tArg
-        tRes' <- withLocalEnv $ do
-          unless (isFunctionType tArg') (environment %= addVariable x tArg')
-          resolveType tRes
-        return $ FunctionT x tArg' tRes'
+resolveType (FunctionT x tArg tRes)
+  | x == valueVarName = throwResError $ text valueVarName <+> text "is a reserved variable name"
+  | x == dontCare = error $ unwords ["resolveType: blank in function type", show (FunctionT x tArg tRes)]
+  | otherwise = do
+    tArg' <- resolveType tArg
+    tRes' <- withLocalEnv $ do
+      unless (isFunctionType tArg') (environment %= addVariable x tArg')
+      resolveType tRes
+    return $ FunctionT x tArg' tRes'
 
-resolveType (AndT t1 t2) = error "resolveType AndT"
-  -- do
-  -- t1' <- withLocalEnv $ resolveType t1
-  -- t2' <- resolveType t2
-  -- return $ AndT t1' t2'
+resolveType (AndT t1 t2) = do
+  t1' <- withLocalEnv $ resolveType t1
+  t2' <- resolveType t2
+  return $ AndT t1' t2'
 
 resolveType AnyT = return AnyT
 
