@@ -8,6 +8,6 @@ square :: x:Int -> {Int | _v == x * x}
 -- Check the logs. It should be able to rule out square
 -- from consistency. There is no x st x*x == 4 or x*x == x + 1
 
-foo :: (x:{Int| _v == 2} -> {Int | _v == 4})
-    ^ (x:{Int| _v == 1} -> {Int | _v == x + 1})
+foo :: (x:{Int| _v == 2} -> {Int | _v == 4}) ^
+       (x:{Int| _v == 1} -> {Int | _v == x + 1})
 foo = ??

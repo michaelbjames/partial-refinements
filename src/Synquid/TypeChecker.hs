@@ -115,7 +115,7 @@ reconstructFix (Goal funName env (Monotype typ) impl depth _ synth) = do
     recursiveTypeTuple (AndT l r) fml = do
       (l', seenLastLeft) <- recursiveTypeTuple l fml
       (r', seenLastRight) <- recursiveTypeTuple r fml
-      return $ (AndT l' r', seenLastLeft || seenLastRight)
+      return (AndT l' r', seenLastLeft || seenLastRight)
     recursiveTypeTuple t _ = return (t, False)
 
     -- | 'recursiveTypeFirst' @t fml@: type of the recursive call to a function of type @t@ when only the first recursible argument decreases

@@ -120,7 +120,7 @@ solveTypeConstraints = do
   solveHornClauses
   -- TODO: Re-enable this:
   -- There are no checks that the user DIDNT disable this.
-  -- checkTypeConsistency
+  checkTypeConsistency
   cands <- use candidates
   writeLog 3 $ text "[solveTypeConstraints]: Solved Candidates:" $+$ pretty (cands :: [Candidate])
 

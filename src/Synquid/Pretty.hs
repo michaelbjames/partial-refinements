@@ -363,7 +363,7 @@ instance Show SortConstraint where
 
 prettyConstraint :: Constraint -> Doc
 prettyConstraint (Subtype env t1 t2 False label) = hang 4 $ pretty env <+> operator "|-" </> pretty t1 <+> operator "<:" <+> pretty t2 <+> parens (text label)
-prettyConstraint (Subtype env t1 t2 True label) = hang 4 $ pretty env <+> operator "|-" </> pretty t1 <+> operator "/\\" <+> pretty t2 <+> parens (text label)
+prettyConstraint (Subtype env t1 t2 True label) = hang 4 $ pretty env <+> operator "|-" </> pretty t1 <+> operator "/\\:" <+> pretty t2 <+> parens (text label)
 prettyConstraint (WellFormed env t) = hang 4 $ prettyBindings env <+> operator "|-" </> pretty t
 prettyConstraint (WellFormedCond env c) = hang 4 $ prettyBindings env <+> operator "|-" </> pretty c
 prettyConstraint (WellFormedMatchCond env c) = hang 4 $ prettyBindings env <+> operator "|- (match)" </> pretty c
