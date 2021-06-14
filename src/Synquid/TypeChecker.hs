@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 -- | Refinement type reconstruction for programs with holes
 module Synquid.TypeChecker (reconstruct, reconstructTopLevel) where
 
@@ -20,6 +21,7 @@ import Synquid.Types.Type
 import Synquid.Types.Rest
 -- import Synquid.Worlds
 
+import Data.List
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
@@ -155,8 +157,8 @@ reconstructI ws (Program p t') = do
   reconstructI' (zip envs t'') p
 
 reconstructI' :: MonadHorn s => [World] -> BareProgram [RType] -> Explorer s RWProgram
-reconstructI' ws PErr = generateError $ fst $ head ws
-reconstructI' ws PHole = (generateError $ fst $ head ws) `mplus` generateI ws
+reconstructI' ws PErr = generateError $ map fst ws
+reconstructI' ws PHole = (generateError $ map fst ws) `mplus` generateI ws
 reconstructI' ws (PLet x iDef@(Program PFun{} _) iBody) = do
     let envs = map fst ws
     let ts = map snd ws
@@ -214,7 +216,7 @@ reconstructI' ws@((_,ScalarT{}):_) impl = case impl of
         pBody <- inContext (\p -> Program (PLet x pDef p) ts) $ reconstructI ws'' iBody
         return $ Program (PLet x pDef pBody) ts
 
---   PIf (Program PHole AnyT) iThen iElse -> do
+    PIf (Program PHole (AnyT:_)) iThen iElse -> $(todo "reconstructI' if-with-hole-worlds")
 --     cUnknown <- Unknown Map.empty <$> freshId "C"
 --     addConstraint $ WellFormedCond env cUnknown
 --     pThen <- inContext (\p -> Program (PIf (Program PHole boolAll) p (Program PHole t)) t) $ reconstructI (addAssumption cUnknown env) t iThen
@@ -223,64 +225,72 @@ reconstructI' ws@((_,ScalarT{}):_) impl = case impl of
 --     pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) $ reconstructI (addAssumption (fnot cond) env) t iElse
 --     return $ Program (PIf pCond pThen pElse) t
 
---   PIf iCond iThen iElse -> do
---     pCond <- inContext (\p -> Program (PIf p (Program PHole t) (Program PHole t)) t) $ reconstructETopLevel env (ScalarT BoolT ftrue) iCond
---     let (env', ScalarT BoolT cond) = embedContext env $ typeOf pCond
---     pThen <- inContext (\p -> Program (PIf pCond p (Program PHole t)) t) $ reconstructI (addAssumption (substitute (Map.singleton valueVarName ftrue) cond) $ env') t iThen
---     pElse <- inContext (\p -> Program (PIf pCond pThen p) t) $ reconstructI (addAssumption (substitute (Map.singleton valueVarName ffalse) cond) $ env') t iElse
---     return $ Program (PIf pCond pThen pElse) t
+    PIf iCond iThen iElse -> do
+        pCond <- inContext (\p -> Program (PIf p (Program PHole ts) (Program PHole ts)) ts) $
+            reconstructETopLevel (zip envs $ repeat (ScalarT BoolT ftrue)) iCond
+        let (envs', conds) = zipWith embedContext envs (typeOf pCond) &
+                unzip & second (map (\(ScalarT BoolT cond) -> cond))
+        let thenEnvs = zipWith (\env' cond -> addAssumption
+                    (substitute (Map.singleton valueVarName ftrue) cond) env') envs' conds
+        let elseEnvs = zipWith (\env' cond -> addAssumption
+                    (substitute (Map.singleton valueVarName ffalse) cond) env') envs' conds
+        pThen <- inContext (\p -> Program (PIf pCond p (Program PHole ts)) ts) $
+            reconstructI (zip thenEnvs ts) iThen
+        pElse <- inContext (\p -> Program (PIf pCond pThen p) ts) $
+            reconstructI (zip elseEnvs ts) iElse
+        return $ Program (PIf pCond pThen pElse) ts
 
---   PMatch iScr iCases -> do
---     (consNames, consTypes) <- unzip <$> checkCases Nothing iCases
---     let scrT = refineTop env $ shape $ lastType $ head consTypes
---     pScrutinee <- inContext (\p -> Program (PMatch p []) t) $ reconstructETopLevel env scrT iScr
---     let (env', tScr) = embedContext env (typeOf pScrutinee)
---     let scrutineeSymbols = symbolList pScrutinee
---     let isGoodScrutinee = (not $ head scrutineeSymbols `elem` consNames) &&                 -- Is not a value
---                           (any (not . flip Set.member (env ^. constants)) scrutineeSymbols) -- Has variables (not just constants)
---     when (not isGoodScrutinee) $ throwErrorWithDescription $ text "Match scrutinee" </> squotes (pretty pScrutinee) </> text "is constant"
+    PMatch iScr iCases -> do
+        (consNames, consTypes) <- unzip <$> checkCases Nothing iCases
+        let scrTs = zipWith refineTop envs (map (shape . lastType . head) consTypes)
+        pScrutinee <- inContext (\p -> Program (PMatch p []) ts) $ reconstructETopLevel (zip envs scrTs) iScr
+        let (envs', tScrs) = unzip $ zipWith embedContext envs (typeOf pScrutinee)
+        let scrutineeSymbols = symbolList pScrutinee
+        let isGoodScrutinee = (not $ head scrutineeSymbols `elem` consNames) &&                 -- Is not a value
+                            (any (not . flip Set.member ((head envs) ^. constants)) scrutineeSymbols) -- Has variables (not just constants)
+        when (not isGoodScrutinee) $ throwErrorWithDescription $ text "Match scrutinee" </> squotes (pretty pScrutinee) </> text "is constant"
 
---     (env'', x) <- toVar (addScrutinee pScrutinee env') pScrutinee
---     pCases <- zipWithM (reconstructCase env'' x pScrutinee t) iCases consTypes
---     return $ Program (PMatch pScrutinee pCases) t
+        (envs'', xs) <- toVar (map (addScrutinee pScrutinee) envs') pScrutinee
+        pCases <- zipWithM (reconstructCase envs'' xs pScrutinee ts) iCases consTypes
+        return $ Program (PMatch pScrutinee pCases) ts
 
     _ -> reconstructETopLevel ws (untypedWorld impl)
 
     where
-        envs = map fst ws
-        ts = map snd ws
+        (envs, ts) = unzip ws
 --     -- Check that all constructors are known and belong to the same datatype
---     checkCases mName (Case consName args _ : cs) = case Map.lookup consName (allSymbols env) of
---       Nothing -> throwErrorWithDescription $ text "Not in scope: data constructor" </> squotes (text consName)
---       Just consSch -> do
---                         consT <- instantiate env consSch True args -- Set argument names in constructor type to user-provided binders
---                         case lastType consT of
---                           (ScalarT (DatatypeT dtName _ _) _) -> do
---                             case mName of
---                               Nothing -> return ()
---                               Just name -> if dtName == name
---                                              then return ()
---                                              else throwErrorWithDescription $ text "Expected constructor of datatype" </> squotes (text name) </>
---                                                                text "and got constructor" </> squotes (text consName) </>
---                                                                text "of datatype" </> squotes (text dtName)
---                             if arity (toMonotype consSch) /= length args
---                               then throwErrorWithDescription $ text "Constructor" </> squotes (text consName)
---                                             </> text "expected" </> pretty (arity (toMonotype consSch)) </> text "binder(s) and got" <+> pretty (length args)
---                               else ((consName, consT) :) <$> checkCases (Just dtName) cs
---                           _ -> throwErrorWithDescription $ text "Not in scope: data constructor" </> squotes (text consName)
---     checkCases _ [] = return []
+        checkCases :: MonadHorn s => Maybe Id -> [Case TypeVector] -> Explorer s [(Id, TypeVector)]
+        checkCases mName (Case consName args _ : cs) = case Map.lookup consName (allSymbols $ head envs) of
+            Nothing -> throwErrorWithDescription $ text "Not in scope: data constructor" </> squotes (text consName)
+            Just consSch -> do
+                consTs <- forM envs $ \env -> instantiate env consSch True args -- Set argument names in constructor type to user-provided binders
+                case lastType (head consTs) of
+                    (ScalarT (DatatypeT dtName _ _) _) -> do
+                        case mName of
+                            Nothing -> return ()
+                            Just name ->
+                                if dtName == name
+                                then return ()
+                                else throwErrorWithDescription $ text "Expected constructor of datatype" </> squotes (text name) </>
+                                                        text "and got constructor" </> squotes (text consName) </>
+                                                        text "of datatype" </> squotes (text dtName)
+                        if arity (toMonotype consSch) /= length args
+                        then throwErrorWithDescription $ text "Constructor" </> squotes (text consName)
+                                        </> text "expected" </> pretty (arity (toMonotype consSch)) </> text "binder(s) and got" <+> pretty (length args)
+                        else ((consName, consTs) :) <$> checkCases (Just dtName) cs
+                    _ -> throwErrorWithDescription $ text "Not in scope: data constructor" </> squotes (text consName)
+        checkCases _ [] = return []
 
-reconstructCase :: MonadHorn s => Environment -> Formula -> RProgram -> TypeVector -> Case RType -> RType -> Explorer s (Case RType)
-reconstructCase = $(todo "reconstructCase")
--- reconstructCase env scrVar pScrutinee t (Case consName args iBody) consT = do
---   runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
---   consT' <- runInSolver $ currentAssignment consT
---   (syms, ass) <- caseSymbols env scrVar args consT'
---   let caseEnv = foldr (uncurry addVariable) (addAssumption ass env) syms
---   pCaseExpr <- local (over (_1 . matchDepth) (-1 +)) $
---                inContext (\p -> Program (PMatch pScrutinee [Case consName args p]) t) $
---                reconstructI caseEnv t iBody
---   return $ Case consName args pCaseExpr
+reconstructCase :: MonadHorn s => [Environment] -> [Formula] -> RWProgram -> TypeVector -> Case TypeVector -> TypeVector -> Explorer s (Case TypeVector)
+reconstructCase envs scrVars pScrutinee ts (Case consName args iBody) consTs = do
+    zipWithM_ (\consT pScrutrTy -> runInSolver $ matchConsType (lastType consT) pScrutrTy) consTs (typeOf pScrutinee)
+    consTs' <- forM consTs (runInSolver . currentAssignment)
+    (symsPerWorld, assPerWorld) <- unzip <$> (sequence $ zipWith4 caseSymbols envs scrVars (repeat args) consTs')
+    let caseEnvs = zipWith3 (\ass env syms -> foldr (uncurry addVariable) (addAssumption ass env) syms) assPerWorld envs symsPerWorld
+    pCaseExpr <- local (over (_1 . matchDepth) (-1 +)) $
+                inContext (\p -> Program (PMatch pScrutinee [Case consName args p]) ts) $
+                reconstructI (zip caseEnvs ts) iBody
+    return $ Case consName args pCaseExpr
 
 -- | 'reconstructE' @env t impl@ :: reconstruct unknown types and terms in a judgment
 -- @env@ |- @impl@ :: @t@ where @impl@ is an elimination term

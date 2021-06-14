@@ -1,6 +1,10 @@
 one :: {Int | _v == 1}
+four :: {Int | _v == 4}
+seven :: {Int | _v == 7}
 
-add4 :: x:Int -> {Int | _v == x + 4}
+-- add4 :: x:Int -> {Int | _v == x + 4}
+
+add :: x:Int -> y:Int -> {Int | _v == x + y}
 
 myConst :: {Int | _v == 5}
-myConst = add4 one
+myConst = ??

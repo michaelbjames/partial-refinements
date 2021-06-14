@@ -619,7 +619,7 @@ getAllMUSs' controlLitsAux mustHave cores = do
     debugOutput label fmls = debug 2 (text label <+> pretty fmls) $ return ()
 
 -- | 'debugOutLevel' : Level above which debug output is ignored
-debugOutLevel = 1
+debugOutLevel = 3
 
 -- | 'debug' @level msg@ : output @msg@ at level @level@
 debug level msg = if level <= debugOutLevel then traceShow msg else id

@@ -1,0 +1,28 @@
+zero :: {Int | _v == 0}
+one :: {Int | _v == 1}
+
+lt :: x:Int -> y:Int -> {Bool| _v == (x < y)}
+
+true :: {Bool | _v == True}
+false :: {Bool | _v == False}
+
+-- Worlds: Checking: yes; synth: no
+-- Solo: Checking yes. synth yes
+
+
+isNatural :: ({Int | _v < 0} -> {Int | _v == 0})
+            ^ ({Int | _v >= 0} -> {Int | _v == 1})
+-- isNatural = \x. if (lt x zero)
+    -- then zero
+    -- else one
+
+-- isNatural :: x:Int -> {Int | ((x < 0) ==> _v == 0) && (x >= 0 ==> _v == 1)}
+isNatural = ??
+
+-- isNatural = \x .
+--   if 0 < x
+--     then one
+--     else
+--       if x < 0
+--         then zero
+--         else one

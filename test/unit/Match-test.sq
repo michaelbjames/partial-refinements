@@ -1,0 +1,27 @@
+data Maybe a where
+    Nothing :: Maybe a
+    Just :: a -> Maybe a
+
+-- true :: {Bool | _v == True}
+-- false :: {Bool | _v == False}
+
+-- Worlds: Checking: yes; synth: no
+-- Solo: Checking yes. synth yes
+
+
+-- isNatural :: ({Int | _v < 0} -> {Int | _v == 0})
+--             ^ ({Int | _v >= 0} -> {Int | _v == 1})
+-- isNatural = \x. if (lt x zero)
+    -- then zero
+    -- else one
+
+-- fromMaybe :: def:Int -> mb:Maybe Int -> {Int | ((mb == Nothing) ==> (_v == def)) &&
+    -- ((mb == Just 1) ==> _v == 1)}
+    -- ((mb == Just 1) ==> (Just _v == mb))}
+fromMaybe :: (def:Int -> mb:{Maybe Int | _v == Nothing} -> {Int | _v == def}) ^
+             (def:Int -> mb:{Maybe Int | _v == Just 1} -> {Int | Just _v == mb })
+fromMaybe = ??
+-- fromMaybe = \def. \mb.
+--     match mb with
+--         Nothing -> def
+--         Just a -> error

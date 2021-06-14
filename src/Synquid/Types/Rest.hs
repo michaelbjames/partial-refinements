@@ -36,7 +36,7 @@ data Environment = Environment
       _boundPredicates :: [PredSig], -- | Unknown assumptions
       _assumptions :: Set Formula, -- | For polymorphic recursive calls, the shape their types must have
       _shapeConstraints :: Map Id SType, -- | Program terms that has already been scrutinized
-      _usedScrutinees :: [RProgram], -- | In eager match mode, datatype variables that can be scrutinized
+      _usedScrutinees :: [RWProgram], -- | In eager match mode, datatype variables that can be scrutinized
       _unfoldedVars :: Set Id, -- | Subset of symbols that are let-bound
       _letBound :: Set Id, -- | Used in GuardedSubtype intersection strategy. These formulae are only (positive, negative)
       _subtypeGuards :: (Set Formula, Set Formula), -- | Subset of symbols that are constants

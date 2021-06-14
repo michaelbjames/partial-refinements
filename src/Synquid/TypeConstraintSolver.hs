@@ -615,7 +615,7 @@ allPotentialScrutinees env = mapMaybe toFormula $ Map.toList $ symbolsOfArity 0 
   where
     toFormula (x, Monotype t) = case t of
       ScalarT b@(DatatypeT _ _ _) _ ->
-        if Set.member x (env ^. unfoldedVars) && (Program (PSymbol x) t `notElem` (env ^. usedScrutinees))
+        if Set.member x (env ^. unfoldedVars) && (Program (PSymbol x) [] `notElem` (env ^. usedScrutinees))
           then Just $ Var (toSort b) x
           else Nothing
       _ -> Nothing

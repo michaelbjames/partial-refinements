@@ -48,6 +48,12 @@ convertToNWorlds p n = fmap (\t -> (replicate n t)) p
 joinWorlds :: RWProgram -> RProgram
 joinWorlds = $(todo "join worlds")
 
+-- | Assuming all input programs have the same pstructure, create a single world-program,
+-- assigning each node the set of types from that node-layer in the list of RPrograms.
+joinPrograms :: [RProgram] -> RWProgram
+joinPrograms pgms@[(Program p t)] = fmap (\t -> [t]) (head pgms)
+joinPrograms pgms@(_:_) = $(todo "find a way to do this smartly")
+
 eraseTypes :: RProgram -> UProgram
 eraseTypes = fmap (const AnyT)
 
@@ -318,7 +324,7 @@ addAssumption :: Formula -> Environment -> Environment
 addAssumption f = assumptions %~ Set.insert f
 
 -- | 'addScrutinee' @p env@ : @env@ with @p@ marked as having been scrutinized already
-addScrutinee :: RProgram -> Environment -> Environment
+addScrutinee :: RWProgram -> Environment -> Environment
 addScrutinee p = usedScrutinees %~ (p :)
 
 addPositiveGuard :: [Formula] -> Environment -> Environment
@@ -346,7 +352,7 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
       if fml == ftrue
         then Nothing
         else Just $ substitute (Map.singleton valueVarName (Pred outSort mName [Var (toSort baseT) valueVarName])) fml
-    
+
     safeIndex xs i =
       if i < length xs
         then Just $ xs !! i
@@ -371,7 +377,7 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
           Just (ScalarT elemT fml) ->
             if fml == ftrue || fml == ffalse || not (Set.null $ unknownsOf fml)
               then Nothing
-              else 
+              else
                 let elemSort = toSort elemT
                     scopedVar = Var elemSort "_x"
                     setVal = Pred (SetS elemSort) mName [Var (toSort baseT) valueVarName]
