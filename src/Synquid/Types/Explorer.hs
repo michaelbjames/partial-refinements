@@ -39,10 +39,35 @@ data ExplorerParams = ExplorerParams {
   _symmetryReduction :: Bool,             -- ^ Should partial applications be memoized to check for redundancy?
   _sourcePos :: SourcePos,                -- ^ Source position of the current goal
   _explorerLogLevel :: Int,                -- ^ How verbose logging is
-  _intersectStrategy :: IntersectStrategy
+  _intersectStrategy :: IntersectStrategy,
+  _intersectAllMustCheck :: Bool -- ^ Should all worlds check? (default: True)
 }
 
 makeLenses ''ExplorerParams
+
+-- | Parameters for template exploration
+defaultExplorerParams = ExplorerParams {
+  _eGuessDepth = 3,
+  _scrutineeDepth = 1,
+  _matchDepth = 2,
+  _auxDepth = 1,
+  _fixStrategy = AllArguments,
+  _polyRecursion = True,
+  _predPolyRecursion = False,
+  _abduceScrutinees = True,
+  _unfoldLocals = False,
+  _partialSolution = False,
+  _incrementalChecking = False,
+  _consistencyChecking = False,
+  _splitMeasures = True,
+  _useMemoization = False,
+  _symmetryReduction = False,
+  _context = id,
+  _sourcePos = noPos,
+  _explorerLogLevel = 0,
+  _intersectStrategy = InferMedian,
+  _intersectAllMustCheck = True
+}
 
 -- | State of program exploration
 data ExplorerState = ExplorerState {

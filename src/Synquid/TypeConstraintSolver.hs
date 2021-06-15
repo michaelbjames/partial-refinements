@@ -35,7 +35,8 @@ module Synquid.TypeConstraintSolver (
   initEnv,
   allScalars,
   condQualsGen,
-  topLevelGoal
+  topLevelGoal,
+  addQuals
 ) where
 
 import Synquid.Logic

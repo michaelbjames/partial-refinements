@@ -87,6 +87,7 @@ generateI ws@((env, ScalarT{}):_) = do
     maPossible <- runInSolver $ hasPotentialScrutinees env -- Are there any potential scrutinees in scope?
     logItFrom "generateI-ScalarT" $ text "are there scrutinees?" <+> pretty maPossible
     if maEnabled && d > 0 && maPossible then generateMaybeMatchIf ws else generateMaybeIf ws
+generateI _ = error "impossible"
 
 -- | Generate a possibly conditional term type @t@, depending on whether a condition is abduced
 generateMaybeIf :: MonadHorn s => [World] -> Explorer s RWProgram
@@ -95,23 +96,30 @@ generateMaybeIf ws = ifte generateThen (uncurry $ generateElse ws) (generateMatc
 --     -- | Guess an E-term and abduce a condition for it
     generateThen = do
         envAndcUnknowns <- forM ws $ \(env, t) -> do
-            cUnknown <- Unknown Map.empty <$> freshId "C"
+            constrName <- freshId "C"
+            let cUnknown = Unknown Map.empty constrName
+            runInSolver $ TCSolver.addQuals constrName (toSpace Nothing [BoolLit False])
+
             logItFrom "generateThen" $ text "cUnknown:" <+> pretty cUnknown <+> text "for type" <+> pretty t
             addConstraint $ WellFormedCond env cUnknown
             return (addAssumption cUnknown env, cUnknown)
         let (envs', cUnknowns) = unzip envAndcUnknowns
         let ws' = zip envs' (map snd ws)
         logItFrom "generateThen" $ text "got constraint worlds, finding a then in:" </> pretty ws'
-        pThen <- cut $ generateE ws' -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
+        -- TODO: Consider using atLeastOneWorld here.
+        pThen <-  cut (generateE ws') -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
         logItFrom "generateThen" $ text "then found:" <+> pretty pThen
-        conds <- forM cUnknowns (fmap conjunction . currentValuation)
+        conds <- forM cUnknowns (\cUnknown -> conjunction <$> currentValuation cUnknown)
         return (conds, pThen)
 
 -- | Proceed after solution @pThen@ has been found under assumption @cond@
 generateElse :: MonadHorn s => [World] -> [Formula] -> RWProgram -> Explorer s RWProgram
 generateElse ws conds pThen = if all (== ftrue) conds
-    then return pThen -- @pThen@ is valid under no assumptions, in all worlds: return it
+    then do
+      logItFrom "generateElse" $ text "then conditions all True, no need for ite."
+      return pThen -- @pThen@ is valid under no assumptions, in all worlds: return it
     else do -- @pThen@ is valid under a nontrivial assumption, proceed to look for the solution for the rest of the inputs
+        logItFrom "generateElse" $ text "must find a conditional expression."
         pCond <- inContext (\p -> Program (PIf p uHoleWorld uHoleWorld ) ts) $ generateCondition envs conds
 
         cUnknowns <- replicateM (length ws) $ Unknown Map.empty <$> freshId "C"
@@ -137,7 +145,6 @@ tryEliminateBranching branch recheck =
             (return False) -- constraints don't hold: the guard is essential
 
 generateCondition :: MonadHorn s => [Environment] -> [Formula] -> Explorer s RWProgram
--- generateCondition envs conds = $(todo "generateCondition with worlds")
 generateCondition envs fmls = do
     conjuncts <- mapM genConjunct allConjunctsPerWorld
     return $ fmap (\ts -> zipWith (\t fml -> addRefinement t (valBool |=| fml)) ts fmls)
@@ -399,29 +406,42 @@ generateEAt ws d = do
 -- | Perform a gradual check that @p@ has type @typ@ in @env@:
 -- if @p@ is a scalar, perform a full subtyping check;
 -- if @p@ is a (partially applied) function, check as much as possible with unknown arguments
-checkE :: MonadHorn s => [World] -> RWProgram -> Explorer s ()
+checkE :: MonadHorn s => [World] -> RWProgram -> Explorer s [Int]
 checkE ws p@(Program pTerm pTyps) = do
   let typs = map snd ws
   ctx <- asks . view $ _1 . context
+  doesCheckForAll <- asks . view $ _1 . intersectAllMustCheck
   writeLog 2 $ brackets (text "checkE") <+> text "Checking" <+> pretty p <+> text "::" <+> pretty typs <+> text "in" $+$ pretty (ctx $ untypedWorld PHole)
+  let ws' = addListToZip ws pTyps
 
   -- ifM (asks $ _symmetryReduction . fst) checkSymmetry (return ())
 
   incremental <- asks . view $ _1 . incrementalChecking -- Is incremental type checking of E-terms enabled?
   consistency <- asks . view $ _1 . consistencyChecking -- Is consistency checking enabled?
 
-  let ws' = addListToZip ws pTyps
-  forM_ ws' $ \(env, typ, pTyp) -> do
-    when (incremental || arity typ == 0) (addConstraint $ Subtype env pTyp typ False "checkE-subtype") -- Add subtyping check, unless it's a function type and incremental checking is diasbled
-    when (consistency && arity typ > 0) (addConstraint $ Subtype env pTyp typ True "checkE-consistency") -- Add consistency constraint for function types
-    fTyp <- runInSolver $ finalizeType typ
-    logItFrom "checkE" (text "finalized type:" <+> pretty fTyp)
-    pos <- asks . view $ _1 . sourcePos
-    typingState . errorContext .= (pos, text "when checking" </> pretty p <+> text "::" <+> pretty fTyp </> text "in" $+$ pretty (ctx p))
-    runInSolver solveTypeConstraints
-    typingState . errorContext .= (noPos, empty)
-    writeLog 2 $ text "Checking OK:" <+> pretty p <+> text "::" <+> pretty fTyp <+> text "in" $+$ pretty (ctx (untypedWorld PHole))
+  let idxdws = zip ws' ([1..]::[Int])
+  let combinator = if doesCheckForAll
+      then forM idxdws
+      else (\f -> observeAllT $ lift $ msum $ map f idxdws)
 
+  let checker = \((env, typ, pTyp), idx) -> do
+                    logItFrom "checkE" $ pretty (void p) <+> text "chk" <+> pretty typ <+> text "str" <+> pretty pTyp
+                    when (incremental || arity typ == 0) (addConstraint $ Subtype env pTyp typ False "checkE-subtype") -- Add subtyping check, unless it's a function type and incremental checking is diasbled
+                    when (consistency && arity typ > 0) (addConstraint $ Subtype env pTyp typ True "checkE-consistency") -- Add consistency constraint for function types
+                    fTyp <- runInSolver $ finalizeType typ
+                    logItFrom "checkE" (text "finalized type:" <+> pretty fTyp)
+                    pos <- asks . view $ _1 . sourcePos
+                    typingState . errorContext .= (pos, text "when checking" </> pretty p <+> text "::" <+> pretty fTyp </> text "in" $+$ pretty (ctx p))
+                    runInSolver solveTypeConstraints
+                    typingState . errorContext .= (noPos, empty)
+                    writeLog 2 $ text "Checking OK:" <+> pretty p <+> text "::" <+> pretty fTyp <+> text "in" $+$ pretty (ctx (untypedWorld PHole))
+                    return idx
+
+  -- let t1 = map checker ws'
+  -- sequence_ t1
+  worlds <- combinator checker
+  logItFrom "checkE" $ text "combinator complete:" <+> pretty worlds
+  return worlds
 
 checkSymbol :: MonadHorn s => [World] -> Id -> Explorer s RWProgram
 checkSymbol ws name = do
@@ -664,7 +684,12 @@ currentValuation u = do
       typingState . candidates .= cands'
       return $ val (head cands')
 
-inContext ctx f = local (over (_1 . context) (. ctx)) f
+-- inContext ctx f = local (over (_1 . context) (. ctx)) f
+inContext ctx f = withSetting context (. ctx) f
+
+atLeastOneWorld f = withSetting intersectAllMustCheck (const False) f
+
+withSetting setting value f = local (over (_1 . setting) value) f
 
 -- | Replace all bound type and predicate variables with fresh free variables
 -- (if @top@ is @False@, instantiate with bottom refinements instead of top refinements)

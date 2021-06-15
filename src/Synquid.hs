@@ -169,29 +169,6 @@ mode = cmdArgsMode $ synt &=
   program programName &=
   summary (programName ++ " v" ++ versionName ++ ", " ++ showGregorian releaseDate)
 
--- | Parameters for template exploration
-defaultExplorerParams = ExplorerParams {
-  _eGuessDepth = 3,
-  _scrutineeDepth = 1,
-  _matchDepth = 2,
-  _auxDepth = 1,
-  _fixStrategy = AllArguments,
-  _polyRecursion = True,
-  _predPolyRecursion = False,
-  _abduceScrutinees = True,
-  _unfoldLocals = False,
-  _partialSolution = False,
-  _incrementalChecking = False,
-  _consistencyChecking = False,
-  _splitMeasures = True,
-  _useMemoization = False,
-  _symmetryReduction = False,
-  _context = id,
-  _sourcePos = noPos,
-  _explorerLogLevel = 0,
-  _intersectStrategy = InferMedian
-}
-
 -- | Parameters for constraint solving
 defaultHornSolverParams = HornSolverParams {
   pruneQuals = False,
