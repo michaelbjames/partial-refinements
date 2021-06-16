@@ -55,7 +55,7 @@ reconstructTopLevel (Goal funName env (ForallT a sch) impl depth pos s) =
     reconstructTopLevel (Goal funName (addTypeVar a env) sch impl depth pos s)
 reconstructTopLevel (Goal funName env (ForallP sig sch) impl depth pos s) =
     reconstructTopLevel (Goal funName (addBoundPredicate sig env) sch impl depth pos s)
-reconstructTopLevel g@(Goal funName env (Monotype typ@FunctionT {}) impl depth _ synth)
+reconstructTopLevel g@(Goal funName env (Monotype typ) impl depth _ synth)
   | isFunctionType typ || isIntersection typ =
     local (set (_1 . auxDepth) depth) (reconstructFix g)
 reconstructTopLevel (Goal _ env (Monotype t) impl depth _ _) = do
@@ -371,25 +371,25 @@ reconstructE' _ _ = $(todo "reconstructE' with worlds")
 -- return resolved @t'@, otherwise fail
 -- @p@ is expected to be untyped
 checkAnnotation :: MonadHorn s => [(Environment, RType, RType)] -> BareProgram TypeVector  -> Explorer s TypeVector
-checkAnnotation ws p = $(todo "checkAnnotation with worlds")
--- checkAnnotation ws p = do
---   tass <- use (typingState . typeAssignment)
---   case resolveRefinedType (typeSubstituteEnv tass env) t' of
---     Left err -> throwError err
---     Right t'' -> do
---       ctx <- asks . view $ _1 . context
---       writeLog 2 $ text "Checking consistency of type annotation" <+> pretty t'' <+> text "with" <+> pretty t <+> text "in" $+$ pretty (ctx (Program p t''))
---       addConstraint $ Subtype env t'' t True ""
+-- checkAnnotation ws p = $(todo "checkAnnotation with worlds")
+checkAnnotation ws p =
+  forM ws $ \(env, t, t') -> do
+    tass <- use (typingState . typeAssignment)
+    case resolveRefinedType (typeSubstituteEnv tass env) t' of
+      Left err -> throwError err
+      Right t'' -> do
+        ctx <- asks . view $ _1 . context
+        writeLog 2 $ text "Checking consistency of type annotation" <+> pretty t'' <+> text "with" <+> pretty t <+> text "in" $+$ pretty (ctx (Program p [t'']))
+        addConstraint $ Subtype env t'' t True ""
+        fT <- runInSolver $ finalizeType t
+        fT'' <- runInSolver $ finalizeType t''
+        pos <- asks . view $ _1 . sourcePos
+        typingState . errorContext .= (pos, text "when checking consistency of type annotation" </> pretty fT'' </> text "with" </> pretty fT </> text "in" $+$ pretty (ctx (Program p [t''])))
+        runInSolver solveTypeConstraints
+        typingState . errorContext .= (noPos, empty)
 
---       fT <- runInSolver $ finalizeType t
---       fT'' <- runInSolver $ finalizeType t''
---       pos <- asks . view $ _1 . sourcePos
---       typingState . errorContext .= (pos, text "when checking consistency of type annotation" </> pretty fT'' </> text "with" </> pretty fT </> text "in" $+$ pretty (ctx (Program p t'')))
---       runInSolver solveTypeConstraints
---       typingState . errorContext .= (noPos, empty)
-
---       tass' <- use (typingState . typeAssignment)
---       return $ intersection (isBound env) t'' (typeSubstitute tass' t)
+        tass' <- use (typingState . typeAssignment)
+        return $ intersection (isBound env) t'' (typeSubstitute tass' t)
 
 -- | 'etaExpand' @t@ @f@: for a symbol @f@ of a function type @t@, the term @\X0 . ... \XN . f X0 ... XN@ where @f@ is fully applied
 etaExpand ts f = do

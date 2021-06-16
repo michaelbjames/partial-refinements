@@ -411,6 +411,7 @@ checkE ws p@(Program pTerm pTyps) = do
   let typs = map snd ws
   ctx <- asks . view $ _1 . context
   doesCheckForAll <- asks . view $ _1 . intersectAllMustCheck
+  writeLog 2 empty 
   writeLog 2 $ brackets (text "checkE") <+> text "Checking" <+> pretty p <+> text "::" <+> pretty typs <+> text "in" $+$ pretty (ctx $ untypedWorld PHole)
   let ws' = addListToZip ws pTyps
 
