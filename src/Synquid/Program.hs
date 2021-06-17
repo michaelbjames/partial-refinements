@@ -41,8 +41,21 @@ makeWorlds env typ = [(env, typ)]
 
 -- | convertToNWorlds @p n@ : takes the UNTYPED program @p@, and creates @n@
 -- type-worlds, each with the same type, from the untyped program @p@, presumably AnyT.
-convertToNWorlds :: UProgram -> Int -> RWProgram
+-- convertToNWorlds :: UProgram -> Int -> RWProgram
 convertToNWorlds p n = fmap (\t -> (replicate n t)) p
+
+
+-- | replaceWorlds @target idexes replacementType@ :
+-- In an RWProgram, replace the type in worlds indexed by @idxes@ with
+-- @replacementType@.
+replaceWorlds :: RWProgram -> [Int] -> RType -> RWProgram
+replaceWorlds target idxes replacementType = fmap (\tys -> fst $
+    foldr replaceInWorld ([], idxes) (zip tys [1..])) target
+    where
+      replaceInWorld :: (RType, Int) -> ([RType], [Int]) -> ([RType], [Int])
+      replaceInWorld (ty, currIdx) (newTys, r@(toRemove:restToRemove))
+          | currIdx == toRemove = (replacementType:newTys, restToRemove)
+      replaceInWorld (ty, currIdx) (newTys, r) = (ty:newTys, r)
 
 -- | joinWorlds @p@: Each program node's set of types are merged into one intersection.
 joinWorlds :: RWProgram -> RProgram

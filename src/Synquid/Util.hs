@@ -162,3 +162,6 @@ pairGetter g1 g2 = to (\x -> (view g1 x, view g2 x))
 
 asInteger :: String -> Maybe Integer
 asInteger s = if all isDigit s then Just $ read s else Nothing
+
+allSucceeding :: (Traversable t, MonadPlus m) => t (m a) -> m (t a)
+allSucceeding = sequence

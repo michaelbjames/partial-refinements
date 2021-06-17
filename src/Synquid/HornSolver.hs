@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 -- | Solver for second-order constraints
 module Synquid.HornSolver (
@@ -21,6 +22,7 @@ import Synquid.Pretty
 
 import Data.Function
 import Data.List
+import Data.List.Extra hiding (merge, disjoint)
 import Data.Maybe
 import qualified Data.Set as Set
 import Data.Set (Set)
@@ -220,7 +222,7 @@ strengthen qmap extractAssumptions fml@(Binary Implies lhs rhs) sol = do
     writeLog 3 (text "[strengthen]: allAssumptions:" $+$ commaSep (map pretty $ Set.toList allAssumptions))
     lhsValuations <- optimalValuations n (lhsQuals Set.\\ usedLhsQuals) allAssumptions rhs -- all minimal valid valuations of the whole antecedent
     writeLog 3 (text "[strengthen]: Optimal valuations:" $+$ vsep (map pretty lhsValuations))
-    let splitVals vals = nub $ concatMap splitLhsValuation vals
+    let splitVals vals = nubOrd $ concatMap splitLhsValuation vals
     pruned <- ifM (asks semanticPrune)
       (ifM (asks agressivePrune)
         (do
@@ -256,7 +258,7 @@ strengthen qmap extractAssumptions fml@(Binary Implies lhs rhs) sol = do
     splitLhsValuation lhsVal = do
       unknownsVal <- mapM (singleUnknownCandidates lhsVal) unknownsList
       let isValidsplit ss s = Set.unions ss == s && sum (map Set.size ss) == Set.size s
-      guard $ isValidsplit unknownsVal lhsVal
+      guard $ (\x y -> trace ("splitLHSValuation: " ++ (show $ isValidsplit x y)) isValidsplit x y) unknownsVal lhsVal
       Map.fromListWith Set.union <$> zipWithM unsubst unknownsList unknownsVal
 
     -- | Given an unknown @[subst]u@ and its valuation @val@, get all possible valuations of @u@

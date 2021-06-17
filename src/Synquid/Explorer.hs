@@ -95,37 +95,33 @@ generateMaybeIf ws = ifte generateThen (uncurry $ generateElse ws) (generateMatc
   where
 --     -- | Guess an E-term and abduce a condition for it
     generateThen = do
-        envAndcUnknowns <- forM ws $ \(env, t) -> do
-            constrName <- freshId "C"
-            let cUnknown = Unknown Map.empty constrName
-            runInSolver $ TCSolver.addQuals constrName (toSpace Nothing [BoolLit False])
-
+        constrName <- freshId "C"
+        let cUnknown = Unknown Map.empty constrName
+        envs' <- forM ws $ \(env, t) -> do
             logItFrom "generateThen" $ text "cUnknown:" <+> pretty cUnknown <+> text "for type" <+> pretty t
             addConstraint $ WellFormedCond env cUnknown
-            return (addAssumption cUnknown env, cUnknown)
-        let (envs', cUnknowns) = unzip envAndcUnknowns
+            return $ addAssumption cUnknown env
         let ws' = zip envs' (map snd ws)
         logItFrom "generateThen" $ text "got constraint worlds, finding a then in:" </> pretty ws'
         -- TODO: Consider using atLeastOneWorld here.
         pThen <-  cut (generateE ws') -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
         logItFrom "generateThen" $ text "then found:" <+> pretty pThen
-        conds <- forM cUnknowns (\cUnknown -> conjunction <$> currentValuation cUnknown)
-        return (conds, pThen)
+        cond <- conjunction <$> currentValuation cUnknown
+        return (cond, pThen)
 
 -- | Proceed after solution @pThen@ has been found under assumption @cond@
-generateElse :: MonadHorn s => [World] -> [Formula] -> RWProgram -> Explorer s RWProgram
-generateElse ws conds pThen = if all (== ftrue) conds
+generateElse :: MonadHorn s => [World] -> Formula -> RWProgram -> Explorer s RWProgram
+generateElse ws cond pThen = if (== ftrue) cond
     then do
       logItFrom "generateElse" $ text "then conditions all True, no need for ite."
       return pThen -- @pThen@ is valid under no assumptions, in all worlds: return it
     else do -- @pThen@ is valid under a nontrivial assumption, proceed to look for the solution for the rest of the inputs
         logItFrom "generateElse" $ text "must find a conditional expression."
-        pCond <- inContext (\p -> Program (PIf p uHoleWorld uHoleWorld ) ts) $ generateCondition envs conds
+        pCond <- inContext (\p -> Program (PIf p uHoleWorld uHoleWorld ) ts) $ generateCondition envs cond
 
-        cUnknowns <- replicateM (length ws) $ Unknown Map.empty <$> freshId "C"
-        runInSolver $ forM_ (zip conds cUnknowns) $ \(cond, cUnknown) -> do
-            addFixedUnknown (unknownName cUnknown) (Set.singleton $ fnot cond) -- Create a fixed-valuation unknown to assume @!cond@
-        let envs' = zipWith addAssumption cUnknowns envs
+        cUnknown <- Unknown Map.empty <$> freshId "C"
+        runInSolver $ addFixedUnknown (unknownName cUnknown) (Set.singleton $ fnot cond) -- Create a fixed-valuation unknown to assume @!cond@
+        let envs' = map (addAssumption cUnknown) envs
         let ws' = zip envs' ts
         pElse <- optionalInPartial ts $ inContext (\p -> Program (PIf pCond pThen p) ts) $ generateI ws'
         return $ Program (PIf pCond pThen pElse) ts
@@ -144,20 +140,18 @@ tryEliminateBranching branch recheck =
             (const $ return True) -- constraints still hold: @branch@ is a valid solution overall
             (return False) -- constraints don't hold: the guard is essential
 
-generateCondition :: MonadHorn s => [Environment] -> [Formula] -> Explorer s RWProgram
-generateCondition envs fmls = do
-    conjuncts <- mapM genConjunct allConjunctsPerWorld
-    return $ fmap (\ts -> zipWith (\t fml -> addRefinement t (valBool |=| fml)) ts fmls)
+generateCondition :: MonadHorn s => [Environment] -> Formula -> Explorer s RWProgram
+generateCondition envs fml = do
+    conjuncts <- mapM genConjunct allConjuncts
+    return $ fmap (\ts -> map (\t -> addRefinement t (valBool |=| fml)) ts)
       (foldl1 conjoin conjuncts)
     where
-        allConjunctsPerWorld = map (Set.toList . conjunctsOf) fmls
-        genConjunct cs = if all isExecutable cs
-            then let pgms = map fmlToProgram cs
-                in if not (allSame pgms)
-                    then generateError envs
-                    else return $ joinPrograms pgms
+        allConjuncts = Set.toList $ conjunctsOf fml
+        genConjunct :: MonadHorn s => Formula -> Explorer s RWProgram
+        genConjunct c = if isExecutable c
+            then return $ convertToNWorlds (fmlToProgram c) (length envs)
             else do
-              let worlds =  zip envs (map (\c -> ScalarT BoolT $ valBool |=| c) cs)
+              let worlds =  zip envs (replicate (length envs) $ ScalarT BoolT $ valBool |=| c)
               cut (generateE worlds)
         andSymb = Program (PSymbol $ binOpTokens Map.! And) (replicate (length envs) $ toMonotype $ binOpType And)
         conjoin p1 p2 = Program (PApp (Program (PApp andSymb p1) (replicate (length envs) boolAll)) p2) (replicate (length envs) boolAll)
@@ -193,16 +187,16 @@ generateMatch ws = do
                 guard $ all isGoodScrutinee envs'
 
                 (envs'', xs) <- toVar (map (addScrutinee pScrutinee) envs') pScrutinee
-                (pCase, conds, condUnknown) <- cut $ generateFirstCase envs'' xs pScrutinee ts (head ctors)                  -- First case generated separately in an attempt to abduce a condition for the whole match
-                let envsWithAssumption = zipWith addAssumption conds envs''
+                (pCase, cond, condUnknown) <- cut $ generateFirstCase envs'' xs pScrutinee ts (head ctors)                  -- First case generated separately in an attempt to abduce a condition for the whole match
+                let envsWithAssumption = map (addAssumption cond) envs''
                 pCases <- map fst <$> mapM (cut . generateCase envsWithAssumption xs pScrutinee ts) (tail ctors)  -- Generate a case for each of the remaining constructors under the assumption
                 let pThen = Program (PMatch pScrutinee (pCase : pCases)) ts
-                generateElse ws conds pThen                                                               -- Generate the else branch
+                generateElse ws cond pThen    -- Generate the else branch
             _ -> error "impossible"
     where
         (envs, ts) = unzip ws
 
-generateFirstCase :: MonadHorn s => [Environment] -> [Formula] -> RWProgram -> TypeVector -> Id -> Explorer s (Case TypeVector, [Formula], Id)
+generateFirstCase :: MonadHorn s => [Environment] -> [Formula] -> RWProgram -> TypeVector -> Id -> Explorer s (Case TypeVector, Formula, Id)
 -- generateFirstCase = $(todo "generateFirstCase")
 generateFirstCase envs scrVars pScrutinee ts consName = do
   case Map.lookup consName (allSymbols $ head envs) of
@@ -223,14 +217,14 @@ generateFirstCase envs scrVars pScrutinee ts consName = do
                 err <- inContext (\p -> Program (PMatch pScrutinee [Case consName binders p]) ts) $ generateError (map (addAssumption deadUnknown) caseEnvs)
                 deadValuation <- conjunction <$> currentValuation deadUnknown
                 ifte (generateError (map (addAssumption deadValuation) envs)) (const mzero) (return ()) -- The error must be possible only in this case
-                return (err, (replicate (length envs) deadValuation), unknownName deadUnknown))
+                return (err, deadValuation, unknownName deadUnknown))
                 (\(err, deadCond, deadUnknown) -> return $ (Case consName binders err, deadCond, deadUnknown))
                 (do
                     let caseWorlds = zip caseEnvs ts
                     pCaseExpr <- local (over (_1 . matchDepth) (-1 +))
                                     $ inContext (\p -> Program (PMatch pScrutinee [Case consName binders p]) ts)
                                     $ generateI caseWorlds
-                    return $ (Case consName binders pCaseExpr, replicate (length envs) ftrue, dontCare))
+                    return $ (Case consName binders pCaseExpr, ftrue, dontCare))
 
 -- | Generate the @consName@ case of a match term with scrutinee variable @scrName@ and scrutinee type @scrType@
 generateCase :: MonadHorn s => [Environment] -> [Formula] -> RWProgram -> TypeVector -> Id -> Explorer s (Case TypeVector, Explorer s ())
@@ -302,8 +296,7 @@ generateMaybeMatchIf ws = (generateOneBranch >>= generateOtherBranches) `mplus` 
     generateOtherBranches :: MonadHorn s => ([Formula], Formula, RWProgram) -> Explorer s RWProgram
     generateOtherBranches (matchConds, conds, p0) = do
         pThen <- cut $ generateMatchesFor (map (addAssumption conds) envs) matchConds p0 ts
-        -- TODO:(mj) This feels weird to use repeat conds here. But I'm not sure what it should be.
-        generateElse ws (replicate (length ws) conds) pThen
+        generateElse ws conds pThen
 
     generateMatchesFor :: MonadHorn s => [Environment] -> [Formula] -> RWProgram -> TypeVector -> Explorer s RWProgram
     generateMatchesFor envs [] pBaseCase t = return pBaseCase
@@ -411,7 +404,7 @@ checkE ws p@(Program pTerm pTyps) = do
   let typs = map snd ws
   ctx <- asks . view $ _1 . context
   doesCheckForAll <- asks . view $ _1 . intersectAllMustCheck
-  writeLog 2 empty 
+  writeLog 2 empty
   writeLog 2 $ brackets (text "checkE") <+> text "Checking" <+> pretty p <+> text "::" <+> pretty typs <+> text "in" $+$ pretty (ctx $ untypedWorld PHole)
   let ws' = addListToZip ws pTyps
 
