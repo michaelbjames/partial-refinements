@@ -453,6 +453,8 @@ typeNodeCount :: RType -> Int
 typeNodeCount (ScalarT (DatatypeT _ tArgs pArgs) fml) = fmlNodeCount' fml + sum (map typeNodeCount tArgs) + sum (map fmlNodeCount' pArgs)
 typeNodeCount (ScalarT _ fml) = fmlNodeCount' fml
 typeNodeCount (FunctionT _ tArg tRes) = typeNodeCount tArg + typeNodeCount tRes
+typeNodeCount (AndT l r) = typeNodeCount l + typeNodeCount r
+typeNodeCount (UnionT l r) = typeNodeCount l + typeNodeCount r
 
 -- | 'programNodeCount' @p@ : size of @p@ (in AST nodes)
 programNodeCount :: Program t -> Int

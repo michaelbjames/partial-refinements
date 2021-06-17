@@ -257,5 +257,5 @@ runOnFile synquidParams explorerParams solverParams file libs = do
                 parens (text "Goals:" <+> pretty (length results)),
                 parens (text "Measures:" <+> pretty measureCount),
                 parens (text "Spec size:" <+> pretty specSize),
-                parens (text "Solution size:" <+> pretty solutionSize),
-                empty]
+                parens (text "Solution size:" <+> pretty solutionSize)
+                ]
