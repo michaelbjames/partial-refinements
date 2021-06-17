@@ -37,6 +37,7 @@ import Control.Lens
 import Debug.Trace
 import Development.Placeholders
 import Data.Data (Data)
+import qualified Text.PrettyPrint.ANSI.Leijen as L
 
 
 -- | 'runExplorer' @eParams tParams initTS go@ : execute exploration @go@ with explorer parameters @eParams@, typing parameters @tParams@ in typing state @initTS@
@@ -447,7 +448,7 @@ checkE ws p@(Program pTerm pTyps) = do
 checkSymbol :: MonadHorn s => [World] -> Id -> Explorer s RWProgram
 checkSymbol ws name = do
   intersectionStrat <- asks . view $ _1 . intersectStrategy
-  ts <- forM ws $ \(env, typ) -> do
+  ts <- forM ws $ \(env, typ) ->
     case lookupSymbol name (arity typ) (hasSet typ) env of
       Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
       Just sch -> do
@@ -457,34 +458,33 @@ checkSymbol ws name = do
         case intersectionStrat of
 
           {- Select one side of an intersection -}
-          EitherOr -> $(todo "eitherOr")
+          EitherOr -> do -- $(todo "eitherOr") {-
           -- do
-          --   let ts = intersectionToList t'
-          --   let nameShape = head . intersectionToList <$> Map.lookup name (env ^. shapeConstraints)
-          --   writeLog 3 $ text "nameShape:" <+> text (show nameShape)
+            let ts = intersectionToList t'
+            let nameShape = head . intersectionToList <$> Map.lookup name (env ^. shapeConstraints)
 
           --   -- t could be an intersection, loop over choices
-          --   symbolUseCount %= Map.insertWith (+) name 1
-          --   let iterList = zip3 ts (repeat nameShape) [1..]
-          --   let choices = flip map iterList $ \(t, s, idx) -> do
-          --         -- logItFrom "reconstructE" $ brackets (text "PSymbol")
-          --         --   <> text ": making choice"
-          --         --   <+> parens ((text $ show idx) <> text "/" <> (text $ show $ length iterList))
-          --         --   <+> text "for" <+> text name
-          --         --   <> L.nest 4 (L.line <> (text "type:" <+> pretty t) L.<$> (text "shape:" <+> pretty s))
+            symbolUseCount %= Map.insertWith (+) name 1
+            let iterList = zip ts [1..]
+            let choices = flip map iterList $ \(t, idx) -> do
+                  logItFrom "reconstructE" $ brackets (text "PSymbol") 
+                    <> text ": making choice"
+                    <+> parens ((text $ show idx) <> text "/" <> (text $ show $ length iterList))
+                    <+> text "for" <+> text name
+                    <> L.nest 4 (L.line <> (text "type:" <+> pretty t) L.<$> (text "shape:" <+> pretty nameShape))
 
-          --         let p = Program (PSymbol name) t
-          --         -- if the shape was an intersection, all parts of the intersection should all have the same shape.
-          --         case s of
-          --           Nothing -> return ()
-          --           Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False "var-eitherOr-shape-match"
-          --         checkE env typ p
-          --         return p
-          --   msum choices
+                  let p = Program (PSymbol name) t
+                  -- if the shape was an intersection, all parts of the intersection should all have the same shape.
+                  case nameShape of
+                    Nothing -> return ()
+                    Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False "var-eitherOr-shape-match"
+                  -- _ <- checkE [(env, typ)] (convertToNWorlds p 1)
+                  -- return $ convertToNWorlds p 1
+                  return t
+            msum choices
 
           {- Base rule -}
-          _ -> do
-            return t'
+          _ -> return t'
   symbolUseCount %= Map.insertWith (+) name 1
   let p = Program (PSymbol name) ts
   checkE ws p

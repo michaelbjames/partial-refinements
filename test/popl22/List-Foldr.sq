@@ -1,0 +1,22 @@
+data List a where
+  Nil :: List a
+  Cons :: x:a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+{-
+The core idea of this fold doesn't specify a direction. However,
+the left-fold would not prove under this spec. The left direction
+is not inductive!
+-}
+foldr ::
+  (xs: List a -> f: (a -> b -> b) -> b -> b) ^
+  (xs: List a -> f: (x:a -> acc:Int -> {Int | _v == acc + 1})
+                   -> seed: {Int|_v == 0} -> {Int | _v == len xs})
+foldr = \xs. \f. \seed.
+  match xs with
+    Nil -> seed
+    -- Cons y ys -> foldr ys f (f y seed) -- foldl
+    Cons y ys -> f y (foldr ys f seed) -- foldr

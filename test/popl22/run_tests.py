@@ -24,7 +24,9 @@ STACK_ARGS = ['--silent']
 DEFAULT_ARGS = ['--print-stats']
 RUN_SYNQUID = ['stack'] + STACK_ARGS + ['run', '--', 'synquid'] + DEFAULT_ARGS
 
-VARIANTS = {}
+VARIANTS = {
+    'either/or' : ['--intersect=EitherOr']
+}
 
 TIMEOUT_SEC = 15
 
@@ -68,7 +70,18 @@ class Benchmark:
 
 BENCHMARKS = [
     Benchmark("List-Inc", "increment list"),
-    Benchmark("List-Sum", "sum list")
+    Benchmark("List-Sum", "sum list"),
+    Benchmark("All-Neg", "all negative"),
+    Benchmark("List-Dict-Contains", "dictionary contains"),
+    Benchmark("List-Dict-Find", "dictionary find"),
+    Benchmark("List-Even-Parity", "list length even", "not"),
+    Benchmark("List-Fold", "foldl"),
+    Benchmark("List-Last", "last list element"),
+    Benchmark("List-Length", "list length"),
+    Benchmark("List-Snoc", "cons at end"),
+    Benchmark("List-toFalse", "map const false"),
+    Benchmark("TakeWhile", "take while")
+
 ]
 
 class Result:
@@ -78,7 +91,14 @@ class Result:
         self.time = time
         self.stats = stats
         self.output = output
-        self.variant_times = {}
+        self.variant_results = {}
+
+class VariantResult:
+    def __init__ (self, status, time, output = ''):
+        self.status = status
+        self.time = time
+        self.output = output
+
 
 class Stats:
     def __init__ (self, goal_count, code_size, spec_size):
@@ -98,28 +118,35 @@ def get_stats(output):
 def run_file(filename, args):
     filepath = filename + '.sq' 
     cmd = " ".join(RUN_SYNQUID + args + [filepath])
+    res = None
     try:
         start = time.time()
         completed = subprocess.run(cmd, timeout=TIMEOUT_SEC, check=True, shell=True, capture_output = True)
         end = time.time()
         stats = get_stats(completed.stdout)
-        return Result(filename, SUCCESS_STATUS, end - start, stats, completed.stdout) # TODO: get stats, write output to file
+        res = Result(filename, SUCCESS_STATUS, end - start, stats, completed.stdout) # TODO: get stats, write output to file
     except subprocess.TimeoutExpired as e:
-        return Result(filename, TIMEOUT_STATUS, -1, '-')
+        res = Result(filename, TIMEOUT_STATUS, -1, nostats, '-')
     except subprocess.CalledProcessError as e:
-        return Result(filename, FAILED_STATUS, -1, nostats, e.stderr) 
+        res = Result(filename, FAILED_STATUS, -1, nostats, e.stderr) 
+    for (vid, vopts) in VARIANTS.items():
+        run_variant(filename, args, vid, vopts, res)
+    return res
 
-def run_variant(filepath, args, extra_args):
+def run_variant(filename, args, variant_id, extra_args, res):
+    filepath = filename + '.sq'
     cmd = " ".join(RUN_SYNQUID + args + extra_args + [filepath])
+    v = None
     try:
-        subprocess.run(cmd, timeout=TIMEOUT_SEC,
-            check=True, shell=True,
-            stderr=FNULL, stdout=FNULL)
-        return SUCCESS_STATUS
+        start = time.time()
+        completed = subprocess.run(cmd, timeout=TIMEOUT_SEC, check=True, shell=True, capture_output = True)
+        end = time.time()
+        v = VariantResult(SUCCESS_STATUS, end - start, completed.stdout)
     except subprocess.TimeoutExpired as e:
-        return TIMEOUT_STATUS
+        v = VariantResult(TIMEOUT_STATUS, -1, '-')
     except subprocess.CalledProcessError as e:
-        return FAILED_STATUS
+        v = VariantResult(FAILED_STATUS, -1, e.stderr) 
+    res.variant_results[variant_id] = v
 
 
 def sort_dir(original_dir, status):
@@ -145,14 +172,18 @@ def worker(bench, return_dict):
     if return_dict is not None:
         return_dict[filename] = res
 
-def print_results(status):
-    for (filename, res) in status:
-        s = res.status
-        t = res.time
-        if t > 0:
-          print(f"{filename}: {t:.2}s")
-        else:
-          print(f"{filename}: {s}")
+def print_result(name, status, time):
+    if time > 0:
+        print(f"  {name}: {time:.2}s")
+    else:
+        print(f"  {name}: {status}")
+
+def print_results(statuses):
+    for (filename, res) in statuses:
+        print(f"{filename}:")
+        print_result("default", res.status, res.time)
+        for (v, vres) in res.variant_results.items():
+            print_result(v, vres.status, vres.time)
 
 def main():
     worklist = []

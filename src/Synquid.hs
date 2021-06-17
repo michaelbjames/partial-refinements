@@ -150,7 +150,7 @@ synt = Synthesis {
   memoize             = False           &= help ("Use memoization (default: False)") &= name "z",
   symmetry            = False           &= help ("Use symmetry reductions (default: False)") &= name "s",
   lfp                 = False           &= help ("Use least fixpoint solver (only works for type checking, default: False)") &= groupname "Solver parameters",
-  Main.intersection = GuardedPowerset    &= help ("Which ruleset to use for intersection on vars?"),
+  Main.intersection   = GuardedPowerset    &= help ("Which ruleset to use for intersection on vars?"),
   bfs_solver          = False           &= help ("Use BFS instead of MARCO to solve second-order constraints (default: False)"),
   resolve             = False           &= help ("Resolve only; no type checking or synthesis (default: False)"),
   out_file            = Nothing         &= help ("Generate Haskell output file (default: none)") &= typFile &= name "o" &= opt "" &= groupname "Output",
