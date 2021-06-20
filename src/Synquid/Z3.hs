@@ -549,15 +549,14 @@ getAllMUSs' controlLitsAux mustHave cores = do
         Unsat -> do                 -- Unsatisfiable: extract MUS
           mus <- getUnsatCore >>= minimize
           blockUp mus
+          musStrs <- mapM litToFml mus
+          debugOutput "found MUSes:" musStrs
+
           unsatFmls <- mapM litToFml (delete mustHave mus)
-          if (mustHave `elem` mus) || (unsatFmls == [ffalse])
-            then do
-                  when (unsatFmls == [ffalse]) (debug 2 (text "MUS solution is vacuous") $ return ())
-                  debugOutput "MUS" unsatFmls
-                  getAllMUSs' controlLitsAux mustHave (unsatFmls : cores)
-            else do
-                  debugOutput "MUSeless" unsatFmls
-                  getAllMUSs' controlLitsAux mustHave cores
+          when (mustHave `elem` mus) (debug 2 (text "Original Synquid MUS") $ return ())
+          when (unsatFmls == [ffalse]) (debug 2 (text "MUS solution is vacuous") $ return ())
+          debugOutput "MUS" unsatFmls
+          getAllMUSs' controlLitsAux mustHave (unsatFmls : cores)
         Sat -> do
           mss <- maximize seed rest  -- Satisfiable: expand to MSS
           blockDown mss

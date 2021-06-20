@@ -1,23 +1,24 @@
-zero :: {Int | _v == 0}
-one :: {Int | _v == 1}
+qualifier {x >= 0}
+-- zero :: {Int | _v == 0}
+-- one :: {Int | _v == 1}
 
-lt :: x:Int -> y:Int -> {Bool| _v == (x < y)}
+-- lt :: x:Int -> y:Int -> {Bool| _v == (x < y)}
 
-true :: {Bool | _v == True}
-false :: {Bool | _v == False}
+-- true :: {Bool | _v == True}
+-- false :: {Bool | _v == False}
 
 -- Worlds: Checking: yes; synth: no
 -- Solo: Checking yes. synth yes
 
 
-isNatural :: ({Int | _v < 0} -> {Int | _v == 0})
-            ^ ({Int | _v >= 0} -> {Int | _v == 1})
+-- isNatural :: ({Int | _v < 0} -> {Int | _v == 0})
+            -- ^ ({Int | _v >= 0} -> {Int | _v == 1})
 -- isNatural = \x. if (lt x zero)
     -- then zero
     -- else one
 
 -- isNatural :: x:Int -> {Int | ((x < 0) ==> _v == 0) && (x >= 0 ==> _v == 1)}
-isNatural = ??
+-- isNatural = ??
 
 -- isNatural = \x .
 --   if 0 < x
@@ -26,3 +27,40 @@ isNatural = ??
 --       if x < 0
 --         then zero
 --         else one
+
+
+-- 1 world succeeds unconditionally
+-- 1 world succeeds conditionally
+-- many worlds succeed unconditionally
+-- many worlds succeed conditionally
+{-
+
+bool :: (x: a -> y: a -> {Bool | _v == True} -> {a | _v == x}) ^
+        (x: a -> y: a -> {Bool | _v == False} -> {a | _v == y})
+bool = \x. \y. \p. if p
+    then x -- synthesizes unconditionally
+    else y
+
+boolAnd :: x: a -> y: a -> {Bool | _v == True} -> {Bool | _v == True} -> {a | _v == x} ^
+           x: a -> y: a -> {Bool | _v == False} -> {Bool | _v == False} -> {a | _v == x} ^
+           x: a -> y: a -> {Bool | _v == True} -> {Bool | _v == False} -> {a | _v == x} ^
+           x: a -> y: a -> {Bool | _v == False} -> {Bool | _v == True} -> {a | _v == y}
+boolAnd = \x. \y. \p. \q. if p
+    then x
+    else if q
+        then x
+        else y
+
+-}
+
+
+-- myIf :: x:a -> y:a -> p:Bool -> {a | ((p == True) ==> (_v == x)) && ((p == False) ==> (_v == y))}
+-- myIf :: (x:a -> y:a -> p:{Bool | _v == True} -> {a | _v == x}) ^
+        -- (x:a -> y:a -> p:{Bool | _v == False} -> {a | _v == y})
+-- myIf = ??
+type Nat = {Int | _v >= 0}
+
+flip :: x:Int -> {Int | _v == (-1) * x}
+
+abs :: (Int -> Int) ^ ({Int | _v == -1} -> {Int | _v == 1}) ^ (Nat -> Nat)
+abs = ??

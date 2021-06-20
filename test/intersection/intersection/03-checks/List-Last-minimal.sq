@@ -20,10 +20,11 @@ list_last ::
   (xs:{List Int | len _v == 0} -> {Maybe Int | _v == Nothing}) ^
   (xs:{List Int | _v == (Cons 1 Nil)} -> {Maybe Int | _v == Just 1}) ^
   (xs:{List {Int | _v == 1} | len _v > 0} -> {Maybe Int | _v == Just 1})
-list_last = \xs .
-  match xs with
-    Nil -> Nothing
-    Cons x rest ->
-      match rest with
-        Nil -> Just x
-        Cons y ys -> list_last rest
+list_last = ??
+-- list_last = \xs .
+--   match xs with
+--     Nil -> Nothing
+--     Cons x rest ->
+--       match rest with
+--         Nil -> Just x
+--         Cons y ys -> list_last rest
