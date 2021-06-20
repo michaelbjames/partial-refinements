@@ -342,7 +342,7 @@ generateE ws = do
   logItFrom "generateE" $ text "got program to check:" <+> pretty (Program pTerm pTyps)
   runInSolver $ isFinal .= True >> solveTypeConstraints >> isFinal .= False  -- Final type checking pass that eliminates all free type variables
   logItFrom "generateE" $ text "all FV gone in type"
-  newGoals <- uses auxGoals (map gName)                                      -- Remember unsolved auxiliary goals
+  newGoals <- uses auxGoals (map aName)                                      -- Remember unsolved auxiliary goals
   generateAuxGoals                                                           -- Solve auxiliary goals
   logItFrom "generateE" $ text "solved all aux goals"
   pTyps' <- mapM (runInSolver . currentAssignment) pTyps                     -- Finalize the type of the synthesized term
@@ -539,11 +539,12 @@ generateApp (enableCut, ctxMod) ws genFun genArg = do
 
   if argTypes' & head & isFunctionType
     then do -- Higher-order argument: its value is not required for the function type, return a placeholder and enqueue an auxiliary goal
-      $(todo "HOF goals, should they be world goals? I think yes.")
-      -- d <- asks . view $ _1 . auxDepth
-      -- when (d <= 0) $ writeLog 2 (text "Cannot synthesize higher-order argument: no auxiliary functions allowed") >> mzero
-      -- arg <- enqueueGoal env tArg (untyped PHole) (d - 1)
-      -- return $ Program (PApp fun arg) tRes
+      d <- asks . view $ _1 . auxDepth
+      when (d <= 0) $ writeLog 2 (text "Cannot synthesize higher-order argument: no auxiliary functions allowed") >> mzero
+      let env = fst $ head ws
+      let nWorlds = length ws
+      arg <- enqueueGoal ws (Program PHole (replicate nWorlds AnyT)) (d - 1)
+      return $ Program (PApp pFun arg) retTypes'
     else do -- First-order argument: generate now
       let mbCut = id -- if (not enableCut) && Set.member x (varsOfType tRes) then id else cut
       let argWorlds = zip (map fst ws) argTypes'
@@ -605,10 +606,10 @@ appTypes ws (Program _ ts) xs =
 
 isPolyConstructor (Program (PSymbol name) t) = isTypeName name && (not . Set.null . typeVarsOf $ t)
 
-enqueueGoal env typ impl depth = do
-  g <- freshVar env "f"
-  auxGoals %= ((Goal g env (Monotype typ) impl depth noPos True) :)
-  return $ Program (PSymbol g) typ
+enqueueGoal ws impl depth = do
+  name <- freshVar (fst $ head ws) "f"
+  auxGoals %= (AuxGoal name ws impl depth noPos :)
+  return $ Program (PSymbol name) (map snd ws) 
 
 {- Utility -}
 
@@ -794,9 +795,9 @@ generateAuxGoals = do
     (g : gs) -> do
         auxGoals .= gs
         writeLog 2 $ text "PICK AUXILIARY GOAL" <+> pretty g
-        Reconstructor reconstructTopLevel <- asks . view $ _3
-        p <- reconstructTopLevel g
-        solvedAuxGoals %= Map.insert (gName g) (etaContract p)
+        Reconstructor reconstructWorlds <- asks . view $ _3
+        p <- reconstructWorlds g
+        solvedAuxGoals %= Map.insert (aName g) (etaContract p)
         generateAuxGoals
   where
     etaContract p = case etaContract' [] (content p) of

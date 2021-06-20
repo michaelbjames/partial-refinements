@@ -170,7 +170,7 @@ fmlToUProgram (SetLit _ (f:fs)) = Program (PApp ins (curriedApp (fmlToUProgram f
     curriedApp p (f:fs) = curriedApp (Program (PApp p (fmlToUProgram f)) AnyT) fs
 
 -- | 'renameAsImpl' @p t@: change argument names in function type @t@ to be the same as in the abstraction @p@
-renameAsImpl :: (Id -> Bool) -> UProgram -> RType -> RType
+renameAsImpl :: (Id -> Bool) -> Program t -> RType -> RType
 renameAsImpl isBound = renameAsImpl' Map.empty
   where
     renameAsImpl' subst (Program (PFun y pRes) _) (FunctionT x tArg tRes) = case tArg of

@@ -382,6 +382,11 @@ instance Pretty Goal where
 prettySpec g@(Goal name _ _ _ _ _ _) = text name <+> operator "::" <+> pretty (unresolvedSpec g)
 prettySolution (Goal name _ _ _ _ _ _) prog = text name <+> operator "=" </> pretty prog
 
+instance Pretty AuxGoal where
+  pretty (AuxGoal name ws impl depth _) = text name <+> text "of depth:" <+> pretty depth <+> text "in worlds" <+> pretty ws
+
+
+
 {- Input language -}
 
 instance Pretty ConstructorSig where

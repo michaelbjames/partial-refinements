@@ -108,4 +108,12 @@ data Goal = Goal
     }
     deriving (Show, Eq, Ord)
 
+data AuxGoal = AuxGoal {
+    aName :: Id
+  , aWorlds :: [World]
+  , aImpl :: RWProgram
+  , aDepth :: Int
+  , aSourcePos :: SourcePos
+} deriving (Show, Eq, Ord)
+
 type World = (Environment, RType)

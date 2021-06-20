@@ -42,7 +42,7 @@ import Debug.Trace
 reconstruct :: MonadHorn s => ExplorerParams -> TypingParams -> Goal -> s (Either ErrorMessage RWProgram)
 reconstruct eParams tParams goal = do
     initTS <- initTypingState (gEnvironment goal) (gSpec goal)
-    runExplorer (eParams { _sourcePos = gSourcePos goal }) tParams (Reconstructor reconstructTopLevel) initTS go
+    runExplorer (eParams { _sourcePos = gSourcePos goal }) tParams (Reconstructor reconstructWorldsTopLevel) initTS go
   where
     go :: MonadHorn s => Explorer s RWProgram
     go = do
@@ -68,7 +68,7 @@ reconstructTopLevel (Goal _ env (Monotype t) impl depth _ _) = do
 reconstructFix :: MonadHorn s => Goal -> Explorer s RWProgram
 reconstructFix (Goal funName env (Monotype typ) impl depth _ synth) = do
   let typ' = renameAsImpl (isBound env) impl typ
-  recCalls <- runInSolver (currentAssignment typ') >>= recursiveCalls synth
+  recCalls <- runInSolver (currentAssignment typ') >>= recursiveCalls funName env synth
   polymorphic <- asks . view $ _1 . polyRecursion
   predPolymorphic <- asks . view $ _1 . predPolyRecursion
   let tvs = env ^. boundTypeVars
@@ -83,78 +83,103 @@ reconstructFix (Goal funName env (Monotype typ) impl depth _ synth) = do
   p <- inContext ctx $ reconstructI ws impl'
   return $ ctx p
 
+reconstructWorldsTopLevel :: MonadHorn s => AuxGoal -> Explorer s RWProgram
+reconstructWorldsTopLevel (AuxGoal funName [] impl _ _) = error "reconstructWorldsTopLevel: no worlds"
+reconstructWorldsTopLevel (AuxGoal funName ws impl depth _) = do
+  ws' <- mapM adjustWorld ws 
+  let placeholderWorld = head ws
+  recCallsPlaceholder <- runInSolver (currentAssignment (snd placeholderWorld)) >>= recursiveCalls funName (fst placeholderWorld) True
+  let ctx p = if null recCallsPlaceholder then p else Program (PFix (map fst recCallsPlaceholder) p) (map snd ws')
+  -- p <- inContext ctx $ reconstructI ws impl
+  p <- local (set (_1 . auxDepth) depth) $ inContext ctx $ reconstructI ws impl
+  return $ ctx p
   where
+    adjustWorld (env, goal) = do
+      let goal' = renameAsImpl (isBound env) impl goal
+      recCalls <- runInSolver (currentAssignment goal') >>= recursiveCalls funName env True    
+      polymorphic <- asks . view $ _1 . polyRecursion
+      predPolymorphic <- asks . view $ _1 . predPolyRecursion
+      let tvs = env ^. boundTypeVars
+      let pvs = env ^. boundPredicates
+      let predGeneralized sch = if predPolymorphic then foldr ForallP sch pvs else sch -- Version of @t'@ generalized in bound predicate variables of the enclosing function
+      let typeGeneralized sch = if polymorphic then foldr ForallT sch tvs else sch -- Version of @t'@ generalized in bound type variables of the enclosing function
+      let env' = foldr (\(f, t) -> addPolyVariable f (typeGeneralized . predGeneralized . Monotype $ t) . (shapeConstraints %~ Map.insert f (shape goal'))) env recCalls
+      return (env', goal')
+  -- modify all worlds
+  --   add appropriate recursive call
+  -- reconstructI
 
 
-    -- | 'recursiveCalls' @t@: name-type pairs for recursive calls to a function with type @t@ (0 or 1)
-    recursiveCalls False t = return [(funName, t)]
-    recursiveCalls _ t = do
-      fixStrategy <- asks . view $ _1 . fixStrategy
-      case fixStrategy of
-        AllArguments -> do recType <- fst <$> recursiveTypeTuple t ffalse; if recType == t then return [] else return [(funName, recType)]
-        FirstArgument -> do recType <- recursiveTypeFirst t; if recType == t then return [] else return [(funName, recType)]
-        DisableFixpoint -> return []
-        Nonterminating -> return [(funName, t)]
+-- | 'recursiveCalls' @t@: name-type pairs for recursive calls to a function with type @t@ (0 or 1)
+recursiveCalls funName _ False t = return [(funName, t)]
+recursiveCalls funName env _ t = do
+  fixStrategy <- asks . view $ _1 . fixStrategy
+  case fixStrategy of
+    AllArguments -> do recType <- fst <$> recursiveTypeTuple env t ffalse; if recType == t then return [] else return [(funName, recType)]
+    FirstArgument -> do recType <- recursiveTypeFirst env t; if recType == t then return [] else return [(funName, recType)]
+    DisableFixpoint -> return []
+    Nonterminating -> return [(funName, t)]
 
-    -- | 'recursiveTypeTuple' @t fml@: type of the recursive call to a function of type @t@ when a lexicographic tuple of all recursible arguments decreases;
-    -- @fml@ denotes the disjunction @x1' < x1 || ... || xk' < xk@ of strict termination conditions on all previously seen recursible arguments to be added to the type of the last recursible argument;
-    -- the function returns a tuple of the weakend type @t@ and a flag that indicates if the last recursible argument has already been encountered and modified
-    recursiveTypeTuple (FunctionT x tArg tRes) fml =
-      case terminationRefinement x tArg of
-        Nothing -> do
-          (tRes', seenLast) <- recursiveTypeTuple tRes fml
-          return (FunctionT x tArg tRes', seenLast)
-        Just (argLt, argLe) -> do
-          y <- freshVar env "x"
-          let yForVal = Map.singleton valueVarName (Var (toSort $ baseTypeOf tArg) y)
-          (tRes', seenLast) <- recursiveTypeTuple (renameVar (isBound env) x y tArg tRes) (fml `orClean` substitute yForVal argLt)
-          if seenLast
-            then return (FunctionT y (addRefinement tArg argLe) tRes', True) -- already encountered the last recursible argument: add a nonstrict termination refinement to the current one
-            -- else return (FunctionT y (addRefinement tArg (fml `orClean` argLt)) tRes', True) -- this is the last recursible argument: add the disjunction of strict termination refinements
-            else if fml == ffalse
-                  then return (FunctionT y (addRefinement tArg argLt) tRes', True)
-                  else return (FunctionT y (addRefinement tArg (argLe `andClean` (fml `orClean` argLt))) tRes', True) -- TODO: this version in incomplete (does not allow later tuple values to go up), but is much faster
-    recursiveTypeTuple (AndT l r) fml = do
-      (l', seenLastLeft) <- recursiveTypeTuple l fml
-      (r', seenLastRight) <- recursiveTypeTuple r fml
-      return (AndT l' r', seenLastLeft || seenLastRight)
-    recursiveTypeTuple t _ = return (t, False)
+-- | 'recursiveTypeTuple' @t fml@: type of the recursive call to a function of type @t@ when a lexicographic tuple of all recursible arguments decreases;
+-- @fml@ denotes the disjunction @x1' < x1 || ... || xk' < xk@ of strict termination conditions on all previously seen recursible arguments to be added to the type of the last recursible argument;
+-- the function returns a tuple of the weakend type @t@ and a flag that indicates if the last recursible argument has already been encountered and modified
+recursiveTypeTuple env (FunctionT x tArg tRes) fml =
+  case terminationRefinement env x tArg of
+    Nothing -> do
+      (tRes', seenLast) <- recursiveTypeTuple env tRes fml
+      return (FunctionT x tArg tRes', seenLast)
+    Just (argLt, argLe) -> do
+      y <- freshVar env "x"
+      let yForVal = Map.singleton valueVarName (Var (toSort $ baseTypeOf tArg) y)
+      (tRes', seenLast) <- recursiveTypeTuple env (renameVar (isBound env) x y tArg tRes) (fml `orClean` substitute yForVal argLt)
+      if seenLast
+        then return (FunctionT y (addRefinement tArg argLe) tRes', True) -- already encountered the last recursible argument: add a nonstrict termination refinement to the current one
+        -- else return (FunctionT y (addRefinement tArg (fml `orClean` argLt)) tRes', True) -- this is the last recursible argument: add the disjunction of strict termination refinements
+        else if fml == ffalse
+              then return (FunctionT y (addRefinement tArg argLt) tRes', True)
+              else return (FunctionT y (addRefinement tArg (argLe `andClean` (fml `orClean` argLt))) tRes', True) -- TODO: this version in incomplete (does not allow later tuple values to go up), but is much faster
+recursiveTypeTuple env (AndT l r) fml = do
+  (l', seenLastLeft) <- recursiveTypeTuple env l fml
+  (r', seenLastRight) <- recursiveTypeTuple env r fml
+  return (AndT l' r', seenLastLeft || seenLastRight)
+recursiveTypeTuple _ t _ = return (t, False)
 
-    -- | 'recursiveTypeFirst' @t fml@: type of the recursive call to a function of type @t@ when only the first recursible argument decreases
-    recursiveTypeFirst (FunctionT x tArg tRes) =
-      case terminationRefinement x tArg of
-        Nothing -> FunctionT x tArg <$> recursiveTypeFirst tRes
-        Just (argLt, _) -> do
-          y <- freshVar env "x"
-          return $ FunctionT y (addRefinement tArg argLt) (renameVar (isBound env) x y tArg tRes)
-    recursiveTypeFirst (AndT l r) = do
-      l' <- recursiveTypeFirst l
-      r' <- recursiveTypeFirst r
-      return $ AndT l' r'
-    recursiveTypeFirst t = return t
+-- | 'recursiveTypeFirst' @t fml@: type of the recursive call to a function of type @t@ when only the first recursible argument decreases
+recursiveTypeFirst env (FunctionT x tArg tRes) =
+  case terminationRefinement env x tArg of
+    Nothing -> FunctionT x tArg <$> recursiveTypeFirst env tRes
+    Just (argLt, _) -> do
+      y <- freshVar env "x"
+      return $ FunctionT y (addRefinement tArg argLt) (renameVar (isBound env) x y tArg tRes)
+recursiveTypeFirst env (AndT l r) = do
+  l' <- recursiveTypeFirst env l
+  r' <- recursiveTypeFirst env r
+  return $ AndT l' r'
+recursiveTypeFirst _ t = return t
 
-    -- | If argument is recursible, return its strict and non-strict termination refinements, otherwise @Nothing@
-    terminationRefinement argName (ScalarT IntT fml) = Just ( valInt |>=| IntLit 0  |&|  valInt |<| intVar argName,
-                                                              valInt |>=| IntLit 0  |&|  valInt |<=| intVar argName)
-    terminationRefinement argName (ScalarT dt@(DatatypeT name _ _) fml) = case env ^. datatypes . to (Map.! name) . wfMetric of
-      Nothing -> Nothing
-      Just mName -> let
-                      metric x = Pred IntS mName [x]
-                      argSort = toSort dt
-                    in Just ( metric (Var argSort valueVarName) |>=| IntLit 0  |&| metric (Var argSort valueVarName) |<| metric (Var argSort argName),
-                              metric (Var argSort valueVarName) |>=| IntLit 0  |&| metric (Var argSort valueVarName) |<=| metric (Var argSort argName))
-    terminationRefinement _ _ = Nothing
+-- | If argument is recursible, return its strict and non-strict termination refinements, otherwise @Nothing@
+terminationRefinement _ argName (ScalarT IntT fml) = Just ( valInt |>=| IntLit 0  |&|  valInt |<| intVar argName,
+                                                          valInt |>=| IntLit 0  |&|  valInt |<=| intVar argName)
+terminationRefinement env argName (ScalarT dt@(DatatypeT name _ _) fml) = case env ^. datatypes . to (Map.! name) . wfMetric of
+  Nothing -> Nothing
+  Just mName -> let
+                  metric x = Pred IntS mName [x]
+                  argSort = toSort dt
+                in Just ( metric (Var argSort valueVarName) |>=| IntLit 0  |&| metric (Var argSort valueVarName) |<| metric (Var argSort argName),
+                          metric (Var argSort valueVarName) |>=| IntLit 0  |&| metric (Var argSort valueVarName) |<=| metric (Var argSort argName))
+terminationRefinement _ _ _ = Nothing
 
 -- | 'reconstructI' @env t impl@ :: reconstruct unknown types and terms in a judgment
 -- @env@ |- @impl@ :: @t@ where @impl@ is a (possibly) introduction term
 -- (top-down phase of bidirectional reconstruction)
 reconstructI :: MonadHorn s => [World] -> RWProgram  -> Explorer s RWProgram
-reconstructI ws (Program p [AnyT]) = reconstructI' ws p
-reconstructI ws (Program p t') = do
-  let envs = map fst ws
-  let envStr = addListToZip ws t'
-  t'' <- checkAnnotation envStr p
-  reconstructI' (zip envs t'') p
+reconstructI ws (Program p ts)
+  | all (== AnyT) ts = reconstructI' ws p
+  | otherwise = do
+      let envs = map fst ws
+      let envStr = addListToZip ws ts
+      t'' <- checkAnnotation envStr p
+      reconstructI' (zip envs t'') p
 
 reconstructI' :: MonadHorn s => [World] -> BareProgram [RType] -> Explorer s RWProgram
 reconstructI' ws PErr = generateError $ map fst ws
@@ -304,11 +329,12 @@ reconstructETopLevel ws impl = do
   return $ Program pTerm pTyps'
 
 reconstructE :: MonadHorn s => [World]-> RWProgram  -> Explorer s RWProgram
-reconstructE ws (Program p [AnyT]) = reconstructE' ws p
-reconstructE ws (Program p t') = do
-  ts'' <- checkAnnotation (addListToZip ws t') p
-  let ws' = zip (map fst ws) ts''
-  reconstructE' ws' p
+reconstructE ws (Program p ts)
+  | all (== AnyT) ts = reconstructE' ws p
+  | otherwise        = do
+      ts'' <- checkAnnotation (addListToZip ws ts) p
+      let ws' = zip (map fst ws) ts''
+      reconstructE' ws' p
 
 reconstructE' :: MonadHorn s => [World] -> BareProgram TypeVector -> Explorer s RWProgram
 -- reconstructE' _ (AndT _ _) _ = error "and E-term cannot have an intersection"

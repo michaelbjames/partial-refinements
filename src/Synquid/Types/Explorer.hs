@@ -72,7 +72,7 @@ defaultExplorerParams = ExplorerParams {
 -- | State of program exploration
 data ExplorerState = ExplorerState {
   _typingState :: TypingState,                     -- ^ Type-checking state
-  _auxGoals :: [Goal],                             -- ^ Subterms to be synthesized independently
+  _auxGoals :: [AuxGoal],                          -- ^ Subterms to be synthesized independently
   _solvedAuxGoals :: Map Id RWProgram,              -- Synthesized auxiliary goals, to be inserted into the main program
   _lambdaLets :: Map Id ([Environment], RWProgram),   -- ^ Local bindings to be checked upon use (in type checking mode)
   _symbolUseCount :: Map Id Int                    -- ^ Number of times each symbol has been used in the program so far
@@ -111,4 +111,5 @@ type Explorer s = StateT ExplorerState (
 
 -- | This type encapsulates the 'reconstructTopLevel' function of the type checker,
 -- which the explorer calls for auxiliary goals
-newtype Reconstructor s = Reconstructor (Goal -> Explorer s RWProgram)
+-- newtype Reconstructor s = Reconstructor (Goal -> Explorer s RWProgram)
+newtype Reconstructor s = Reconstructor (AuxGoal -> Explorer s RWProgram)
