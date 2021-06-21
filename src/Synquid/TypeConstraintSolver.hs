@@ -380,7 +380,7 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
             superTRet
             consisent (label ++ "+ret-world-" ++ show idx)
 
-      -- try to solve for what you can rn
+      -- TODO: sove what you can rn
 
       -- domain
       -- Get the powerset of each constraint and its matching constraint
@@ -390,12 +390,16 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
       forM_ jConjuncts $ \conjunctConstraintSubset -> do
         let (args, inConstraints, worldIdxs) = unzip3 conjunctConstraintSubset
         let worldId = intercalate "," (map show worldIdxs)
-        let unionOfArgs = foldr1 UnionT args
-        let outConstraints = filter (`notElem` inConstraints) (map snd conjunctsWithConstraints)
+        let unionOfArgs = simplifyType $ foldr1 UnionT args
+        let outConstraints = map fnot $ filter (`notElem` inConstraints) (map snd conjunctsWithConstraints)
         let env' = addPositiveGuard inConstraints env
         let env'' = addNegativeGuard outConstraints env'
         simplifyConstraint $ Subtype env'' superTArg unionOfArgs consisent (label ++ "+arg-world-union-" ++ worldId)
 
+      -- At least one of the domains needs to be true.
+      let (_, constraints) = unzip conjunctArgs
+      let atLeastOneConstr = ftrue |=>| (foldr1 (|||) constraints)
+      hornClauses %= ((atLeastOneConstr, "at least one"):)
 
 -- Union Type
 simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label)
@@ -434,6 +438,7 @@ simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label
             <+> squotes (pretty subT) <+> text "<:"
             <+> squotes (pretty superT) <+> parens (text label)
     mergeRefinements = do
+      $(todo "impossible now that we have added simplifyType")
       let fmls = concatMap allRefinementsOf' $ unionToList superT
       let (ScalarT repB _) = head $ unionToList superT
       let newSuperT = ScalarT repB (foldr1 (|||) fmls)
@@ -464,7 +469,7 @@ mkHornGuard c env label = do
   let constraints = env ^. subtypeGuards
   let (posFmls, negFmls) = both Set.toList constraints
   let lhsConstraints = foldr1 (|&|) posFmls
-  let rhsConstraints = foldr1 (|||) (defaultList negFmls ffalse)
+  let rhsConstraints = foldr1 (|||) (defaultList (map fnot negFmls) ffalse)
   let clause = lhsConstraints |=>| rhsConstraints
   hornClauses %= ((clause, label):)
   writeLog 3 $ text "[simplifyConstraint]:" <+> pretty c </> pretty clause <+> parens (text label)
@@ -586,14 +591,16 @@ generateHornClauses c@(Subtype env (ScalarT baseTL l) (ScalarT baseTR r) False l
       qmap <- use qualifierMap
       let relevantVars = potentialVars qmap (l |&| r)
       emb <- embedding env relevantVars baseTL True
-      clauses <- lift . lift . lift $ preprocessConstraint (conjunction (Set.insert l emb) |=>| r)
+      let negGuards = (env ^. subtypeGuards) & snd & Set.map (negationNF . fnot)
+      clauses <- lift . lift . lift $ preprocessConstraint (conjunction (Set.insert l emb) |=>| (foldr (|||) r negGuards))
       hornClauses %= (zip clauses (repeat label) ++)
 generateHornClauses (Subtype env (ScalarT baseTL l) (ScalarT baseTR r) True _) | baseTL == baseTR
   = do
       qmap <- use qualifierMap
       let relevantVars = potentialVars qmap (l |&| r)
       emb <- embedding env relevantVars baseTL False
-      let clause = conjunction (Set.insert l $ Set.insert r emb)
+      let negGuards = (env ^. subtypeGuards) & snd -- TODO:2021-06-21:mj, not sure whether the negations should appear positively or negatively.
+      let clause = conjunction (Set.insert l $ Set.insert r (Set.union emb negGuards))
       consistencyChecks %= (clause :)
 generateHornClauses c = error $ show $ text "generateHornClauses: not a simple subtyping constraint" <+> pretty c
 
@@ -634,10 +641,10 @@ embedding env vars vvBase includeQuantified = do
     tass <- use typeAssignment
     pass <- use predAssignment
     qmap <- use qualifierMap
-    let guards = env ^. subtypeGuards & uncurry Set.union
+    let posGuards = env ^. subtypeGuards & fst
     let ass = Set.map (substitutePredicate pass) (env ^. assumptions)
     let allVars = vars `Set.union` potentialVars qmap (conjunction ass)
-    let bindings = addBindings env tass pass qmap (Set.union ass guards) allVars
+    let bindings = addBindings env tass pass qmap (Set.union ass posGuards) allVars
     return bindings
   where
     addBindings env tass pass qmap fmls vars =

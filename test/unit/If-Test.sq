@@ -1,20 +1,21 @@
-qualifier {x >= 0, x}
--- zero :: {Int | _v == 0}
--- one :: {Int | _v == 1}
+qualifier {x >= 0}
 
--- lt :: x:Int -> y:Int -> {Bool| _v == (x < y)}
+zero :: {Int | _v == 0}
+one :: {Int | _v == 1}
+
+lt :: x:Int -> y:Int -> {Bool| _v == (x < y)}
 
 -- true :: {Bool | _v == True}
 -- false :: {Bool | _v == False}
 
--- isNatural :: ({Int | _v < 0} -> {Int | _v == 0})
-            -- ^ ({Int | _v >= 0} -> {Int | _v == 1})
+isNatural :: ({Int | _v < 0} -> {Int | _v == 0})
+            ^ ({Int | _v >= 0} -> {Int | _v == 1})
 -- isNatural = \x. if (lt x zero)
     -- then zero
     -- else one
 
 -- isNatural :: x:Int -> {Int | ((x < 0) ==> _v == 0) && (x >= 0 ==> _v == 1)}
--- isNatural = ??
+isNatural = ??
 
 -- isNatural = \x .
 --   if 0 < x
