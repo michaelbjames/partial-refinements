@@ -1,4 +1,4 @@
-qualifier {x >= 0}
+qualifier {x >= 0, x}
 -- zero :: {Int | _v == 0}
 -- one :: {Int | _v == 1}
 
@@ -6,10 +6,6 @@ qualifier {x >= 0}
 
 -- true :: {Bool | _v == True}
 -- false :: {Bool | _v == False}
-
--- Worlds: Checking: yes; synth: no
--- Solo: Checking yes. synth yes
-
 
 -- isNatural :: ({Int | _v < 0} -> {Int | _v == 0})
             -- ^ ({Int | _v >= 0} -> {Int | _v == 1})
@@ -58,9 +54,21 @@ boolAnd = \x. \y. \p. \q. if p
 -- myIf :: (x:a -> y:a -> p:{Bool | _v == True} -> {a | _v == x}) ^
         -- (x:a -> y:a -> p:{Bool | _v == False} -> {a | _v == y})
 -- myIf = ??
-type Nat = {Int | _v >= 0}
 
-flip :: x:Int -> {Int | _v == (-1) * x}
 
-abs :: (Int -> Int) ^ ({Int | _v == -1} -> {Int | _v == 1}) ^ (Nat -> Nat)
-abs = ??
+--
+-- type Nat = {Int | _v >= 0}
+
+-- flip :: x:Int -> {Int | _v == (-1) * x}
+
+-- abs :: (Int -> Int) ^ ({Int | _v == -1} -> {Int | _v == 1}) ^ (Nat -> Nat)
+-- abs = ??
+
+
+
+-- nestedIf ::
+--     (x:a -> y:a -> p:{Bool | _v == True} -> p2:{Bool | _v == True} -> {a | _v == x}) ^
+--     (x:a -> y:a -> p:{Bool | _v == True} -> p2:{Bool | _v == False} -> {a | _v == y}) ^
+--     (x:a -> y:a -> p:{Bool | _v == False} -> p2:{Bool | _v == True} -> {a | _v == y}) ^
+--     (x:a -> y:a -> p:{Bool | _v == False} -> p2:{Bool | _v == False} -> {a | _v == x})
+-- nestedIf = ??

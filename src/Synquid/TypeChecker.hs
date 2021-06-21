@@ -77,16 +77,16 @@ reconstructFix (Goal funName env (Monotype typ) impl depth _ synth) = do
   let typeGeneralized sch = if polymorphic then foldr ForallT sch tvs else sch -- Version of @t'@ generalized in bound type variables of the enclosing function
   let env' = foldr (\(f, t) -> addPolyVariable f (typeGeneralized . predGeneralized . Monotype $ t) . (shapeConstraints %~ Map.insert f (shape typ'))) env recCalls
   -- $(todo "Should the number of worlds in the ctx be 1 or n?")
-  let ctx p = if null recCalls then p else Program (PFix (map fst recCalls) p) [typ']
   let ws = makeWorlds env' typ'
   let impl' = convertToNWorlds impl (length ws)
+  let ctx p = if null recCalls then p else Program (PFix (map fst recCalls) p) (replicate (length ws) typ')
   p <- inContext ctx $ reconstructI ws impl'
   return $ ctx p
 
 reconstructWorldsTopLevel :: MonadHorn s => AuxGoal -> Explorer s RWProgram
 reconstructWorldsTopLevel (AuxGoal funName [] impl _ _) = error "reconstructWorldsTopLevel: no worlds"
 reconstructWorldsTopLevel (AuxGoal funName ws impl depth _) = do
-  ws' <- mapM adjustWorld ws 
+  ws' <- mapM adjustWorld ws
   let placeholderWorld = head ws
   recCallsPlaceholder <- runInSolver (currentAssignment (snd placeholderWorld)) >>= recursiveCalls funName (fst placeholderWorld) True
   let ctx p = if null recCallsPlaceholder then p else Program (PFix (map fst recCallsPlaceholder) p) (map snd ws')
@@ -96,7 +96,7 @@ reconstructWorldsTopLevel (AuxGoal funName ws impl depth _) = do
   where
     adjustWorld (env, goal) = do
       let goal' = renameAsImpl (isBound env) impl goal
-      recCalls <- runInSolver (currentAssignment goal') >>= recursiveCalls funName env True    
+      recCalls <- runInSolver (currentAssignment goal') >>= recursiveCalls funName env True
       polymorphic <- asks . view $ _1 . polyRecursion
       predPolymorphic <- asks . view $ _1 . predPolyRecursion
       let tvs = env ^. boundTypeVars

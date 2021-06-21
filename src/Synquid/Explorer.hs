@@ -268,7 +268,6 @@ caseSymbols env x (name : names) (FunctionT y tArg tRes) = do
 
 -- | Generate a possibly conditional possibly match term, depending on which conditions are abduced
 generateMaybeMatchIf :: MonadHorn s => [World] -> Explorer s RWProgram
--- generateMaybeMatchIf ws = $(todo "generateMaybeMatchIf with worlds")
 generateMaybeMatchIf ws = (generateOneBranch >>= generateOtherBranches) `mplus` (generateMatch ws) -- might need to backtrack a successful match due to match depth limitation
   where
     (envs, ts) = unzip ws
@@ -404,7 +403,6 @@ checkE :: MonadHorn s => [World] -> RWProgram -> Explorer s [Int]
 checkE ws p@(Program pTerm pTyps) = do
   let typs = map snd ws
   ctx <- asks . view $ _1 . context
-  doesCheckForAll <- asks . view $ _1 . intersectAllMustCheck
   writeLog 2 empty
   writeLog 2 $ brackets (text "checkE") <+> text "Checking" <+> pretty p <+> text "::" <+> pretty typs <+> text "in" $+$ pretty (ctx $ untypedWorld PHole)
   let ws' = addListToZip ws pTyps
@@ -415,9 +413,6 @@ checkE ws p@(Program pTerm pTyps) = do
   consistency <- asks . view $ _1 . consistencyChecking -- Is consistency checking enabled?
 
   let idxdws = zip ws' ([1..]::[Int])
-  let combinator = if doesCheckForAll
-      then forM idxdws
-      else (\f -> observeAllT $ lift $ msum $ map f idxdws)
 
   let checker = \((env, typ, pTyp), idx) -> do
                     logItFrom "checkE" $ pretty (void p) <+> text "chk" <+> pretty typ <+> text "str" <+> pretty pTyp
@@ -434,9 +429,7 @@ checkE ws p@(Program pTerm pTyps) = do
 
   -- let t1 = map checker ws'
   -- sequence_ t1
-  worlds <- combinator checker
-  logItFrom "checkE" $ text "combinator complete:" <+> pretty worlds
-  return worlds
+  forM idxdws checker
 
 checkSymbol :: MonadHorn s => [World] -> Id -> Explorer s RWProgram
 checkSymbol ws name = do
@@ -679,10 +672,7 @@ currentValuation u = do
       typingState . candidates .= cands'
       return $ val (head cands')
 
--- inContext ctx f = local (over (_1 . context) (. ctx)) f
 inContext ctx f = withSetting context (. ctx) f
-
-atLeastOneWorld f = withSetting intersectAllMustCheck (const False) f
 
 withSetting setting value f = local (over (_1 . setting) value) f
 

@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell, FlexibleContexts #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 -- | Incremental solving of subtyping and well-formedness constraints
 module Synquid.TypeConstraintSolver (
@@ -358,7 +359,7 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
   case intersectionStrategy of
     GuardedPowerset -> do
       conjunctsWithConstraints <- forM conjuncts (\t -> do
-        constraintName <- freshId "C"
+        constraintName <- freshId "G"
         let c = Unknown Map.empty constraintName
         -- Set the qualifier map to just False (True is an implicit other option)
         addQuals constraintName (toSpace Nothing [BoolLit False])

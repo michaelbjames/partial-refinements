@@ -258,7 +258,7 @@ strengthen qmap extractAssumptions fml@(Binary Implies lhs rhs) sol = do
     splitLhsValuation lhsVal = do
       unknownsVal <- mapM (singleUnknownCandidates lhsVal) unknownsList
       let isValidsplit ss s = Set.unions ss == s && sum (map Set.size ss) == Set.size s
-      guard $ (\x y -> trace ("splitLHSValuation: " ++ (show $ isValidsplit x y)) isValidsplit x y) unknownsVal lhsVal
+      guard $ isValidsplit unknownsVal lhsVal
       Map.fromListWith Set.union <$> zipWithM unsubst unknownsList unknownsVal
 
     -- | Given an unknown @[subst]u@ and its valuation @val@, get all possible valuations of @u@

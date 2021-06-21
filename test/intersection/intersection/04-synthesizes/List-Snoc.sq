@@ -6,22 +6,27 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs
 
+measure elems :: List a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs
+
 {-
 Note that two of the specs are identical but one is the polymorphic version of the other.
 -}
 snoc ::
-		(xs: List a -> x: a ->  {List a | len _v == (len xs + 1)}) ^
+		(xs: List a -> x: a ->  {List a | len _v == (len xs + 1) && elems _v == (elems xs + [x])}) ^
+		(xs: List Int -> x: Int ->  {List Int | len _v == (len xs + 1) && elems _v == (elems xs + [x])}) ^
 		(xs: {List a | _v == Nil} -> x: a ->  {List a | _v == (Cons x Nil)}) ^
 		(xs: {List Int| _v == (Cons 2 Nil)} -> x: {Int | _v == 1} -> {List Int | _v == (Cons 2 (Cons 1 Nil))}) ^
-		(xs: {List Int| _v == (Cons 3 (Cons 2 Nil))} -> x: {Int | _v == 1} -> {List Int | _v == (Cons 3 (Cons 2 (Cons 1 Nil)))}) ^
-		(xs: {List Int| _v == (Nil)} -> x: {Int | _v == 1} -> {List Int | _v == (Cons 1 Nil)})
--- snoc = \xs. \x.
+		(xs: {List Int| _v == (Cons 3 (Cons 2 Nil))} -> x: {Int | _v == 1} -> {List Int | _v == (Cons 3 (Cons 2 (Cons 1 Nil)))})
+		-- (xs: {List Int| _v == (Nil)} -> x: {Int | _v == 1} -> {List Int | _v == (Cons 1 Nil)})
+-- snoc = ??
 -- 	match xs with
 -- 		Nil -> ??
 -- 		Cons y ys -> ??
 snoc = \xs. \x.
 	match xs with
 		Nil -> Cons x Nil
-		Cons y ys -> Cons y (snoc ys x)
+		Cons y ys -> (snoc ys y)
 
 

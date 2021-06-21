@@ -39,8 +39,7 @@ data ExplorerParams = ExplorerParams {
   _symmetryReduction :: Bool,             -- ^ Should partial applications be memoized to check for redundancy?
   _sourcePos :: SourcePos,                -- ^ Source position of the current goal
   _explorerLogLevel :: Int,                -- ^ How verbose logging is
-  _intersectStrategy :: IntersectStrategy,
-  _intersectAllMustCheck :: Bool -- ^ Should all worlds check? (default: True)
+  _intersectStrategy :: IntersectStrategy
 }
 
 makeLenses ''ExplorerParams
@@ -65,8 +64,7 @@ defaultExplorerParams = ExplorerParams {
   _context = id,
   _sourcePos = noPos,
   _explorerLogLevel = 0,
-  _intersectStrategy = InferMedian,
-  _intersectAllMustCheck = True
+  _intersectStrategy = InferMedian
 }
 
 -- | State of program exploration

@@ -1,5 +1,6 @@
 -- | Refinement Types
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module Synquid.Type where
 
 import Synquid.Logic
@@ -18,22 +19,23 @@ import Data.Map (Map)
 
 import Control.Arrow
 import Control.Monad
+import Control.Monad.State
 import Control.Lens hiding (set)
 import Development.Placeholders
 import GHC.Stack
 
 
-btEq :: BaseType a -> BaseType b -> Bool
+btEq :: BaseType a -> BaseType a -> Bool
 btEq BoolT BoolT = True
 btEq IntT IntT = True
-btEq (TypeVarT _ x) (TypeVarT _ y) = x == y
+btEq (TypeVarT _ x) (TypeVarT _ y) = True -- TODO: We could equate inequivalent types!
 btEq (DatatypeT name1 args1 _) (DatatypeT name2 args2 _) =
   (name1 == name2) &&
   (length args1) == (length args2) &&
   (foldr (\(al, ar) -> (&&) (arrowEq al ar)) True (zip args1 args2))
 btEq _ _ = False
 
-arrowEq :: TypeSkeleton a -> TypeSkeleton b -> Bool
+arrowEq :: TypeSkeleton a -> TypeSkeleton a -> Bool
 arrowEq (ScalarT bt1 _) (ScalarT bt2 _) = btEq bt1 bt2
 arrowEq (FunctionT x arg1 ret1) (FunctionT y arg2 ret2) =
   arrowEq arg1 arg2 && arrowEq ret1 ret2
