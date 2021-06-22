@@ -354,6 +354,8 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
     GuardedPowerset -> do
       conjunctsWithConstraints <- forM conjuncts (\t -> do
         constraintName <- freshId "G"
+        logItFrom "Conjunct Guard" $ (text constraintName)
+          <+> text "-controls-" <+> pretty t
         let c = Unknown Map.empty constraintName
         -- Set the qualifier map to just False (True is an implicit other option)
         addQuals constraintName (toSpace Nothing [BoolLit False])
@@ -463,7 +465,7 @@ mkHornGuard c env label = do
   let constraints = env ^. subtypeGuards
   let (posFmls, negFmls) = both Set.toList constraints
   let lhsConstraints = foldr1 (|&|) posFmls
-  let rhsConstraints = foldr1 (|||) (defaultList (map fnot negFmls) ffalse)
+  let rhsConstraints = foldr1 (|||) (defaultList (map (negationNF . fnot) negFmls) ffalse)
   let clause = lhsConstraints |=>| rhsConstraints
   hornClauses %= ((clause, label):)
   writeLog 3 $ text "[simplifyConstraint]:" <+> pretty c </> pretty clause <+> parens (text label)
@@ -858,3 +860,6 @@ finalizeWProgram p = do
 writeLog level msg = do
   maxLevel <- asks _tcSolverLogLevel
   when (level <= maxLevel) $ traceShow (plain msg) (return ())
+
+logItFrom fnName msg = do
+  writeLog 1 $ brackets (text fnName) <+> msg
