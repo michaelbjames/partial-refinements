@@ -6,6 +6,8 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs
 
+qualifier { len _v < len x }
+
 -- This spec checks but is not strong enough to specify the _direction_ of the fold.
 foldl ::
   (xs:List a -> f: (acc:b -> x:a -> b) -> seed:b -> b) ^

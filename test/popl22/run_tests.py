@@ -25,10 +25,14 @@ DEFAULT_ARGS = ['--print-stats']
 RUN_SYNQUID = ['stack'] + STACK_ARGS + ['run', '--', 'synquid'] + DEFAULT_ARGS
 
 VARIANTS = {
-    'either/or' : ['--intersect=EitherOr']
+    'either/or' : ['--intersect=EitherOr'],
+    'laurent-BCD' : ['--intersect=LaurentBCD']
 }
 
-TIMEOUT_SEC = 15
+DEFAULT_VARIANT = 'guarded powerset'
+
+TIMEOUT = 15
+TIMEOUT_CMD = ['timeout', str(TIMEOUT)]
 
 BASE_TEST_PATH = "./test/intersection/intersection/"
 
@@ -117,35 +121,35 @@ def get_stats(output):
 
 def run_file(filename, args):
     filepath = filename + '.sq' 
-    cmd = " ".join(RUN_SYNQUID + args + [filepath])
+    cmd = RUN_SYNQUID + args + [filepath]
     res = None
     try:
         start = time.time()
-        completed = subprocess.run(cmd, timeout=TIMEOUT_SEC, check=True, shell=True, capture_output = True)
+        completed = subprocess.run(cmd, timeout=TIMEOUT, check=True, capture_output = True)
         end = time.time()
         stats = get_stats(completed.stdout)
-        res = Result(filename, SUCCESS_STATUS, end - start, stats, completed.stdout) # TODO: get stats, write output to file
+        res = Result(filename, SUCCESS_STATUS, end - start, stats, completed.stdout)
     except subprocess.TimeoutExpired as e:
         res = Result(filename, TIMEOUT_STATUS, -1, nostats, '-')
     except subprocess.CalledProcessError as e:
-        res = Result(filename, FAILED_STATUS, -1, nostats, e.stderr) 
+        res = Result(filename, FAILED_STATUS, -1, nostats, e.stdout) 
     for (vid, vopts) in VARIANTS.items():
         run_variant(filename, args, vid, vopts, res)
     return res
 
 def run_variant(filename, args, variant_id, extra_args, res):
     filepath = filename + '.sq'
-    cmd = " ".join(RUN_SYNQUID + args + extra_args + [filepath])
+    cmd = RUN_SYNQUID + args + extra_args + [filepath]
     v = None
     try:
         start = time.time()
-        completed = subprocess.run(cmd, timeout=TIMEOUT_SEC, check=True, shell=True, capture_output = True)
+        completed = subprocess.run(cmd, timeout=TIMEOUT, check=True, capture_output = True)
         end = time.time()
         v = VariantResult(SUCCESS_STATUS, end - start, completed.stdout)
     except subprocess.TimeoutExpired as e:
         v = VariantResult(TIMEOUT_STATUS, -1, '-')
     except subprocess.CalledProcessError as e:
-        v = VariantResult(FAILED_STATUS, -1, e.stderr) 
+        v = VariantResult(FAILED_STATUS, -1, e.stdout) 
     res.variant_results[variant_id] = v
 
 
@@ -165,9 +169,9 @@ def is_synquid_file(filename):
     filename[-3:] == ".sq"
 
 
-def worker(bench, return_dict):
+def worker(bench, return_dict, extra_args):
     filename = bench.name
-    res = run_file(filename, bench.options)
+    res = run_file(filename, bench.options + extra_args)
 
     if return_dict is not None:
         return_dict[filename] = res
@@ -181,11 +185,31 @@ def print_result(name, status, time):
 def print_results(statuses):
     for (filename, res) in statuses:
         print(f"{filename}:")
-        print_result("default", res.status, res.time)
+        print_result(DEFAULT_VARIANT, res.status, res.time)
         for (v, vres) in res.variant_results.items():
             print_result(v, vres.status, vres.time)
 
+def output_str(mode, status, output):
+    if status == TIMEOUT_STATUS:
+        return mode + ": timeout\n"
+    else:
+        return mode + ':\n' + output.decode('utf-8')
+
+
+def write_results(statuses, resfile):
+    with open(resfile, 'w') as logfile:
+        for (filename, res) in statuses:
+            logfile.write('---------------------------------------------------------------\n') # Delimit benchmark
+            logfile.write(filename + ':\n')
+            logfile.write('---------------------------------------------------------------\n') # Delimit benchmark
+            logfile.write(output_str(DEFAULT_VARIANT, res.status, res.output))
+            for (v, vres) in res.variant_results.items():
+                logfile.write('\n')
+                logfile.write(output_str(v, vres.status, vres.output))
+
+
 def main():
+    extra_args = sys.argv[1:]
     worklist = []
     manager = Manager()
     return_dict = manager.dict()
@@ -195,7 +219,7 @@ def main():
     print("done")
 
     for b in BENCHMARKS:
-        worklist.append((b, return_dict))
+        worklist.append((b, return_dict, extra_args))
 
     print("running testing benchmarks...", end="")
     with Pool() as pool:
@@ -203,6 +227,7 @@ def main():
     print("done")
 
     statuses = sorted(return_dict.items())
+    write_results(statuses, LOGFILE)
     print_results(statuses)
     # TODO: write csv
     # TODO: write latex

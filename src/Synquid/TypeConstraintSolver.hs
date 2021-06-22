@@ -746,7 +746,7 @@ freshPred env sorts = do
 freshFromIntersect env t@(AndT l r) goalType = do
   let goalShapes = intersectionToList t & filter (on arrowEq shape goalType)
   case listToMaybe goalShapes of
-    Nothing -> error $ "Specification has a shape mismatch. Nothing matches:\n" ++ show (pretty (shape goalType)) ++ "\nfrom:\n" ++ show (pretty $ map shape $ intersectionToList t)
+    Nothing -> error $ "Specification has a shape mismatch. Nothing matches:\n" ++ show (plain (pretty (shape goalType))) ++ "\nfrom:\n" ++ show (plain (pretty $ map shape $ intersectionToList t))
     Just t' -> fresh env t'
 freshFromIntersect env (FunctionT x tArg tRes) (FunctionT gx goalArg goalRes) = do
   tArg' <- freshFromIntersect env tArg goalArg

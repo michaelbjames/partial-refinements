@@ -69,7 +69,7 @@ generateI :: MonadHorn s => [World] -> Explorer s RWProgram
 generateI envTy@((env, FunctionT{}):_) = do
   let ts = map snd envTy
   unless (all isFunctionType ts) (error "generateI, not all functions")
-  unless (allSame $ map argName ts) (error "the intersected functions don't all use the same arg name! They should.")
+  -- unless (allSame $ map argName ts) (error "the intersected functions don't all use the same arg name! They should.")
   let x = argName $ head ts
   let ctx = \p -> Program (PFun x p) ts
   let tRess = map resType ts
@@ -415,7 +415,7 @@ checkE ws p@(Program pTerm pTyps) = do
   let idxdws = zip ws' ([1..]::[Int])
 
   let checker = \((env, typ, pTyp), idx) -> do
-                    logItFrom "checkE" $ pretty (void p) <+> text "chk" <+> pretty typ <+> text "str" <+> pretty pTyp
+                    logItFrom "checkE" $ pretty (void p) <+> text "chk" <+> pretty typ <+> text "str" <+> pretty pTyp <+> text "in world" <+> pretty idx
                     when (incremental || arity typ == 0) (addConstraint $ Subtype env pTyp typ False "checkE-subtype") -- Add subtyping check, unless it's a function type and incremental checking is diasbled
                     when (consistency && arity typ > 0) (addConstraint $ Subtype env pTyp typ True "checkE-consistency") -- Add consistency constraint for function types
                     fTyp <- runInSolver $ finalizeType typ
@@ -472,7 +472,8 @@ checkSymbol ws name = do
           {- Base rule -}
           _ -> return t'
   symbolUseCount %= Map.insertWith (+) name 1
-  let p = Program (PSymbol name) ts
+  let ts' = enforceWorldNames ts
+  let p = Program (PSymbol name) ts'
   checkE ws p
   return p
 
@@ -715,7 +716,7 @@ instantiate env sch top argNames = do
               (argName : _) -> return argName
       liftM2 (FunctionT x') (go subst pSubst intersectionStrat [] tArg) (go subst pSubst intersectionStrat (drop 1 argNames) (renameVar (isBoundTV subst) x x' tArg tRes))
 
-    go subst pSubst intersectionStrat@GuardedPowerset argNames t@AndT{} = do
+    go subst pSubst intersectionStrat@GuardedPowerset argNames t@AndT{} =
       constrainBottom subst pSubst intersectionStrat argNames t
 
     -- Use a Laurent-presentation of BCD to infer a median type from some

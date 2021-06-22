@@ -18,12 +18,18 @@ data Maybe a where
   Nothing :: Maybe a
   Just :: a -> Maybe a
 
+measure isNothing :: Maybe a -> Bool where
+  Nothing -> True
+  Just x -> False
+
+qualifier { len _v < len x }
 
 list_last ::
   (xs:List Int -> Maybe Int) ^
-  (xs:{List Int | len _v == 0} -> {Maybe Int | _v == Nothing}) ^
-  (xs:{List Int | _v == (Cons 3 (Cons 1 Nil))} -> {Maybe Int | _v == Just 1}) ^
-  (xs:{List Int | _v == (Cons 1 Nil)} -> {Maybe Int | _v == Just 1})
+  (xs: {List Int | len _v == 0} -> {Maybe Int | isNothing _v}) ^
+  (xs: {List Int | len _v > 0} -> {Maybe Int | !(isNothing _v)})
+  -- (xs:{List Int | _v == (Cons 3 (Cons 1 Nil))} -> {Maybe Int | _v == Just 1}) ^
+  -- (xs:{List Int | _v == (Cons 1 Nil)} -> {Maybe Int | _v == Just 1})
 list_last = \xs .
   match xs with
     Nil -> Nothing

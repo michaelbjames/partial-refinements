@@ -37,25 +37,25 @@ List-Dict-Contains:
 ---------------------------------------------------------------
 guarded powerset:
 contains :: (x:Int -> arg0:List Pair Int b -> Bool) ^ ((x:a -> arg0:{List Pair a b|len _v == 0} -> {Bool|_v == False}) ^ ((x:Int -> arg0:{List Pair {Int|_v == x} b|len _v > 0} -> {Bool|_v == True}) ^ (x:Int -> arg0:List Pair {Int|_v != x} b -> {Bool|_v == False})))
-contains = \needle . \haystack .
-    
-    match haystack with
-      Nil -> False
-      Cons x xs -> 
-        match x with
-          Pair xa xb -> 
-            if xa == needle
-              then True
-              else contains needle xs
+List-Dict-Contains.sq:42: Error:
+  Cannot find sufficiently strong refinements
+  when checking
+  contains :: X6:_ -> X5:_ -> Bool
+  in
+  \needle . \haystack . 
+      match haystack with
+        Cons x xs -> 
+          match x with
+            Pair xa xb -> 
+              if xa == needle
+                then True
+                else contains (?? :: [_])
+                       (?? :: [_])
 
-(Goals: 5)
-(Measures: 4)
-(Spec size: 26)
-(Solution size: 56)
 
 either/or:
 contains :: (x:Int -> arg0:List Pair Int b -> Bool) ^ ((x:a -> arg0:{List Pair a b|len _v == 0} -> {Bool|_v == False}) ^ ((x:Int -> arg0:{List Pair {Int|_v == x} b|len _v > 0} -> {Bool|_v == True}) ^ (x:Int -> arg0:List Pair {Int|_v != x} b -> {Bool|_v == False})))
-List-Dict-Contains.sq:41: Error:
+List-Dict-Contains.sq:42: Error:
   Cannot find sufficiently strong refinements
   when checking
   needle :: {Int|_v >= 0 && _v < needle}
@@ -76,21 +76,21 @@ List-Dict-Find:
 ---------------------------------------------------------------
 guarded powerset:
 find :: (arg2:List Pair Int b -> arg1:Int -> arg0:b -> b) ^ (arg2:{List Pair Int Int|len _v == 0} -> arg1:Int -> default:Int -> {Int|_v == default})
-find = \haystack . \needle .
-    \def . 
-      match haystack with
-        Nil -> def
-        Cons x xs -> 
-          match x with
-            Pair xa xb -> 
-              if xa == needle
-                then xb
-                else find xs needle def
+List-Dict-Find.sq:33: Error:
+  Cannot find sufficiently strong refinements
+  when checking
+  find :: X7:_ -> X6:_ -> X5:_ -> b
+  in
+  \haystack . \needle . \def . 
+        match haystack with
+          Cons x xs -> 
+            match x with
+              Pair xa xb -> 
+                if xa == needle
+                  then xb
+                  else find (?? :: [_])
+                         (?? :: [_]) (?? :: [_])
 
-(Goals: 5)
-(Measures: 4)
-(Spec size: 10)
-(Solution size: 59)
 
 either/or:
 find :: (arg2:List Pair Int b -> arg1:Int -> arg0:b -> b) ^ (arg2:{List Pair Int Int|len _v == 0} -> arg1:Int -> default:Int -> {Int|_v == default})
@@ -116,18 +116,19 @@ List-Even-Parity:
 ---------------------------------------------------------------
 guarded powerset:
 list_even_parity :: (xs:List Bool -> Bool) ^ ((xs:{List {Bool|_v == True}|len _v == 2 || len _v == 0} -> {Bool|_v == True}) ^ (xs:{List {Bool|_v == True}|len _v == 3 || len _v == 1} -> {Bool|_v == False}))
-list_even_parity = \xs . 
-  match xs with
-    Nil -> True
-    Cons y ys -> 
-      if y
-        then not (list_even_parity ys)
-        else list_even_parity ys
+List-Even-Parity.sq:24: Error:
+  Cannot find sufficiently strong refinements
+  when checking
+  ys :: {List {Bool|_v == True}|len _v < len ys && (len _v == 3 || len _v == 1)}
+  in
+  \xs . 
+    match xs with
+      Cons y ys -> 
+        if y
+          then not (list_even_parity ys)
+          else (?? :: [Bool
+                      ,{Bool|_v == True}])
 
-(Goals: 2)
-(Measures: 1)
-(Spec size: 33)
-(Solution size: 25)
 
 either/or:
 list_even_parity :: (xs:List Bool -> Bool) ^ ((xs:{List {Bool|_v == True}|len _v == 2 || len _v == 0} -> {Bool|_v == True}) ^ (xs:{List {Bool|_v == True}|len _v == 3 || len _v == 1} -> {Bool|_v == False}))
@@ -150,20 +151,20 @@ List-Fold:
 ---------------------------------------------------------------
 guarded powerset:
 foldl :: (xs:List a -> f:(acc:b -> x:a -> b) -> seed:b -> b) ^ (xs:List Int -> f:(acc:Int -> x:Int -> {Int|_v == acc + 1}) -> seed:Int -> {Int|_v == len xs + seed})
-List-Fold.sq:14: Error:
+List-Fold.sq:16: Error:
   Cannot find sufficiently strong refinements
-  when checking f
-                  seed :: X14:_ -> {Int|(_v == seed + 1 && (_v == y + 1 && _v == len xs + y)) && True}
+  when checking
+  foldl :: X3:_ -> X2:_ -> X1:_ -> b
   in
   \xs . \f . \seed . 
         match xs with
-          Cons y ys -> foldl ys f1 (f seed
-                                      (?? :: [_]))
+          Cons y ys -> foldl (?? :: [_])
+                         (?? :: [_]) (?? :: [_])
 
 
 either/or:
 foldl :: (xs:List a -> f:(acc:b -> x:a -> b) -> seed:b -> b) ^ (xs:List Int -> f:(acc:Int -> x:Int -> {Int|_v == acc + 1}) -> seed:Int -> {Int|_v == len xs + seed})
-List-Fold.sq:14: Error:
+List-Fold.sq:16: Error:
   Cannot match shape, unresolvable subtype:
   'Int' : {Int|_v == len X3 + X1} </: 'b' : b from label 'checkE-subtype'
   when checking
@@ -189,6 +190,14 @@ map = \f . \xs .
         Cons (f x3) (map f x4)
 
 list_inc_intersect :: (xs:List Int -> List Int) ^ ((xs:List {Int|_v == 1} -> List {Int|_v == 2}) ^ (xs:{List Int|len _v == 1} -> {List Int|len _v == 1}))
+list_inc_intersect = \x . 
+  let f = (?? :: [_]) in
+  map inc x
+
+(Goals: 4)
+(Measures: 2)
+(Spec size: 25)
+(Solution size: 46)
 
 either/or:
 map :: f:(arg0:a -> b) -> xs:List a -> {List b|len _v == len xs}
@@ -200,6 +209,14 @@ map = \f . \xs .
         Cons (f x3) (map f x4)
 
 list_inc_intersect :: (xs:List Int -> List Int) ^ ((xs:List {Int|_v == 1} -> List {Int|_v == 2}) ^ (xs:{List Int|len _v == 1} -> {List Int|len _v == 1}))
+list_inc_intersect = \x . 
+  let f = (?? :: [_]) in
+  map inc x
+
+(Goals: 4)
+(Measures: 2)
+(Spec size: 25)
+(Solution size: 46)
 
 laurent-BCD:
 map :: f:(arg0:a -> b) -> xs:List a -> {List b|len _v == len xs}
@@ -211,11 +228,19 @@ map = \f . \xs .
         Cons (f x3) (map f x4)
 
 list_inc_intersect :: (xs:List Int -> List Int) ^ ((xs:List {Int|_v == 1} -> List {Int|_v == 2}) ^ (xs:{List Int|len _v == 1} -> {List Int|len _v == 1}))
+list_inc_intersect = \x . 
+  let f = (?? :: [_]) in
+  map inc x
+
+(Goals: 4)
+(Measures: 2)
+(Spec size: 25)
+(Solution size: 46)
 ---------------------------------------------------------------
 List-Last:
 ---------------------------------------------------------------
 guarded powerset:
-list_last :: (xs:List Int -> Maybe Int) ^ ((xs:{List Int|len _v == 0} -> {Maybe Int|_v == (Nothing)}) ^ ((xs:{List Int|_v == (Cons 3 ((Cons 1 (Nil))))} -> {Maybe Int|_v == (Just 1)}) ^ (xs:{List Int|_v == (Cons 1 (Nil))} -> {Maybe Int|_v == (Just 1)})))
+list_last :: (xs:List Int -> Maybe Int) ^ ((xs:{List Int|len _v == 0} -> {Maybe Int|isNothing _v}) ^ (xs:{List Int|len _v > 0} -> {Maybe Int|!isNothing _v}))
 list_last = \xs . 
   match xs with
     Nil -> Nothing
@@ -224,13 +249,13 @@ list_last = \xs .
         Nil -> Just x
         Cons y ys -> list_last rest
 
-(Goals: 3)
-(Measures: 2)
-(Spec size: 33)
-(Solution size: 34)
+(Goals: 4)
+(Measures: 3)
+(Spec size: 19)
+(Solution size: 39)
 
 either/or:
-list_last :: (xs:List Int -> Maybe Int) ^ ((xs:{List Int|len _v == 0} -> {Maybe Int|_v == (Nothing)}) ^ ((xs:{List Int|_v == (Cons 3 ((Cons 1 (Nil))))} -> {Maybe Int|_v == (Just 1)}) ^ (xs:{List Int|_v == (Cons 1 (Nil))} -> {Maybe Int|_v == (Just 1)})))
+list_last :: (xs:List Int -> Maybe Int) ^ ((xs:{List Int|len _v == 0} -> {Maybe Int|isNothing _v}) ^ (xs:{List Int|len _v > 0} -> {Maybe Int|!isNothing _v}))
 list_last = \xs . 
   match xs with
     Nil -> Nothing
@@ -239,12 +264,25 @@ list_last = \xs .
         Nil -> Just x
         Cons y ys -> list_last rest
 
-(Goals: 3)
-(Measures: 2)
-(Spec size: 33)
-(Solution size: 34)
+(Goals: 4)
+(Measures: 3)
+(Spec size: 19)
+(Solution size: 39)
 
-laurent-BCD: timeout
+laurent-BCD:
+list_last :: (xs:List Int -> Maybe Int) ^ ((xs:{List Int|len _v == 0} -> {Maybe Int|isNothing _v}) ^ (xs:{List Int|len _v > 0} -> {Maybe Int|!isNothing _v}))
+list_last = \xs . 
+  match xs with
+    Nil -> Nothing
+    Cons x rest -> 
+      match rest with
+        Nil -> Just x
+        Cons y ys -> list_last rest
+
+(Goals: 4)
+(Measures: 3)
+(Spec size: 19)
+(Solution size: 39)
 ---------------------------------------------------------------
 List-Length:
 ---------------------------------------------------------------
@@ -277,7 +315,7 @@ laurent-BCD: timeout
 List-Snoc:
 ---------------------------------------------------------------
 guarded powerset:
-snoc :: (xs:List a -> x:a -> {List a|len _v == len xs + 1}) ^ ((xs:{List a|_v == (Nil)} -> x:a -> {List a|_v == (Cons x (Nil))}) ^ ((xs:{List Int|_v == (Cons 2 (Nil))} -> x:{Int|_v == 1} -> {List Int|_v == (Cons 2 ((Cons 1 (Nil))))}) ^ ((xs:{List Int|_v == (Cons 3 ((Cons 2 (Nil))))} -> x:{Int|_v == 1} -> {List Int|_v == (Cons 3 ((Cons 2 ((Cons 1 (Nil))))))}) ^ (xs:{List Int|_v == (Nil)} -> x:{Int|_v == 1} -> {List Int|_v == (Cons 1 (Nil))}))))
+snoc :: (xs:List a -> x:a -> {List a|len _v == len xs + 1}) ^ ((xs:{List a|_v == (Nil)} -> x:a -> {List a|_v == (Cons x (Nil))}) ^ (xs:{List Int|_v == (Cons 2 (Nil))} -> x:{Int|_v == 1} -> {List Int|_v == (Cons 2 ((Cons 1 (Nil))))}))
 snoc = \xs . \x . 
     match xs with
       Nil -> Cons x Nil
@@ -285,11 +323,11 @@ snoc = \xs . \x .
 
 (Goals: 2)
 (Measures: 1)
-(Spec size: 63)
+(Spec size: 33)
 (Solution size: 29)
 
 either/or:
-snoc :: (xs:List a -> x:a -> {List a|len _v == len xs + 1}) ^ ((xs:{List a|_v == (Nil)} -> x:a -> {List a|_v == (Cons x (Nil))}) ^ ((xs:{List Int|_v == (Cons 2 (Nil))} -> x:{Int|_v == 1} -> {List Int|_v == (Cons 2 ((Cons 1 (Nil))))}) ^ ((xs:{List Int|_v == (Cons 3 ((Cons 2 (Nil))))} -> x:{Int|_v == 1} -> {List Int|_v == (Cons 3 ((Cons 2 ((Cons 1 (Nil))))))}) ^ (xs:{List Int|_v == (Nil)} -> x:{Int|_v == 1} -> {List Int|_v == (Cons 1 (Nil))}))))
+snoc :: (xs:List a -> x:a -> {List a|len _v == len xs + 1}) ^ ((xs:{List a|_v == (Nil)} -> x:a -> {List a|_v == (Cons x (Nil))}) ^ (xs:{List Int|_v == (Cons 2 (Nil))} -> x:{Int|_v == 1} -> {List Int|_v == (Cons 2 ((Cons 1 (Nil))))}))
 snoc = \xs . \x . 
     match xs with
       Nil -> Cons x Nil
@@ -297,10 +335,20 @@ snoc = \xs . \x .
 
 (Goals: 2)
 (Measures: 1)
-(Spec size: 63)
+(Spec size: 33)
 (Solution size: 29)
 
-laurent-BCD: timeout
+laurent-BCD:
+snoc :: (xs:List a -> x:a -> {List a|len _v == len xs + 1}) ^ ((xs:{List a|_v == (Nil)} -> x:a -> {List a|_v == (Cons x (Nil))}) ^ (xs:{List Int|_v == (Cons 2 (Nil))} -> x:{Int|_v == 1} -> {List Int|_v == (Cons 2 ((Cons 1 (Nil))))}))
+snoc = \xs . \x . 
+    match xs with
+      Nil -> Cons x Nil
+      Cons y ys -> Cons y (snoc ys x)
+
+(Goals: 2)
+(Measures: 1)
+(Spec size: 33)
+(Solution size: 29)
 ---------------------------------------------------------------
 List-Sum:
 ---------------------------------------------------------------
@@ -362,6 +410,18 @@ TakeWhile:
 ---------------------------------------------------------------
 guarded powerset:
 takeWhile :: <p :: a -> Bool> . (pred:(x:a -> {Bool|_v == p x}) -> xs:List a -> List {a|p _v}) ^ (pred:(x:a -> {Bool|_v == p x}) -> xs:List {a|p _v} -> {List a|_v == xs})
+takeWhile = \pred . \xs . 
+    match xs with
+      Nil -> Nil
+      Cons y ys -> 
+        if pred y
+          then Cons y (takeWhile pred ys)
+          else Nil
+
+(Goals: 2)
+(Measures: 1)
+(Spec size: 18)
+(Solution size: 30)
 
 either/or:
 takeWhile :: <p :: a -> Bool> . (pred:(x:a -> {Bool|_v == p x}) -> xs:List a -> List {a|p _v}) ^ (pred:(x:a -> {Bool|_v == p x}) -> xs:List {a|p _v} -> {List a|_v == xs})

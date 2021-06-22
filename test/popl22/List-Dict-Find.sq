@@ -20,6 +20,7 @@ measure insert :: x: a -> List a -> {List a|True} where
   Nil -> Cons x Nil
   Cons y ys -> Cons x (Cons y ys)
 
+qualifier { len _v < len x }
 
 {-
 This hangs, but IDK where. VSCode won't tell me.

@@ -141,6 +141,7 @@ arity (LetT _ _ t) = arity t
 arity (AndT l _) = arity l -- these should be the same though.
 arity _ = 0
 
+
 -- TODO: make sure the AnyT case is OK
 hasSet :: TypeSkeleton r -> Bool
 hasSet (ScalarT (DatatypeT name _ _) _) = name == setTypeName
@@ -429,6 +430,21 @@ simplifyType t@(UnionT l _)
       fps = map (simplifyType . (foldr1 UnionT)) baseTys
     in foldr1 UnionT fps
 simplifyType t = t
+
+enforceWorldNames :: [RType] -> [RType]
+enforceWorldNames [] = []
+enforceWorldNames (t:ts) = t : map (matchNames t) ts
+
+matchNames :: RType -> RType -> RType
+matchNames = matchNames' Map.empty
+  where
+    matchNames' subst (FunctionT x argTemplate resTemplate) (FunctionT y arg res) =
+      let arg' = matchNames' subst argTemplate arg in
+      case arg of
+        ScalarT base _ ->
+          FunctionT x (substituteInType (const False) subst arg') (matchNames' (Map.insert y (Var (toSort base) x) subst) resTemplate res)
+        _ -> FunctionT x (substituteInType (const False) subst arg') (matchNames' subst resTemplate res)
+    matchNames' subst _ t = substituteInType (const False) subst t
 
 -- Set strings: used for "fake" set type for typechecking measures
 emptySetCtor = "Emptyset"
