@@ -88,7 +88,7 @@ generateI ws@((env, ScalarT{}):_) = do
     maPossible <- runInSolver $ hasPotentialScrutinees env -- Are there any potential scrutinees in scope?
     logItFrom "generateI-ScalarT" $ text "are there scrutinees?" <+> pretty maPossible
     if maEnabled && d > 0 && maPossible then generateMaybeMatchIf ws else generateMaybeIf ws
-generateI _ = error "impossible"
+generateI ws = error $ "impossible world case: " ++ show (pretty ws)
 
 -- | Generate a possibly conditional term type @t@, depending on whether a condition is abduced
 generateMaybeIf :: MonadHorn s => [World] -> Explorer s RWProgram
@@ -522,18 +522,16 @@ generateApp (enableCut, ctxMod) ws genFun genArg = do
   let argTypes' = map argType funTypes
   let realArgs = map (\(FunctionT y _ _) -> y) funTypes
   let retTypes' = map resType funTypes
-
+  let argWorlds = zip (map fst ws) (argTypes')
   if argTypes' & head & isFunctionType
     then do -- Higher-order argument: its value is not required for the function type, return a placeholder and enqueue an auxiliary goal
       d <- asks . view $ _1 . auxDepth
       when (d <= 0) $ writeLog 2 (text "Cannot synthesize higher-order argument: no auxiliary functions allowed") >> mzero
-      let env = fst $ head ws
       let nWorlds = length ws
-      arg <- enqueueGoal ws (Program PHole (replicate nWorlds AnyT)) (d - 1)
+      arg <- enqueueGoal argWorlds (Program PHole (replicate nWorlds AnyT)) (d - 1)
       return $ Program (PApp pFun arg) retTypes'
     else do -- First-order argument: generate now
       let mbCut = id -- if (not enableCut) && Set.member x (varsOfType tRes) then id else cut
-      let argWorlds = zip (map fst ws) argTypes'
       arg <- ctxMod
                 $ inContext (\p -> Program (PApp pFun p) retTypes')
                 $ mbCut (genArg argWorlds)
@@ -716,12 +714,6 @@ instantiate env sch top argNames = do
               [] -> freshVar env "X"
               (argName : _) -> return argName
       liftM2 (FunctionT x') (go subst pSubst intersectionStrat [] tArg) (go subst pSubst intersectionStrat (drop 1 argNames) (renameVar (isBoundTV subst) x x' tArg tRes))
-
-    go subst pSubst intersectionStrat@InferMedian argNames t@AndT{} =
-      constrainBottom subst pSubst intersectionStrat argNames t
-
-    go subst pSubst intersectionStrat@AlgorithmicLaurent argNames t@AndT{} = do
-      constrainBottom subst pSubst intersectionStrat argNames t
 
     go subst pSubst intersectionStrat@GuardedPowerset argNames t@AndT{} = do
       constrainBottom subst pSubst intersectionStrat argNames t

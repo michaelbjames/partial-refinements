@@ -47,8 +47,8 @@ reconstruct eParams tParams goal = do
     go :: MonadHorn s => Explorer s RWProgram
     go = do
       pMain <- reconstructTopLevel goal { gDepth = _auxDepth eParams }     -- Reconstruct the program
-      p <- flip insertAuxSolutions pMain <$> (use solvedAuxGoals)            -- Insert solutions for auxiliary goals stored in @solvedAuxGoals@
-      runInSolver $ finalizeWProgram p                                      -- Substitute all type/predicates variables and unknowns
+      p <- flip insertAuxSolutions pMain <$> use solvedAuxGoals            -- Insert solutions for auxiliary goals stored in @solvedAuxGoals@
+      runInSolver $ finalizeWProgram p                                     -- Substitute all type/predicates variables and unknowns
 
 reconstructTopLevel :: MonadHorn s => Goal -> Explorer s RWProgram
 reconstructTopLevel (Goal funName env (ForallT a sch) impl depth pos s) =

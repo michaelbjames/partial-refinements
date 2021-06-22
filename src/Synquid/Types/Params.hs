@@ -18,12 +18,8 @@ data PickSymbolStrategy = PickDepthFirst | PickInterleave
 data IntersectStrategy
     = -- | Try to check with only one of the intersected types
       EitherOr
-    | -- | Find some supertype that is not an intersection itself
-      InferMedian
     | -- | Use the Laurent BCD subtyping rule for intersection types.
       LaurentBCD
-    | -- | Like Laurent BCD, but on functions, build up co-domain checks to avoid a powerset
-      AlgorithmicLaurent
     | -- | Like LaurentBCD, but creates constraints through guarded subtypes
       GuardedPowerset
     deriving (Data, Eq, Ord, Show)

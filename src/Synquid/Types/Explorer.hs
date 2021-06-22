@@ -64,7 +64,7 @@ defaultExplorerParams = ExplorerParams {
   _context = id,
   _sourcePos = noPos,
   _explorerLogLevel = 0,
-  _intersectStrategy = InferMedian
+  _intersectStrategy = GuardedPowerset
 }
 
 -- | State of program exploration
