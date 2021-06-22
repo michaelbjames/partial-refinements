@@ -111,17 +111,11 @@ solveTypeConstraints = do
   scs <- use simpleConstraints
   writeLog 3 (text "Simple Constraints" $+$ (vsep $ map pretty scs))
 
-  writeLog 3 (text "---Processing All Predicates---")
   processAllPredicates
-  writeLog 3 (text "---Processing All Constraints---")
   processAllConstraints
-  writeLog 3 (text "---Generating All Horn Clauses---")
   generateAllHornClauses
 
-  writeLog 3 (text "---Solving All Horn Clauses---")
   solveHornClauses
-  -- TODO: Re-enable this:
-  -- There are no checks that the user DIDNT disable this.
   checkTypeConsistency
   cands <- use candidates
   writeLog 3 $ text "[solveTypeConstraints]: Solved Candidates:" $+$ pretty (cands :: [Candidate])
@@ -599,9 +593,10 @@ generateHornClauses (Subtype env (ScalarT baseTL l) (ScalarT baseTR r) True _) |
       qmap <- use qualifierMap
       let relevantVars = potentialVars qmap (l |&| r)
       emb <- embedding env relevantVars baseTL False
-      let negGuards = (env ^. subtypeGuards) & snd -- TODO:2021-06-21:mj, not sure whether the negations should appear positively or negatively.
-      let clause = conjunction (Set.insert l $ Set.insert r (Set.union emb negGuards))
-      consistencyChecks %= (clause :)
+      let guards = (env ^. subtypeGuards) & uncurry Set.union
+      let rhs = conjunction (Set.insert l $ Set.insert r emb)
+      let lhs = conjunction guards
+      consistencyChecks %= ((lhs |=>| rhs) :)
 generateHornClauses c = error $ show $ text "generateHornClauses: not a simple subtyping constraint" <+> pretty c
 
 -- | 'allScalars' @env@ : logic terms for all scalar symbols in @env@
