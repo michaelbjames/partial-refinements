@@ -12,12 +12,14 @@ import Synquid.Types.Type
 import Data.Maybe
 import Data.Either
 import Data.List
+import Data.Function
+import Data.List.Extra
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
 
-import Control.Arrow
+import Control.Arrow hiding ((|||))
 import Control.Monad
 import Control.Monad.State
 import Control.Lens hiding (set)
@@ -408,6 +410,25 @@ allRefinementsOf sch = allRefinementsOf' $ typeFromSchema sch
 allRefinementsOf' (ScalarT _ ref) = [ref]
 allRefinementsOf' (FunctionT _ argT resT) = allRefinementsOf' argT ++ allRefinementsOf' resT
 allRefinementsOf' _ = error "allRefinementsOf called on contextual or any type"
+
+simplifyType :: RType -> RType
+simplifyType t@(AndT l _)
+  | allSame (intersectionToList t) = l
+  -- | (ScalarT repB _) <- head (intersectionToList t)
+  -- , allSame (map baseTypeOf)
+simplifyType t@(UnionT l _)
+  | allSame (unionToList t) = l
+  -- We can only truely lift scalar unions to refinements
+  | (ScalarT repB _) <- head (unionToList t)
+  , allSame (map baseTypeOf (unionToList t)) = let
+      fmls = concatMap allRefinementsOf' $ unionToList t
+    in ScalarT repB (foldr1 (|||) fmls)
+  | otherwise = let
+      ts = unionToList t
+      baseTys = groupBy (on (==) baseTypeOf) ts
+      fps = map (simplifyType . (foldr1 UnionT)) baseTys
+    in foldr1 UnionT fps
+simplifyType t = t
 
 -- Set strings: used for "fake" set type for typechecking measures
 emptySetCtor = "Emptyset"

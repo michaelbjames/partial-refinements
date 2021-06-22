@@ -453,7 +453,7 @@ checkSymbol ws name = do
             symbolUseCount %= Map.insertWith (+) name 1
             let iterList = zip ts [1..]
             let choices = flip map iterList $ \(t, idx) -> do
-                  logItFrom "reconstructE" $ brackets (text "PSymbol") 
+                  logItFrom "reconstructE" $ brackets (text "PSymbol")
                     <> text ": making choice"
                     <+> parens ((text $ show idx) <> text "/" <> (text $ show $ length iterList))
                     <+> text "for" <+> text name
@@ -593,7 +593,7 @@ isPolyConstructor (Program (PSymbol name) t) = isTypeName name && (not . Set.nul
 enqueueGoal ws impl depth = do
   name <- freshVar (fst $ head ws) "f"
   auxGoals %= (AuxGoal name ws impl depth noPos :)
-  return $ Program (PSymbol name) (map snd ws) 
+  return $ Program (PSymbol name) (map snd ws)
 
 {- Utility -}
 
