@@ -12,7 +12,7 @@ termination measure len :: List a -> {Int | _v >= 0} where
 
 not :: p:Bool -> {Bool | _v == !p}
 
-qualifier { len _v < len x }
+qualifier { len _v < len x, len _v >= 0 }
 
 -- {-
 -- It will check WITHOUT the first, more general type.

@@ -10,14 +10,11 @@ import re
 
 '''
 Run all benchmarks, collect results, output csv and tex files
+Usage: ./ru_tests.py [extra_synquid_arguments]
 
 TODO:
-record time
-record AST size
-other stats?
 output csv
 output tex
-write all output to a log
 '''
 
 STACK_ARGS = ['--silent']

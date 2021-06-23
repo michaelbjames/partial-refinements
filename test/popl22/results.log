@@ -36,7 +36,7 @@ laurent-BCD: timeout
 List-Dict-Contains:
 ---------------------------------------------------------------
 guarded powerset:
-contains :: (x:Int -> arg0:List Pair Int b -> Bool) ^ ((x:a -> arg0:{List Pair a b|len _v == 0} -> {Bool|_v == False}) ^ ((x:Int -> arg0:{List Pair {Int|_v == x} b|len _v > 0} -> {Bool|_v == True}) ^ (x:Int -> arg0:List Pair {Int|_v != x} b -> {Bool|_v == False})))
+contains :: (x:Int -> arg0:List Pair Int b -> Bool) ^ (x:a -> arg0:{List Pair a b|len _v == 0} -> {Bool|_v == False})
 List-Dict-Contains.sq:42: Error:
   Cannot find sufficiently strong refinements
   when checking
@@ -54,11 +54,11 @@ List-Dict-Contains.sq:42: Error:
 
 
 either/or:
-contains :: (x:Int -> arg0:List Pair Int b -> Bool) ^ ((x:a -> arg0:{List Pair a b|len _v == 0} -> {Bool|_v == False}) ^ ((x:Int -> arg0:{List Pair {Int|_v == x} b|len _v > 0} -> {Bool|_v == True}) ^ (x:Int -> arg0:List Pair {Int|_v != x} b -> {Bool|_v == False})))
+contains :: (x:Int -> arg0:List Pair Int b -> Bool) ^ (x:a -> arg0:{List Pair a b|len _v == 0} -> {Bool|_v == False})
 List-Dict-Contains.sq:42: Error:
   Cannot find sufficiently strong refinements
   when checking
-  needle :: {Int|_v >= 0 && _v < needle}
+  xs :: {List Pair Int b|len _v == 0 && (len _v >= 0 && len _v < len haystack)}
   in
   \needle . \haystack . 
       match haystack with
@@ -67,7 +67,7 @@ List-Dict-Contains.sq:42: Error:
             Pair xa xb -> 
               if xa == needle
                 then True
-                else contains needle (?? :: [_])
+                else contains needle xs
 
 
 laurent-BCD: timeout
@@ -76,21 +76,21 @@ List-Dict-Find:
 ---------------------------------------------------------------
 guarded powerset:
 find :: (arg2:List Pair Int b -> arg1:Int -> arg0:b -> b) ^ (arg2:{List Pair Int Int|len _v == 0} -> arg1:Int -> default:Int -> {Int|_v == default})
-List-Dict-Find.sq:33: Error:
-  Cannot find sufficiently strong refinements
-  when checking
-  find :: X7:_ -> X6:_ -> X5:_ -> b
-  in
-  \haystack . \needle . \def . 
-        match haystack with
-          Cons x xs -> 
-            match x with
-              Pair xa xb -> 
-                if xa == needle
-                  then xb
-                  else find (?? :: [_])
-                         (?? :: [_]) (?? :: [_])
+find = \haystack . \needle .
+    \def . 
+      match haystack with
+        Nil -> def
+        Cons x xs -> 
+          match x with
+            Pair xa xb -> 
+              if xa == needle
+                then xb
+                else find xs needle def
 
+(Goals: 5)
+(Measures: 4)
+(Spec size: 10)
+(Solution size: 59)
 
 either/or:
 find :: (arg2:List Pair Int b -> arg1:Int -> arg0:b -> b) ^ (arg2:{List Pair Int Int|len _v == 0} -> arg1:Int -> default:Int -> {Int|_v == default})
@@ -110,7 +110,23 @@ find = \haystack . \needle .
 (Spec size: 10)
 (Solution size: 59)
 
-laurent-BCD: timeout
+laurent-BCD:
+find :: (arg2:List Pair Int b -> arg1:Int -> arg0:b -> b) ^ (arg2:{List Pair Int Int|len _v == 0} -> arg1:Int -> default:Int -> {Int|_v == default})
+find = \haystack . \needle .
+    \def . 
+      match haystack with
+        Nil -> def
+        Cons x xs -> 
+          match x with
+            Pair xa xb -> 
+              if xa == needle
+                then xb
+                else find xs needle def
+
+(Goals: 5)
+(Measures: 4)
+(Spec size: 10)
+(Solution size: 59)
 ---------------------------------------------------------------
 List-Even-Parity:
 ---------------------------------------------------------------
