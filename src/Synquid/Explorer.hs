@@ -435,7 +435,7 @@ checkSymbol :: MonadHorn s => [World] -> Id -> Explorer s RWProgram
 checkSymbol ws name = do
   intersectionStrat <- asks . view $ _1 . intersectStrategy
   ts <- forM (zip ws [1..]) $ \((env, typ), widx) -> do
-    typingState . currentWorldIdx .= widx
+    typingState . currentWorldNumOneIdx .= widx
     case lookupSymbol name (arity typ) (hasSet typ) env of
       Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
       Just sch -> do
@@ -622,7 +622,7 @@ throwErrorWithDescription msg = do
 throwError :: MonadHorn s => ErrorMessage -> Explorer s a
 throwError e = do
   worlds <- use $ typingState . topLevelGoals
-  currentIdx <- use $ typingState . currentWorldIdx
+  currentIdx <- use $ typingState . currentWorldNumOneIdx
   writeLog 2 $ text "TYPE ERROR:" </> text "from world:" <+> pretty (worlds !! (currentIdx -1)) </> text "with error:" <+> plain (emDescription e)
   lift . lift . lift $ typeErrors %= (e :)
   mzero
@@ -656,7 +656,7 @@ fresh env t = runInSolver $ TCSolver.fresh env t
 freshFromIntersect :: MonadHorn s => Environment -> RType -> Explorer s RType
 freshFromIntersect env t = do
   goals <- use $ typingState . topLevelGoals
-  currentWorld <- use $ typingState . currentWorldIdx
+  currentWorld <- use $ typingState . currentWorldNumOneIdx
   runInSolver $ TCSolver.freshFromIntersect env t (goals !! (currentWorld - 1))
 
 -- | Return the current valuation of @u@;

@@ -46,7 +46,7 @@ data TypingState = TypingState {
   _idCount :: Map String Int,                   -- ^ Number of unique identifiers issued so far
   _isFinal :: Bool,                             -- ^ Has the entire program been seen?
   _topLevelGoals :: [RType],                     -- ^ The top-level goal per world.
-  _currentWorldIdx :: Int,
+  _currentWorldNumOneIdx :: Int,
   -- Temporary state:
   _simpleConstraints :: [Constraint],           -- ^ Typing constraints that cannot be simplified anymore and can be converted to horn clauses or qualifier maps
   _hornClauses :: [(Formula, Id)],              -- ^ Horn clauses generated from subtyping constraints
