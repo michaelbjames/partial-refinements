@@ -36,7 +36,6 @@ module Synquid.TypeConstraintSolver (
   initEnv,
   allScalars,
   condQualsGen,
-  topLevelGoal,
   addQuals
 ) where
 
@@ -92,7 +91,8 @@ initTypingState env schema = do
     _candidates = [initCand],
     _initEnv = env,
     _idCount = Map.empty,
-    _topLevelGoal = toMonotype schema,
+    _topLevelGoals = intersectionToList $ toMonotype schema,
+    _currentWorldIdx = 0,
     _isFinal = False,
     _simpleConstraints = [],
     _hornClauses = [],
@@ -260,7 +260,7 @@ simplifyConstraint' _ _ c@(Subtype _ AnyT _ _ _) = return ()
 simplifyConstraint' _ _ c@(WellFormed _ AnyT) = return ()
 -- Any datatype: drop only if lhs is a datatype
 simplifyConstraint' _ _ (Subtype _ (ScalarT (DatatypeT _ _ _) _) t _ _) | t == anyDatatype = return ()
---simplifyConstraint' _ _ (Subtype _ (ScalarT (TypeVarT _ _) _) t _ _) | t == anyDatatype = return ()
+-- simplifyConstraint' _ _ (Subtype _ (ScalarT (TypeVarT _ _) _) t _ _) | t == anyDatatype = return ()
 -- Well-formedness of a known predicate drop
 simplifyConstraint' _ pass c@(WellFormedPredicate _ _ p) | p `Map.member` pass = return ()
 
@@ -380,7 +380,7 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
 
       -- domain
       -- Get the powerset of each constraint and its matching constraint
-      let jConjuncts = (zipWith (\(a,b) c -> (a,b,c)) conjunctArgs [1..]) &
+      let jConjuncts = zipWith (\(a,b) c -> (a,b,c)) conjunctArgs [1..] &
                         Set.fromList & Set.powerSet & Set.delete Set.empty & Set.toList &
                         map Set.toList
       forM_ jConjuncts $ \conjunctConstraintSubset -> do
@@ -748,7 +748,9 @@ freshPred env sorts = do
 freshFromIntersect env t@(AndT l r) goalType = do
   let goalShapes = intersectionToList t & filter (on arrowEq shape goalType)
   case listToMaybe goalShapes of
-    Nothing -> error $ "Specification has a shape mismatch. Nothing matches:\n" ++ show (plain (pretty (shape goalType))) ++ "\nfrom:\n" ++ show (plain (pretty $ map shape $ intersectionToList t))
+    Nothing -> error $ "Specification has a shape mismatch. Nothing matches:\n" ++
+        show (plain $ pretty (shape goalType)) ++ "\nfrom:\n" ++
+        show (plain $ pretty $ map shape $ intersectionToList t)
     Just t' -> fresh env t'
 freshFromIntersect env (FunctionT x tArg tRes) (FunctionT gx goalArg goalRes) = do
   tArg' <- freshFromIntersect env tArg goalArg

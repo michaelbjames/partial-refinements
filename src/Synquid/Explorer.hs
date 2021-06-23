@@ -19,6 +19,7 @@ import Synquid.Types.Type
 import Synquid.Types.Rest
 import Synquid.Types.Explorer
 import Synquid.Types.Params
+import Synquid.Types.Solver
 
 import Data.Bifunctor
 import Data.Maybe
@@ -69,7 +70,7 @@ generateI :: MonadHorn s => [World] -> Explorer s RWProgram
 generateI envTy@((env, FunctionT{}):_) = do
   let ts = map snd envTy
   unless (all isFunctionType ts) (error "generateI, not all functions")
-  -- unless (allSame $ map argName ts) (error "the intersected functions don't all use the same arg name! They should.")
+  -- unless (allSame $ map argName ts) (error $ "the intersected functions don't all use the same arg name! They should, in: " ++ (show $ pretty ts))
   let x = argName $ head ts
   let ctx = \p -> Program (PFun x p) ts
   let tRess = map resType ts
@@ -94,7 +95,8 @@ generateI ws = error $ "impossible world case: " ++ show (pretty ws)
 generateMaybeIf :: MonadHorn s => [World] -> Explorer s RWProgram
 generateMaybeIf ws = ifte generateThen (uncurry $ generateElse ws) (generateMatch ws) -- If at least one solution without a match exists, go with it and continue with the else branch; otherwise try to match
   where
---     -- | Guess an E-term and abduce a condition for it
+    (envs, ts) = unzip ws
+    -- | Guess an E-term and abduce a condition for it
     generateThen = do
         constrName <- freshId "C"
         let cUnknown = Unknown Map.empty constrName
@@ -102,12 +104,13 @@ generateMaybeIf ws = ifte generateThen (uncurry $ generateElse ws) (generateMatc
             logItFrom "generateThen" $ text "cUnknown:" <+> pretty cUnknown <+> text "for type" <+> pretty t
             addConstraint $ WellFormedCond env cUnknown
             return $ addAssumption cUnknown env
-        let ws' = zip envs' (map snd ws)
+        let ws' = zip envs' ts
         logItFrom "generateThen" $ text "got constraint worlds, finding a then in:" </> pretty ws'
         -- TODO: Consider using atLeastOneWorld here.
         pThen <-  cut (generateE ws') -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
         logItFrom "generateThen" $ text "then found:" <+> pretty pThen
         cond <- conjunction <$> currentValuation cUnknown
+        -- This condition is satisfiable in at least one world.
         return (cond, pThen)
 
 -- | Proceed after solution @pThen@ has been found under assumption @cond@
@@ -426,30 +429,28 @@ checkE ws p@(Program pTerm pTyps) = do
                     typingState . errorContext .= (noPos, empty)
                     writeLog 2 $ text "Checking OK:" <+> pretty p <+> text "::" <+> pretty fTyp <+> text "in" $+$ pretty (ctx (untypedWorld PHole))
                     return idx
-
-  -- let t1 = map checker ws'
-  -- sequence_ t1
   forM idxdws checker
 
 checkSymbol :: MonadHorn s => [World] -> Id -> Explorer s RWProgram
 checkSymbol ws name = do
   intersectionStrat <- asks . view $ _1 . intersectStrategy
-  ts <- forM ws $ \(env, typ) ->
+  ts <- forM (zip ws [1..]) $ \((env, typ), widx) -> do
+    typingState . currentWorldIdx .= widx
     case lookupSymbol name (arity typ) (hasSet typ) env of
       Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
       Just sch -> do
-        logItFrom "checkSymbol" $ dquotes (text name) <+> text "schema:" <+> pretty sch <+> text "against" <+> pretty typ
+        logItFrom "checkSymbol" $ dquotes (text name) <+> text "world" <+> pretty (widx::Int)
+          <+> text "schema:" <+> pretty sch <+> text "against" <+> pretty typ
         t' <- symbolType env name sch  -- symbolType will infer a type if it's polymorphic or an intersection
         -- logItFrom "reconstructE'-Var-Base" (text "symbol:" <+> (pretty name) <> (text "::") <> (pretty typ) <+> (text "symbol type:")  <+> (pretty t'))
         case intersectionStrat of
 
           {- Select one side of an intersection -}
-          EitherOr -> do -- $(todo "eitherOr") {-
-          -- do
+          EitherOr -> do
             let ts = intersectionToList t'
             let nameShape = head . intersectionToList <$> Map.lookup name (env ^. shapeConstraints)
 
-          --   -- t could be an intersection, loop over choices
+            -- t could be an intersection, loop over choices
             symbolUseCount %= Map.insertWith (+) name 1
             let iterList = zip ts [1..]
             let choices = flip map iterList $ \(t, idx) -> do
@@ -620,8 +621,9 @@ throwErrorWithDescription msg = do
 -- | Record type error and backtrack
 throwError :: MonadHorn s => ErrorMessage -> Explorer s a
 throwError e = do
-  currentGoal <- use $ typingState . topLevelGoal
-  writeLog 2 $ text "TYPE ERROR:" </> text "from world:" <+> pretty currentGoal </> text "with error:" <+> plain (emDescription e)
+  worlds <- use $ typingState . topLevelGoals
+  currentIdx <- use $ typingState . currentWorldIdx
+  writeLog 2 $ text "TYPE ERROR:" </> text "from world:" <+> pretty (worlds !! (currentIdx -1)) </> text "with error:" <+> plain (emDescription e)
   lift . lift . lift $ typeErrors %= (e :)
   mzero
 
@@ -653,8 +655,9 @@ fresh env t = runInSolver $ TCSolver.fresh env t
 
 freshFromIntersect :: MonadHorn s => Environment -> RType -> Explorer s RType
 freshFromIntersect env t = do
-  currentGoal <- use $ typingState . topLevelGoal
-  runInSolver $ TCSolver.freshFromIntersect env t currentGoal
+  goals <- use $ typingState . topLevelGoals
+  currentWorld <- use $ typingState . currentWorldIdx
+  runInSolver $ TCSolver.freshFromIntersect env t (goals !! (currentWorld - 1))
 
 -- | Return the current valuation of @u@;
 -- in case there are multiple solutions,

@@ -287,7 +287,7 @@ testType = AndT t2 t3
 -- Remove the refinements, preserve the arrow structure,
 -- and infer the least common generalization.
 shape :: RType -> SType
-shape (AndT l r) = antiUnify (removeRefinement l) (removeRefinement r)
+shape (AndT l r) = antiUnify (removeRefinement l) (removeRefinement r) ()
 shape t = removeRefinement t
 
 -- | Remove the refinement, but keep the same constructor structure.
@@ -302,7 +302,7 @@ removeRefinement (AndT l r) = AndT (removeRefinement l) (removeRefinement r)
 removeRefinement AnyT = AnyT
 
 -- antiUnify :: Ord a => TypeSkeleton a -> TypeSkeleton a -> TypeSkeleton a
-antiUnify t1 t2 = antiUnify' () t1 t2 Map.empty & fst
+antiUnify t1 t2 def = antiUnify' def t1 t2 Map.empty & fst
 -- Implementation taken from James et al. 2020
 antiUnify' def (AndT ll lr) r st = uncurry (antiUnify' def r) (antiUnify' def ll lr st)
 antiUnify' def l (AndT rl rr) st = uncurry (antiUnify' def l) (antiUnify' def rl rr st)
@@ -330,7 +330,6 @@ antiUnify' def l r st
         if ("T" ++ show idx) `elem` ks
             then mkFreshIdSafe ks (idx + 1)
             else "T" ++ show idx
-
 
 -- | Conjoin refinement to a type
 addRefinement :: TypeSkeleton Formula -> Formula -> TypeSkeleton Formula
@@ -426,7 +425,7 @@ simplifyType t@(UnionT l _)
     in ScalarT repB (foldr1 (|||) fmls)
   | otherwise = let
       ts = unionToList t
-      baseTys = groupBy (on (==) baseTypeOf) ts
+      baseTys = groupBy arrowEq ts
       fps = map (simplifyType . (foldr1 UnionT)) baseTys
     in foldr1 UnionT fps
 simplifyType t = t
