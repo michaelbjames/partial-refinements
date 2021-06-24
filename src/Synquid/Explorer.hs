@@ -415,9 +415,10 @@ checkE ws p@(Program pTerm pTyps) = do
   incremental <- asks . view $ _1 . incrementalChecking -- Is incremental type checking of E-terms enabled?
   consistency <- asks . view $ _1 . consistencyChecking -- Is consistency checking enabled?
 
-  let idxdws = zip ws' ([1..]::[Int])
+  let idxdws = zip ws' ([1..(length ws')]::[Int])
 
   let checker = \((env, typ, pTyp), idx) -> do
+                    typingState . currentWorldNumOneIdx .= idx
                     logItFrom "checkE" $ pretty (void p) <+> text "chk" <+> pretty typ <+> text "str" <+> pretty pTyp <+> text "in world" <+> pretty idx
                     when (incremental || arity typ == 0) (addConstraint $ Subtype env pTyp typ False "checkE-subtype") -- Add subtyping check, unless it's a function type and incremental checking is diasbled
                     when (consistency && arity typ > 0) (addConstraint $ Subtype env pTyp typ True "checkE-consistency") -- Add consistency constraint for function types
@@ -426,10 +427,13 @@ checkE ws p@(Program pTerm pTyps) = do
                     pos <- asks . view $ _1 . sourcePos
                     typingState . errorContext .= (pos, text "when checking" </> pretty p <+> text "::" <+> pretty fTyp </> text "in" $+$ pretty (ctx p))
                     runInSolver solveTypeConstraints
+                    logItFrom "checkE" (text "Finished solveTypeConstraints")
                     typingState . errorContext .= (noPos, empty)
                     writeLog 2 $ text "Checking OK:" <+> pretty p <+> text "::" <+> pretty fTyp <+> text "in" $+$ pretty (ctx (untypedWorld PHole))
                     return idx
-  forM idxdws checker
+  res <- forM idxdws checker
+  logItFrom "checkE" $ text "checked in worlds:" <+> pretty res
+  return res
 
 checkSymbol :: MonadHorn s => [World] -> Id -> Explorer s RWProgram
 checkSymbol ws name = do

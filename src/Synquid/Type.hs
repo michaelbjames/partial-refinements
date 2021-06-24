@@ -414,8 +414,10 @@ allRefinementsOf' _ = error "allRefinementsOf called on contextual or any type"
 simplifyType :: RType -> RType
 simplifyType t@(AndT l _)
   | allSame (intersectionToList t) = l
-  -- | (ScalarT repB _) <- head (intersectionToList t)
-  -- , allSame (map baseTypeOf)
+  | (ScalarT repB _) <- head (intersectionToList t)
+  , allSame (map baseTypeOf (intersectionToList t)) = let
+      fmls = concatMap allRefinementsOf' $ unionToList t
+    in ScalarT repB (foldr1 (|&|) fmls)
 simplifyType t@(UnionT l _)
   | allSame (unionToList t) = l
   -- We can only truely lift scalar unions to refinements
