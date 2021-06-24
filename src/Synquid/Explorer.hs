@@ -518,7 +518,7 @@ generateApp :: MonadHorn s =>
   ([World] -> Explorer s RWProgram) ->
     Explorer s RWProgram
 generateApp (enableCut, ctxMod) ws genFun genArg = do
-  x <- freshId "X"
+  x <- freshId "x"
   let retTyps = map snd ws
   let functionWorlds = map (second (FunctionT x AnyT)) ws
   pFun <- inContext (\p -> Program (PApp p uHoleWorld) retTyps)
