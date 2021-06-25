@@ -98,16 +98,19 @@ generateMaybeIf ws = ifte generateThen (uncurry $ generateElse ws) (generateMatc
     generateThen = do
         constrName <- freshId "C"
         let cUnknown = Unknown Map.empty constrName
+        addConstraint $ ProductiveCond (map fst ws) cUnknown
         envs' <- forM ws $ \(env, t) -> do
             logItFrom "generateThen" $ text "cUnknown:" <+> pretty cUnknown <+> text "for type" <+> pretty t
             addConstraint $ WellFormedCond env cUnknown
             return $ addAssumption cUnknown env
         let ws' = zip envs' (map snd ws)
         logItFrom "generateThen" $ text "got constraint worlds, finding a then in:" </> pretty ws'
-        -- TODO: Consider using atLeastOneWorld here.
-        pThen <-  cut (generateE ws') -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
-        logItFrom "generateThen" $ text "then found:" <+> pretty pThen
-        cond <- conjunction <$> currentValuation cUnknown
+        (pThen, cond) <- cut $ do
+          p <- generateE ws' -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
+          c <- conjunction <$> currentValuation cUnknown
+          runInSolver $ progressChecks .= [] -- TODO: is this necessary??
+          return (p, c)
+        logItFrom "generateThen" $ text "then found:" <+> pretty pThen <+> text "under condition" <+> pretty cond
         return (cond, pThen)
 
 -- | Proceed after solution @pThen@ has been found under assumption @cond@
@@ -199,7 +202,7 @@ generateMatch ws = do
 
 generateFirstCase :: MonadHorn s => [Environment] -> [Formula] -> RWProgram -> TypeVector -> Id -> Explorer s (Case TypeVector, Formula, Id)
 -- generateFirstCase = $(todo "generateFirstCase")
-generateFirstCase envs scrVars pScrutinee ts consName = do
+generateFirstCase envs scrVars pScrutinee ts consName =
   case Map.lookup consName (allSymbols $ head envs) of
     Nothing -> error $ show $ text "Datatype constructor" <+> text consName <+> text "not found in the environment" <+> pretty (head envs)
     Just consSch -> do
@@ -230,7 +233,7 @@ generateFirstCase envs scrVars pScrutinee ts consName = do
 -- | Generate the @consName@ case of a match term with scrutinee variable @scrName@ and scrutinee type @scrType@
 generateCase :: MonadHorn s => [Environment] -> [Formula] -> RWProgram -> TypeVector -> Id -> Explorer s (Case TypeVector, Explorer s ())
 -- generateCase = $(todo "generateCase")
-generateCase envs scrVars pScrutinee scrTypes consName = do
+generateCase envs scrVars pScrutinee scrTypes consName =
     case Map.lookup consName (allSymbols (head envs)) of
         Nothing -> error $ show $ text "Datatype constructor" <+> text consName <+> text "not found in the environment" <+> pretty (head envs)
         Just consSch -> do
@@ -277,6 +280,7 @@ generateMaybeMatchIf ws = (generateOneBranch >>= generateOtherBranches) `mplus` 
         matchUnknown <- Unknown Map.empty <$> freshId "M"
         forM_ envs $ \env -> addConstraint $ WellFormedMatchCond env matchUnknown
         condUnknown <- Unknown Map.empty <$> freshId "C"
+        addConstraint $ ProductiveCond (map fst ws) condUnknown
         forM_ envs $ \env -> addConstraint $ WellFormedCond env condUnknown
         cut $ do
             p0 <- generateEOrError (zip (map (addAssumption matchUnknown . addAssumption condUnknown) envs) ts)
@@ -405,6 +409,7 @@ checkE ws p@(Program pTerm pTyps) = do
   ctx <- asks . view $ _1 . context
   writeLog 2 empty
   writeLog 2 $ brackets (text "checkE") <+> text "Checking" <+> pretty p <+> text "::" <+> pretty typs <+> text "in" $+$ pretty (ctx $ untypedWorld PHole)
+  writeLog 2 $ text "Worlds:" <+> pretty ws
   let ws' = addListToZip ws pTyps
 
   -- ifM (asks $ _symmetryReduction . fst) checkSymmetry (return ())
@@ -414,7 +419,7 @@ checkE ws p@(Program pTerm pTyps) = do
 
   let idxdws = zip ws' ([1..]::[Int])
 
-  let checker = \((env, typ, pTyp), idx) -> do
+  let checker ((env, typ, pTyp), idx) = do
                     logItFrom "checkE" $ pretty (void p) <+> text "chk" <+> pretty typ <+> text "str" <+> pretty pTyp <+> text "in world" <+> pretty idx
                     when (incremental || arity typ == 0) (addConstraint $ Subtype env pTyp typ False "checkE-subtype") -- Add subtyping check, unless it's a function type and incremental checking is diasbled
                     when (consistency && arity typ > 0) (addConstraint $ Subtype env pTyp typ True "checkE-consistency") -- Add consistency constraint for function types
@@ -492,6 +497,7 @@ enumerateAt ws 0 = do
       return symbols') ws
     logItFrom "enumerateAt" $ text "Symbols:" <+> pretty symbols''
     msum $ map (checkSymbol ws) symbols''
+
 
 enumerateAt ws d = do
   forM_ ws $ \(env, typ) -> do
@@ -661,7 +667,8 @@ freshFromIntersect env t = do
 -- order them from weakest to strongest in terms of valuation of @u@ and split the computation
 currentValuation :: MonadHorn s => Formula -> Explorer s Valuation
 currentValuation u = do
-  runInSolver $ solveAllCandidates
+  runInSolver solveAllCandidates
+  runInSolver checkProgress
   cands <- use (typingState . candidates)
   let candGroups = groupBy (\c1 c2 -> val c1 == val c2) $ sortBy (\c1 c2 -> setCompare (val c1) (val c2)) cands
   msum $ map pickCandidiate candGroups

@@ -21,7 +21,6 @@ module Synquid.TypeConstraintSolver (
   setUnknownRecheck,
   solveTypeConstraints,
   simplifyAllConstraints,
-  getViolatingLabels,
   solveAllCandidates,
   matchConsType,
   hasPotentialScrutinees,
@@ -37,7 +36,9 @@ module Synquid.TypeConstraintSolver (
   allScalars,
   condQualsGen,
   topLevelGoal,
-  addQuals
+  addQuals,
+  progressChecks,
+  checkProgress
 ) where
 
 import Synquid.Logic
@@ -97,6 +98,7 @@ initTypingState env schema = do
     _simpleConstraints = [],
     _hornClauses = [],
     _consistencyChecks = [],
+    _progressChecks = [],
     _errorContext = (noPos, empty)
   }
 
@@ -116,47 +118,15 @@ solveTypeConstraints = do
   generateAllHornClauses
 
   solveHornClauses
+  writeLog 2 $ text "Checking progress"
+  -- checkProgress
   checkTypeConsistency
   cands <- use candidates
   writeLog 3 $ text "[solveTypeConstraints]: Solved Candidates:" $+$ pretty (cands :: [Candidate])
 
   hornClauses .= []
   consistencyChecks .= []
-
-{- Repair-specific interface -}
-
-getViolatingLabels :: MonadHorn s => TCSolver s (Set Id)
-getViolatingLabels = do
-  scs <- use simpleConstraints
-  writeLog 2 (text "Simple Constraints" $+$ (vsep $ map pretty scs))
-
-  processAllPredicates
-  processAllConstraints
-  generateAllHornClauses
-
-  clauses <- use hornClauses
-  -- TODO: this should probably be moved to Horn solver
-  let (nontermClauses, termClauses) = partition isNonTerminal clauses
-  qmap <- use qualifierMap
-  cands <- use candidates
-  env <- use initEnv
-
-  writeLog 2 (vsep [
-    nest 2 $ text "Terminal Horn clauses" $+$ vsep (map (\(fml, l) -> text l <> text ":" <+> pretty fml) termClauses),
-    nest 2 $ text "Nonterminal Horn clauses" $+$ vsep (map (\(fml, l) -> text l <> text ":" <+> pretty fml) nontermClauses),
-    nest 2 $ text "QMap" $+$ pretty qmap])
-
-  newCand <- head <$> (lift . lift . lift $ refineCandidates nontermClauses qmap (instantiateConsAxioms env Nothing) cands)
-  candidates .= [newCand]
-  invalidTerminals <- filterM (isInvalid newCand (instantiateConsAxioms env Nothing)) termClauses
-  return $ Set.fromList $ map snd invalidTerminals
-  where
-    isNonTerminal (Binary Implies _ (Unknown _ _), _) = True
-    isNonTerminal _ = False
-
-    isInvalid cand extractAssumptions (fml,_) = do
-      cands' <- lift . lift . lift $ checkCandidates False [fml] extractAssumptions [cand]
-      return $ null cands'
+  -- progressChecks .= []
 
 {- Implementation -}
 
@@ -242,9 +212,21 @@ checkTypeConsistency = do
   clauses <- use consistencyChecks
   cands <- use candidates
   env <- use initEnv
-  cands' <- lift . lift . lift $ checkCandidates True clauses (instantiateConsAxioms env Nothing) cands
+  cands' <- lift . lift . lift $ checkCandidates Consistency clauses (instantiateConsAxioms env Nothing) cands
   when (null cands') (throwError $ text "Found inconsistent refinements")
   candidates .= cands'
+
+-- | Filter out liquid assignments that do not produce productive conditions
+checkProgress :: MonadHorn s => TCSolver s ()
+checkProgress = do
+  clauses <- use progressChecks
+  cands <- use candidates
+  env <- use initEnv
+  writeLog 2 $ text "Progress checks:" <+> pretty clauses
+  cands' <- lift . lift . lift $ checkCandidates Progress clauses (instantiateConsAxioms env Nothing) cands
+  when (null cands') (throwError $ text "Found inconsistent refinements") -- TODO: is this still necessary?
+  candidates .= cands'
+
 
 -- | Simplify @c@ into a set of simple and shapeless constraints, possibly extended the current type assignment or predicate assignment
 simplifyConstraint :: MonadHorn s => Constraint -> TCSolver s ()
@@ -255,6 +237,7 @@ simplifyConstraint c = do
 
 -- Any type: drop
 simplifyConstraint' :: MonadHorn s => Map Id RType -> Map Id a -> Constraint -> TCSolver s ()
+simplifyConstraint' _ _ c@ProductiveCond{} = simpleConstraints %= (c :)
 simplifyConstraint' _ _ (Subtype _ _ AnyT _ _) = return ()
 simplifyConstraint' _ _ c@(Subtype _ AnyT _ _ _) = return ()
 simplifyConstraint' _ _ c@(WellFormed _ AnyT) = return ()
@@ -579,6 +562,13 @@ processConstraint (WellFormedMatchCond env (Unknown _ u))
       mq <- asks _matchQualsGen
       let env' = typeSubstituteEnv tass env
       addQuals u (mq env' (allPotentialScrutinees env'))
+processConstraint (ProductiveCond envs c) = do
+  tass <- use typeAssignment
+  pass <- use predAssignment
+  let c' = substitute pass c
+  let subst = sortSubstituteFml (asSortSubst tass) . substitutePredicate pass 
+  simpleConstraints %= (ProductiveCond envs c' :)
+
 processConstraint c = error $ show $ text "processConstraint: not a simple constraint" <+> pretty c
 
 generateHornClauses :: MonadHorn s => Constraint -> TCSolver s ()
@@ -599,6 +589,14 @@ generateHornClauses (Subtype env (ScalarT baseTL l) (ScalarT baseTR r) True _) |
       let rhs = conjunction (Set.insert l $ Set.insert r emb)
       let lhs = conjunction guards
       consistencyChecks %= ((lhs |=>| rhs) :)
+generateHornClauses (ProductiveCond envs c) = do
+  qmap <- use qualifierMap
+  let relevantVars = potentialVars qmap c
+  embs <- mapM (\e -> conjunction <$> embedding e relevantVars BoolT True) envs -- Base type shouldn't matter as long as it isn't a datatype
+  let mkFml e = e |&| c
+  -- This isn't actually a horn clause but whatever
+  let hc = disjunction $ map mkFml embs
+  progressChecks %= (hc :)
 generateHornClauses c = error $ show $ text "generateHornClauses: not a simple subtyping constraint" <+> pretty c
 
 -- | 'allScalars' @env@ : logic terms for all scalar symbols in @env@
@@ -782,7 +780,7 @@ setUnknownRecheck name valuation duals = do
   let clauses = Set.filter (\fml -> name `Set.member` (Set.map unknownName (unknownsOf fml))) (validConstraints cand) -- First candidate cannot have invalid constraints
   let cands' = map (\c -> c { solution = Map.insert name valuation (solution c) }) cands
   env <- use initEnv
-  cands'' <- lift . lift . lift $ checkCandidates False (Set.toList clauses) (instantiateConsAxioms env Nothing) cands'
+  cands'' <- lift . lift . lift $ checkCandidates Validity (Set.toList clauses) (instantiateConsAxioms env Nothing) cands'
 
   if null cands''
     then throwError $ text "Re-checking candidates failed"

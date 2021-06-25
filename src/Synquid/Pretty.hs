@@ -368,6 +368,7 @@ prettyConstraint (WellFormed env t) = hang 4 $ prettyBindings env <+> operator "
 prettyConstraint (WellFormedCond env c) = hang 4 $ prettyBindings env <+> operator "|-" </> pretty c
 prettyConstraint (WellFormedMatchCond env c) = hang 4 $ prettyBindings env <+> operator "|- (match)" </> pretty c
 prettyConstraint (WellFormedPredicate _ sorts p) = hang 4 $ operator "|-" </> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
+prettyConstraint (ProductiveCond es c) = hang 4 $ pretty c <+> text "in" <+> pretty es
 
 instance Pretty Constraint where
   pretty = prettyConstraint

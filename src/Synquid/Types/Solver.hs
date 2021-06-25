@@ -50,6 +50,7 @@ data TypingState = TypingState {
   _simpleConstraints :: [Constraint],           -- ^ Typing constraints that cannot be simplified anymore and can be converted to horn clauses or qualifier maps
   _hornClauses :: [(Formula, Id)],              -- ^ Horn clauses generated from subtyping constraints
   _consistencyChecks :: [Formula],              -- ^ Formulas generated from type consistency constraints
+  _progressChecks :: [Formula],
   _errorContext :: (SourcePos, Doc)             -- ^ Information to be added to all type errors
 }
 

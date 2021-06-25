@@ -87,6 +87,7 @@ data Constraint
     | WellFormedCond Environment Formula
     | WellFormedMatchCond Environment Formula
     | WellFormedPredicate Environment [Sort] Id
+    | ProductiveCond [Environment] Formula 
     deriving (Show, Eq, Ord)
 
 -- | Synthesis goal
@@ -117,3 +118,10 @@ data AuxGoal = AuxGoal {
 } deriving (Show, Eq, Ord)
 
 type World = (Environment, RType)
+
+data SolverCallType = Validity | Consistency | Progress
+
+instance Show SolverCallType where
+  show Validity = "validity"
+  show Consistency = "consistency"
+  show Progress = "progress"

@@ -20,7 +20,7 @@ measure insert :: x: a -> List a -> {List a|True} where
   Nil -> Cons x Nil
   Cons y ys -> Cons x (Cons y ys)
 
-qualifier { len _v < len x }
+qualifier { len _v < len x, len _v >= 0 }
 
 {-
 Intersection: Not strong enough. I'm not sure why.
@@ -31,11 +31,11 @@ but it's decreasing.
 -}
 contains :: (x:Int -> List (Pair Int b) -> Bool) ^
             -- Empty list trivially doesn't contain anything
-            (x:a -> {List (Pair a b) | len _v == 0} -> {Bool | _v == False}) ^
+            (x:a -> {List (Pair a b) | len _v == 0} -> {Bool | _v == False}) -- ^
             -- The list where x is in every element definitely contains x
-            (x: Int -> {List (Pair {Int | _v == x} b) | len _v > 0} -> {Bool | _v == True}) ^
+            -- (x: Int -> {List (Pair {Int | _v == x} b) | len _v > 0} -> {Bool | _v == True}) ^
             -- The list where x is in no element definitely does not contains x
-            (x: Int -> List (Pair {Int | _v != x} b) -> {Bool | _v == False})
+            -- (x: Int -> List (Pair {Int | _v != x} b) -> {Bool | _v == False})
             -- Lastly we need an example to force a recursive call
             -- (x: {Int | _v != 0} -> {List (Pair Int Int) | _v == (Cons (Pair 0 0) (Cons (Pair x 0) Nil))} -> {Bool | _v == False})
 

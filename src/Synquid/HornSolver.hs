@@ -131,19 +131,21 @@ refine constraints quals extractAssumptions cands = do
 
 -- | 'check' @consistency fmls extractAssumptions cands@ : return those candidates from @cands@ under which all @fmls@ are either valid or satisfiable, depending on @consistency@;
 -- use @extractAssumptions@ to extract axiom instantiations from formulas
-check :: MonadSMT s => Bool -> [Formula] ->  ExtractAssumptions -> [Candidate] -> FixPointSolver s [Candidate]
-check consistency fmls extractAssumptions cands = do
+check :: MonadSMT s => SolverCallType -> [Formula] ->  ExtractAssumptions -> [Candidate] -> FixPointSolver s [Candidate]
+check callType fmls extractAssumptions cands = do
     writeLog 3 (text "[check]:" <> vsep [
-      nest 2 $ (if consistency then text "Checking consistency" else text "Checking validity") $+$ vsep (map pretty fmls),
+      nest 2 $ text "Checking" <+> pretty (show callType) $+$ vsep (map pretty fmls),
       nest 2 $ text "Candidates" <+> parens (pretty $ length cands) $+$ (vsep $ map pretty cands)])
     cands' <- filterM checkCand cands
     writeLog 3 (nest 2 $ text "[check]: Remaining Candidates" <+> parens (pretty $ length cands') $+$ (vsep $ map pretty cands'))
     return cands'
   where
     apply sol fml = let fml' = applySolution sol fml in fml' |&| conjunction (extractAssumptions fml')
-    checkCand (Candidate sol valids invalids label) = if consistency
-      then allM isSatFml (map (apply sol) fmls)
-      else allM isValidFml (map (hornApplySolution extractAssumptions sol) fmls)
+    checkCand (Candidate sol valids invalids label) = 
+      case callType of
+        Validity -> allM isValidFml (map (hornApplySolution extractAssumptions sol) fmls)
+        _ -> allM isSatFml (map (apply sol) fmls)
+      
 
 -- | 'greatestFixPoint' @quals constraints@: weakest solution for a system of second-order constraints @constraints@ over qualifiers @quals@.
 greatestFixPoint :: MonadSMT s => QMap -> ExtractAssumptions -> [Candidate] -> FixPointSolver s [Candidate]
