@@ -35,10 +35,11 @@ module Synquid.TypeConstraintSolver (
   initEnv,
   allScalars,
   condQualsGen,
-  topLevelGoal,
+  topLevelGoals,
   addQuals,
   progressChecks,
-  checkProgress
+  checkProgress,
+  addQuals
 ) where
 
 import Synquid.Logic
@@ -93,7 +94,8 @@ initTypingState env schema = do
     _candidates = [initCand],
     _initEnv = env,
     _idCount = Map.empty,
-    _topLevelGoal = toMonotype schema,
+    _topLevelGoals = intersectionToList $ toMonotype schema,
+    _currentWorldNumOneIdx = 1,
     _isFinal = False,
     _simpleConstraints = [],
     _hornClauses = [],
@@ -104,6 +106,8 @@ initTypingState env schema = do
 
 -- | Impose typing constraint @c@ on the programs
 addTypingConstraint c = over typingConstraints (nubOrd . (c :))
+
+addHornClause c = hornClauses %= (nubOrd . (c :))
 
 -- | Solve @typingConstraints@: either strengthen the current candidates and return shapeless type constraints or fail
 solveTypeConstraints :: MonadHorn s => TCSolver s ()
@@ -243,7 +247,7 @@ simplifyConstraint' _ _ c@(Subtype _ AnyT _ _ _) = return ()
 simplifyConstraint' _ _ c@(WellFormed _ AnyT) = return ()
 -- Any datatype: drop only if lhs is a datatype
 simplifyConstraint' _ _ (Subtype _ (ScalarT (DatatypeT _ _ _) _) t _ _) | t == anyDatatype = return ()
---simplifyConstraint' _ _ (Subtype _ (ScalarT (TypeVarT _ _) _) t _ _) | t == anyDatatype = return ()
+-- simplifyConstraint' _ _ (Subtype _ (ScalarT (TypeVarT _ _) _) t _ _) | t == anyDatatype = return ()
 -- Well-formedness of a known predicate drop
 simplifyConstraint' _ pass c@(WellFormedPredicate _ _ p) | p `Map.member` pass = return ()
 
@@ -333,11 +337,13 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
   unless (isFunctionType . head $ conjuncts) $
     throwError $ text  "Cannot subtype intersection of non-function" <+> squotes (pretty isect) $+$ text "with " <+> squotes (pretty superT)
 
+  worldIdx <- use currentWorldNumOneIdx
   case intersectionStrategy of
     GuardedPowerset -> do
       conjunctsWithConstraints <- forM conjuncts (\t -> do
         constraintName <- freshId "G"
         logItFrom "Conjunct Guard" $ (text constraintName)
+          <+> parens (text "world" <+> pretty worldIdx)
           <+> text "-controls-" <+> pretty t
         let c = Unknown Map.empty constraintName
         -- Set the qualifier map to just False (True is an implicit other option)
@@ -359,11 +365,11 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
             superTRet
             consisent (label ++ "+ret-world-" ++ show idx)
 
-      -- TODO: sove what you can rn
+      -- TODO: solve what you can rn
 
       -- domain
       -- Get the powerset of each constraint and its matching constraint
-      let jConjuncts = (zipWith (\(a,b) c -> (a,b,c)) conjunctArgs [1..]) &
+      let jConjuncts = zipWith (\(a,b) c -> (a,b,c)) conjunctArgs [1..] &
                         Set.fromList & Set.powerSet & Set.delete Set.empty & Set.toList &
                         map Set.toList
       forM_ jConjuncts $ \conjunctConstraintSubset -> do
@@ -378,7 +384,8 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
       -- At least one of the domains needs to be true.
       let (_, constraints) = unzip conjunctArgs
       let atLeastOneConstr = ftrue |=>| (foldr1 (|||) constraints)
-      hornClauses %= ((atLeastOneConstr, "at least one"):)
+      addHornClause (atLeastOneConstr, "at least one")
+      return ()
 
 -- Union Type
 simplifyConstraint' _ _ c@(Subtype env subT superT@(UnionT l r) consistent label)
@@ -450,7 +457,7 @@ mkHornGuard c env label = do
   let lhsConstraints = foldr1 (|&|) posFmls
   let rhsConstraints = foldr1 (|||) (defaultList (map (negationNF . fnot) negFmls) ffalse)
   let clause = lhsConstraints |=>| rhsConstraints
-  hornClauses %= ((clause, label):)
+  addHornClause (clause, label)
   writeLog 3 $ text "[simplifyConstraint]:" <+> pretty c </> pretty clause <+> parens (text label)
 
 -- | Unify type variable @a@ with type @t@ or fail if @a@ occurs in @t@
@@ -579,7 +586,7 @@ generateHornClauses c@(Subtype env (ScalarT baseTL l) (ScalarT baseTR r) False l
       emb <- embedding env relevantVars baseTL True
       let negGuards = (env ^. subtypeGuards) & snd & Set.map (negationNF . fnot)
       clauses <- lift . lift . lift $ preprocessConstraint (conjunction (Set.insert l emb) |=>| (foldr (|||) r negGuards))
-      hornClauses %= (zip clauses (repeat label) ++)
+      hornClauses %= (nubOrd . (zip clauses (repeat label) ++))
 generateHornClauses (Subtype env (ScalarT baseTL l) (ScalarT baseTR r) True _) | baseTL == baseTR
   = do
       qmap <- use qualifierMap
@@ -746,7 +753,9 @@ freshPred env sorts = do
 freshFromIntersect env t@(AndT l r) goalType = do
   let goalShapes = intersectionToList t & filter (on arrowEq shape goalType)
   case listToMaybe goalShapes of
-    Nothing -> error $ "Specification has a shape mismatch. Nothing matches:\n" ++ show (plain (pretty (shape goalType))) ++ "\nfrom:\n" ++ show (plain (pretty $ map shape $ intersectionToList t))
+    Nothing -> error $ "Specification has a shape mismatch. Nothing matches:\n" ++
+        show (plain $ pretty (shape goalType)) ++ "\nfrom:\n" ++
+        show (plain $ pretty $ map shape $ intersectionToList t)
     Just t' -> fresh env t'
 freshFromIntersect env (FunctionT x tArg tRes) (FunctionT gx goalArg goalRes) = do
   tArg' <- freshFromIntersect env tArg goalArg

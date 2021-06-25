@@ -344,49 +344,54 @@ reconstructE' ws PHole = do
 -- {- Var Rule -}
 reconstructE' ws (PSymbol name) = do
   checkSymbol ws name
-reconstructE' ws (PApp iFun iArg) = do
-    pApp <- generateApp (False, id) ws (`reconstructE` iFun) (`reconstructE` iArg)
-    checkE ws pApp
-    return pApp
 -- reconstructE' ws (PApp iFun iArg) = do
---     x <- freshVar (fst $ head ws) "x" -- freshVar just looks at the symbol names.
---     let retTyps = map snd ws
---     let ws' = map (second (FunctionT x AnyT)) ws
---     pFun <- inContext (\p -> Program (PApp p uHoleWorld) retTyps)
---             $ reconstructE ws' iFun
--- --   let FunctionT x tArg tRes = typeOf pFun
---     let funTypes = typeOf pFun
---     let argTypes' = map argType funTypes
---     let retTypes' = map resType funTypes
---     let envs = map fst ws
-
---     pApp <- if argTypes' & head & isFunctionType
---         then do -- Higher-order argument: its value is not required for the function type, enqueue an auxiliary goal
---             $(todo "HOF goals, should they be world goals? I think yes.")
---             -- d <- asks . view $ _1 . auxDepth
---             -- pArg <- generateHOArg env (d - 1) tArg iArg
---             -- return $ Program (PApp pFun pArg) tRes
---         else do -- First-order argument: generate now
---             let argWorlds = zip envs argTypes'
---             pArg <- inContext (\p -> Program (PApp pFun p) retTyps)
---                 $ reconstructE argWorlds iArg
---             let ws'' = zip envs retTypes'
---             let tRes' = appTypes ws'' pArg x
---             return $ Program (PApp pFun pArg) tRes'
+    -- pApp <- generateApp (False, id) ws (`reconstructE` iFun) (`reconstructE` iArg)
 --     checkE ws pApp
 --     return pApp
---     where
-        -- generateHOArg env d tArg iArg = case content iArg of
-        --     PSymbol f -> do
-        --         lets <- use lambdaLets
-        --         case Map.lookup f lets of
-        --             Nothing -> do -- This is a function from the environment, with a known type: add its eta-expansion as an aux goal
-        --                         impl <- etaExpand tArg f
-        --                         _ <- enqueueGoal env tArg impl d
-        --                         return ()
-        --             Just (env', def) -> auxGoals %= ((Goal f env' (Monotype tArg) def d noPos True) :) -- This is a locally defined function: add an aux goal with its body
-        --         return iArg
-        --     _ -> enqueueGoal env tArg iArg d -- HO argument is an abstraction: enqueue a fresh goal
+reconstructE' ws (PApp iFun iArg) = do
+    x <- freshId "x" -- freshVar just looks at the symbol names.
+    let retTyps = map snd ws
+    let functionWorlds = map (second (FunctionT x AnyT)) ws
+    pFun <- inContext (\p -> Program (PApp p uHoleWorld) retTyps)
+            $ reconstructE functionWorlds iFun
+    let funTypes = typeOf pFun
+    let realArgs = map (\(FunctionT y _ _) -> y) funTypes
+    let argTypes' = map argType funTypes
+    let retTypes' = map resType funTypes
+
+    pApp <- if argTypes' & head & isFunctionType
+        then do -- Higher-order argument: its value is not required for the function type, enqueue an auxiliary goal
+            d <- asks . view $ _1 . auxDepth
+            pArg <- generateHOArg envs (d - 1) argTypes' iArg
+            return $ Program (PApp pFun pArg) retTypes'
+        else do -- First-order argument: generate now
+            let argWorlds = zip envs argTypes'
+            pArg <- inContext (\p -> Program (PApp pFun p) retTypes')
+                $ reconstructE argWorlds iArg
+            logItFrom "reconstructE" $ text "Checked Argument"
+                <+> pretty pArg <+> text "of type" <+> pretty (typeOf pArg)
+            let appWorlds = zip envs retTypes'
+            let tRes' = appTypes appWorlds pArg realArgs
+            return $ Program (PApp pFun pArg) tRes'
+    checkE ws pApp
+    return pApp
+    where
+        nWorlds = length ws
+        (envs, tys) = unzip ws
+        generateHOArg :: MonadHorn s => [Environment] -> Int -> TypeVector -> RWProgram -> Explorer s RWProgram
+        generateHOArg envs d tArg iArg = case content iArg of
+            PSymbol f -> do
+                lets <- use lambdaLets
+                case Map.lookup f lets of
+                    Nothing -> do -- This is a function from the environment, with a known type: add its eta-expansion as an aux goal
+                                impl <- etaExpand tArg f
+                                _ <- enqueueGoal (zip envs tArg) impl d
+                                return ()
+                    Just (envs', defW) -> do
+                        let goalWorld = zip envs' tArg
+                        auxGoals %= (AuxGoal f goalWorld defW d noPos :) -- This is a locally defined function: add an aux goal with its body
+                return iArg
+            _ -> enqueueGoal (zip envs tArg) iArg d -- HO argument is an abstraction: enqueue a fresh goal
 
 -- reconstructE' env typ impl =
 --   throwErrorWithDescription $ text "Expected application term of type" </> squotes (pretty typ) </>
