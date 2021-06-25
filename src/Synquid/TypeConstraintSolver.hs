@@ -95,7 +95,7 @@ initTypingState env schema = do
     _initEnv = env,
     _idCount = Map.empty,
     _topLevelGoals = intersectionToList $ toMonotype schema,
-    _currentWorldNumOneIdx = 1,
+    _currentWorldNumOneIdx = -1,
     _isFinal = False,
     _simpleConstraints = [],
     _hornClauses = [],
@@ -343,7 +343,6 @@ simplifyConstraint' _ _ (Subtype env isect@(AndT l r) superT@(FunctionT y superT
       conjunctsWithConstraints <- forM conjuncts (\t -> do
         constraintName <- freshId "G"
         logItFrom "Conjunct Guard" $ (text constraintName)
-          <+> parens (text "world" <+> pretty worldIdx)
           <+> text "-controls-" <+> pretty t
         let c = Unknown Map.empty constraintName
         -- Set the qualifier map to just False (True is an implicit other option)
@@ -573,7 +572,7 @@ processConstraint (ProductiveCond envs c) = do
   tass <- use typeAssignment
   pass <- use predAssignment
   let c' = substitute pass c
-  let subst = sortSubstituteFml (asSortSubst tass) . substitutePredicate pass 
+  let subst = sortSubstituteFml (asSortSubst tass) . substitutePredicate pass
   simpleConstraints %= (ProductiveCond envs c' :)
 
 processConstraint c = error $ show $ text "processConstraint: not a simple constraint" <+> pretty c

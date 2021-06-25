@@ -421,8 +421,7 @@ checkE ws p@(Program pTerm pTyps) = do
 
   let idxdws = zip ws' ([1..(length ws')]::[Int])
 
-  let checker ((env, typ, pTyp), idx) = do
-                    typingState . currentWorldNumOneIdx .= idx
+  let checker = \((env, typ, pTyp), idx) -> inWorld idx $ do
                     logItFrom "checkE" $ pretty (void p) <+> text "chk" <+> pretty typ <+> text "str" <+> pretty pTyp <+> text "in world" <+> pretty idx
                     when (incremental || arity typ == 0) (addConstraint $ Subtype env pTyp typ False "checkE-subtype") -- Add subtyping check, unless it's a function type and incremental checking is diasbled
                     when (consistency && arity typ > 0) (addConstraint $ Subtype env pTyp typ True "checkE-consistency") -- Add consistency constraint for function types
@@ -442,8 +441,7 @@ checkE ws p@(Program pTerm pTyps) = do
 checkSymbol :: MonadHorn s => [World] -> Id -> Explorer s RWProgram
 checkSymbol ws name = do
   intersectionStrat <- asks . view $ _1 . intersectStrategy
-  ts <- forM (zip ws [1..]) $ \((env, typ), widx) -> do
-    typingState . currentWorldNumOneIdx .= widx
+  ts <- forM (zip ws [1..]) $ \((env, typ), widx) -> inWorld widx $ do
     case lookupSymbol name (arity typ) (hasSet typ) env of
       Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
       Just sch -> do
@@ -714,11 +712,12 @@ instantiate env sch top argNames = do
       go subst pSubst intersectionStrat argNames t
 
     constrainBottom subst pSubst intersectionStrat argNames t = do
+      idx <- use $ typingState . currentWorldNumOneIdx
       medianType <- freshFromIntersect env t
       unless (isFunctionType medianType) $
         error "varInferMedian: Goal type not a function!"
       addConstraint $ WellFormed env medianType
-      addConstraint $ Subtype env t medianType False "instantiate-isect-LHS"
+      addConstraint $ Subtype env t medianType False $ "goal-" ++ show idx ++ "-instantiate-isect-LHS"
       -- The G |- medianType <: goalType happens back in the PSymbol rule
       -- medianType <- varInferMedian env t
       go subst pSubst intersectionStrat argNames medianType
@@ -735,6 +734,7 @@ instantiate env sch top argNames = do
     -- Use a Laurent-presentation of BCD to infer a median type from some
     -- subset of the intersected types.
     go subst pSubst intersectionStrat@LaurentBCD argNames t@AndT{} = do
+      idx <- use $ typingState . currentWorldNumOneIdx
       let conjuncts = intersectionToList t
       let tpowerset = map Set.toList . Set.toList . Set.delete Set.empty . Set.powerSet . Set.fromList $ conjuncts
       let choices = flip map (zip tpowerset [1..]) $ \(ts, idx) -> do
@@ -745,7 +745,7 @@ instantiate env sch top argNames = do
             unless (isFunctionType medianType) $
               error "varInferMedian: Goal type not a function!"
             addConstraint $ WellFormed env medianType
-            addConstraint $ Subtype env t medianType False "instantiate-isect-LHS"
+            addConstraint $ Subtype env t medianType False $ "goal-" ++ show idx ++ "instantiate-isect-LHS"
             return medianType
       choice <- msum choices
       -- Now try to infer the medium type
@@ -797,6 +797,9 @@ generateAuxGoals = do
     etaContract' (x:binders) (PApp pFun (Program (PSymbol y) _)) | x == y    =  etaContract' binders (content pFun)
     etaContract' [] f@(PSymbol _)                                            = Just f
     etaContract' binders p                                                   = Nothing
+
+inWorld :: Int -> StateT ExplorerState m a -> StateT ExplorerState m a
+inWorld idx = withStateT (typingState . currentWorldNumOneIdx .~ idx)
 
 writeLog level msg = do
   maxLevel <- asks . view $ _1 . explorerLogLevel

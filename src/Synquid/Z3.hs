@@ -553,10 +553,17 @@ getAllMUSs' controlLitsAux mustHave cores = do
           debugOutput "found MUSes:" musStrs
 
           unsatFmls <- mapM litToFml (delete mustHave mus)
-          when (mustHave `elem` mus) (debug 2 (text "Original Synquid MUS") $ return ())
-          when (unsatFmls == [ffalse]) (debug 2 (text "MUS solution is vacuous") $ return ())
-          debugOutput "MUS" unsatFmls
-          getAllMUSs' controlLitsAux mustHave (unsatFmls : cores)
+          -- when (mustHave `elem` mus) (debug 2 (text "Original Synquid MUS") $ return ())
+          -- when (unsatFmls == [ffalse]) (debug 2 (text "MUS solution is vacuous") $ return ())
+          -- debugOutput "MUS" unsatFmls
+          -- getAllMUSs' controlLitsAux mustHave (unsatFmls : cores)
+          if mustHave `elem` mus || ffalse `elem` unsatFmls
+            then do
+                  debugOutput "MUS" unsatFmls
+                  getAllMUSs' controlLitsAux mustHave (unsatFmls : cores)
+            else do
+                  debugOutput "MUSeless" unsatFmls
+                  getAllMUSs' controlLitsAux mustHave cores
         Sat -> do
           mss <- maximize seed rest  -- Satisfiable: expand to MSS
           blockDown mss

@@ -404,7 +404,7 @@ reconstructE' _ _ = $(todo "reconstructE' with worlds")
 checkAnnotation :: MonadHorn s => [(Environment, RType, RType)] -> BareProgram TypeVector  -> Explorer s TypeVector
 -- checkAnnotation ws p = $(todo "checkAnnotation with worlds")
 checkAnnotation ws p =
-  forM ws $ \(env, t, t') -> do
+  flip (`zipWithM` ws) [1..(length ws)] $ \(env, t, t') idx -> inWorld idx $ do
     tass <- use (typingState . typeAssignment)
     case resolveRefinedType (typeSubstituteEnv tass env) t' of
       Left err -> throwError err
