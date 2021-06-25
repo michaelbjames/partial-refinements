@@ -419,15 +419,19 @@ simplifyType t@(AndT l _)
       fmls = concatMap allRefinementsOf' $ unionToList t
     in ScalarT repB (foldr1 (|&|) fmls)
 simplifyType t@(UnionT l _)
+  -- Reduce T OR T OR .. T to just T
   | allSame (unionToList t) = l
   -- We can only truely lift scalar unions to refinements
+  -- But only if they all have the same base type.
   | (ScalarT repB _) <- head (unionToList t)
   , allSame (map baseTypeOf (unionToList t)) = let
       fmls = concatMap allRefinementsOf' $ unionToList t
     in ScalarT repB (foldr1 (|||) fmls)
-  | otherwise = let
+  -- Still scalars, but the base types don't match.
+  -- e.g. Int OR (List Int)
+  | (ScalarT repB _) <- head (unionToList t) = let
       ts = unionToList t
-      baseTys = groupBy arrowEq ts
+      baseTys = groupBy (on (==) baseTypeOf) ts
       fps = map (simplifyType . (foldr1 UnionT)) baseTys
     in foldr1 UnionT fps
 simplifyType t = t
