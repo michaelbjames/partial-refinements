@@ -91,7 +91,7 @@ reconstructWorldsTopLevel (AuxGoal funName ws impl depth _) = do
   recCallsPlaceholder <- runInSolver (currentAssignment (snd placeholderWorld)) >>= recursiveCalls funName (fst placeholderWorld) True
   let ctx p = if null recCallsPlaceholder then p else Program (PFix (map fst recCallsPlaceholder) p) (map snd ws')
   -- p <- inContext ctx $ reconstructI ws impl
-  p <- local (set (_1 . auxDepth) depth) $ inContext ctx $ reconstructI ws impl
+  p <- local (set (_1 . auxDepth) depth) $ inContext ctx $ reconstructI ws' impl
   return $ ctx p
   where
     adjustWorld (env, goal) = do

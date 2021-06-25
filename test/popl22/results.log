@@ -1,24 +1,50 @@
 ---------------------------------------------------------------
 All-Neg:
 ---------------------------------------------------------------
-guarded powerset: timeout
+guarded powerset:
+allNeg :: (xs:{List {Int|_v < 0}|len _v >= 0} -> {Bool|_v == True}) ^ (xs:{List Nat|len _v > 0} -> {Bool|_v == False})
+allNeg = \xs . 
+  match xs with
+    Nil -> True
+    Cons y ys -> 
+      if y >= 0
+        then False
+        else allNeg ys
+
+(Goals: 2)
+(Measures: 1)
+(Spec size: 20)
+(Solution size: 25)
 
 either/or:
-allNeg :: (xs:{List {Int|_v < 0}|len _v == 0} -> {Bool|_v == True}) ^ ((xs:{List {Int|_v < 0}|len _v > 0} -> {Bool|_v == True}) ^ (xs:{List Nat|len _v > 0} -> {Bool|_v == False}))
-All-Neg.sq:19: Error:
-  Cannot find sufficiently strong refinements
-  when checking
-  allNeg :: x6:_ -> {Bool|_v == True}
-  in
-  \xs . 
-    match xs with
-      Cons y ys -> 
-        if y >= 0
-          then False
-          else allNeg (?? :: [_])
+allNeg :: (xs:{List {Int|_v < 0}|len _v >= 0} -> {Bool|_v == True}) ^ (xs:{List Nat|len _v > 0} -> {Bool|_v == False})
+allNeg = \xs . 
+  match xs with
+    Nil -> True
+    Cons y ys -> 
+      if y >= 0
+        then False
+        else allNeg ys
 
+(Goals: 2)
+(Measures: 1)
+(Spec size: 20)
+(Solution size: 25)
 
-laurent-BCD: timeout
+laurent-BCD:
+allNeg :: (xs:{List {Int|_v < 0}|len _v >= 0} -> {Bool|_v == True}) ^ (xs:{List Nat|len _v > 0} -> {Bool|_v == False})
+allNeg = \xs . 
+  match xs with
+    Nil -> True
+    Cons y ys -> 
+      if y >= 0
+        then False
+        else allNeg ys
+
+(Goals: 2)
+(Measures: 1)
+(Spec size: 20)
+(Solution size: 25)
 ---------------------------------------------------------------
 List-Dict-Contains:
 ---------------------------------------------------------------
@@ -117,7 +143,20 @@ find = \haystack . \needle .
 ---------------------------------------------------------------
 List-Even-Parity:
 ---------------------------------------------------------------
-guarded powerset: timeout
+guarded powerset:
+list_even_parity :: (xs:List Bool -> Bool) ^ ((xs:{List {Bool|_v == True}|len _v == 2 || len _v == 0} -> {Bool|_v == True}) ^ (xs:{List {Bool|_v == True}|len _v == 3 || len _v == 1} -> {Bool|_v == False}))
+list_even_parity = \xs . 
+  match xs with
+    Nil -> True
+    Cons y ys -> 
+      if y
+        then not (list_even_parity ys)
+        else list_even_parity ys
+
+(Goals: 2)
+(Measures: 1)
+(Spec size: 33)
+(Solution size: 25)
 
 either/or:
 list_even_parity :: (xs:List Bool -> Bool) ^ ((xs:{List {Bool|_v == True}|len _v == 2 || len _v == 0} -> {Bool|_v == True}) ^ (xs:{List {Bool|_v == True}|len _v == 3 || len _v == 1} -> {Bool|_v == False}))
@@ -140,20 +179,20 @@ List-Fold:
 ---------------------------------------------------------------
 guarded powerset:
 foldl :: (xs:List a -> f:(acc:b -> x:a -> b) -> seed:b -> b) ^ (xs:List Int -> f:(acc:Int -> x:Int -> {Int|_v == acc + 1}) -> seed:Int -> {Int|_v == len xs + seed})
-List-Fold.sq:16: Error:
-  Cannot find sufficiently strong refinements
-  when checking
-  foldl :: x5:_ -> x4:_ -> x3:_ -> b
-  in
-  \xs . \f . \seed . 
-        match xs with
-          Cons y ys -> foldl (?? :: [_])
-                         (?? :: [_]) (?? :: [_])
+foldl = \xs . \f . \seed . 
+      match xs with
+        Nil -> seed
+        Cons y ys -> foldl ys f (f seed
+                                   y)
 
+(Goals: 2)
+(Measures: 1)
+(Spec size: 14)
+(Solution size: 28)
 
 either/or:
 foldl :: (xs:List a -> f:(acc:b -> x:a -> b) -> seed:b -> b) ^ (xs:List Int -> f:(acc:Int -> x:Int -> {Int|_v == acc + 1}) -> seed:Int -> {Int|_v == len xs + seed})
-List-Fold.sq:16: Error:
+List-Fold.sq:17: Error:
   Cannot match shape, unresolvable subtype:
   'Int' : {Int|_v == len x5 + x3} </: 'b' : b from label 'checkE-subtype'
   when checking
@@ -341,7 +380,17 @@ snoc = \xs . \x .
 ---------------------------------------------------------------
 List-Sum:
 ---------------------------------------------------------------
-guarded powerset: timeout
+guarded powerset:
+sum :: (xs:List Int -> Int) ^ (xs:List {Int|_v == 3} -> {Int|_v == 3 * len xs})
+sum = \xs . 
+  match xs with
+    Nil -> 0
+    Cons y ys -> plus y (sum ys)
+
+(Goals: 2)
+(Measures: 1)
+(Spec size: 12)
+(Solution size: 22)
 
 either/or:
 sum :: (xs:List Int -> Int) ^ (xs:List {Int|_v == 3} -> {Int|_v == 3 * len xs})
@@ -389,33 +438,32 @@ TakeWhile:
 ---------------------------------------------------------------
 guarded powerset:
 takeWhile :: <p :: a -> Bool> . (pred:(x:a -> {Bool|_v == p x}) -> xs:List a -> List {a|p _v}) ^ (pred:(x:a -> {Bool|_v == p x}) -> xs:List {a|p _v} -> {List a|_v == xs})
-TakeWhile.sq:25: Error:
-  Cannot find sufficiently strong refinements
-  when checking pred
-                  X13 :: {Bool|_v == p X8} in
-  \pred . \xs . 
-      match xs with
-        Cons y ys -> 
-          if pred y
-            then \X13 . pred X13
-            else (?? :: [List {a|p _v}
-                        ,{List a|_v == xs}])
+takeWhile = \pred . \xs . 
+    match xs with
+      Nil -> Nil
+      Cons y ys -> 
+        if pred y
+          then Cons y (takeWhile pred ys)
+          else Nil
 
+(Goals: 2)
+(Measures: 1)
+(Spec size: 18)
+(Solution size: 30)
 
 either/or:
 takeWhile :: <p :: a -> Bool> . (pred:(x:a -> {Bool|_v == p x}) -> xs:List a -> List {a|p _v}) ^ (pred:(x:a -> {Bool|_v == p x}) -> xs:List {a|p _v} -> {List a|_v == xs})
-TakeWhile.sq:25: Error:
-  Cannot find sufficiently strong refinements
-  when checking
-  ys :: {List {a|p _v && True}|len _v >= 0 && len _v < len xs}
-  in
-  \pred . \xs . 
-      match xs with
-        Cons y ys -> 
-          if pred y
-            then Cons y (takeWhile pred ys)
-            else (?? :: [List {a|p _v}
-                        ,{List a|_v == xs}])
+takeWhile = \pred . \xs . 
+    match xs with
+      Nil -> Nil
+      Cons y ys -> 
+        if pred y
+          then Cons y (takeWhile pred ys)
+          else Nil
 
+(Goals: 2)
+(Measures: 1)
+(Spec size: 18)
+(Solution size: 30)
 
 laurent-BCD: timeout
