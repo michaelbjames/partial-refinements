@@ -267,7 +267,7 @@ reconstructI' ws@((_,ScalarT{}):_) impl = case impl of
 
     PMatch iScr iCases -> do
         (consNames, consTypes) <- unzip <$> checkCases Nothing iCases
-        let scrTs = zipWith refineTop envs (map (shape . lastType . head) consTypes)
+        let scrTs = zipWith refineTop envs (map (shape . lastType) (head consTypes))
         pScrutinee <- inContext (\p -> Program (PMatch p []) ts) $ reconstructETopLevel (zip envs scrTs) iScr
         let (envs', tScrs) = unzip $ zipWith embedContext envs (typeOf pScrutinee)
         let scrutineeSymbols = symbolList pScrutinee

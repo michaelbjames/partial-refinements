@@ -2,7 +2,7 @@
 All-Neg:
 ---------------------------------------------------------------
 guarded powerset:
-allNeg :: (xs:{List {Int|_v < 0}|len _v >= 0} -> {Bool|_v == True}) ^ (xs:{List Nat|len _v > 0} -> {Bool|_v == False})
+allNeg :: (xs:{List {Int|_v < 0}|len _v >= 0} -> {Bool|_v == True}) ^ ((xs:{List {Int|_v < 0}|len _v > 0} -> {Bool|_v == True}) ^ (xs:{List Nat|len _v > 0} -> {Bool|_v == False}))
 allNeg = \xs . 
   match xs with
     Nil -> True
@@ -13,11 +13,11 @@ allNeg = \xs .
 
 (Goals: 2)
 (Measures: 1)
-(Spec size: 20)
+(Spec size: 30)
 (Solution size: 25)
 
 either/or:
-allNeg :: (xs:{List {Int|_v < 0}|len _v >= 0} -> {Bool|_v == True}) ^ (xs:{List Nat|len _v > 0} -> {Bool|_v == False})
+allNeg :: (xs:{List {Int|_v < 0}|len _v >= 0} -> {Bool|_v == True}) ^ ((xs:{List {Int|_v < 0}|len _v > 0} -> {Bool|_v == True}) ^ (xs:{List Nat|len _v > 0} -> {Bool|_v == False}))
 allNeg = \xs . 
   match xs with
     Nil -> True
@@ -28,11 +28,11 @@ allNeg = \xs .
 
 (Goals: 2)
 (Measures: 1)
-(Spec size: 20)
+(Spec size: 30)
 (Solution size: 25)
 
 laurent-BCD:
-allNeg :: (xs:{List {Int|_v < 0}|len _v >= 0} -> {Bool|_v == True}) ^ (xs:{List Nat|len _v > 0} -> {Bool|_v == False})
+allNeg :: (xs:{List {Int|_v < 0}|len _v >= 0} -> {Bool|_v == True}) ^ ((xs:{List {Int|_v < 0}|len _v > 0} -> {Bool|_v == True}) ^ (xs:{List Nat|len _v > 0} -> {Bool|_v == False}))
 allNeg = \xs . 
   match xs with
     Nil -> True
@@ -43,7 +43,7 @@ allNeg = \xs .
 
 (Goals: 2)
 (Measures: 1)
-(Spec size: 20)
+(Spec size: 30)
 (Solution size: 25)
 ---------------------------------------------------------------
 List-Dict-Contains:
@@ -69,10 +69,9 @@ List-Dict-Contains.sq:42: Error:
 either/or:
 contains :: (x:Int -> arg0:List Pair Int b -> Bool) ^ (x:a -> arg0:{List Pair a b|len _v == 0} -> {Bool|_v == False})
 List-Dict-Contains.sq:42: Error:
-  Cannot find sufficiently strong refinements
-  when checking
-  xs :: {List Pair Int b|len _v == 0 && (len _v >= 0 && len _v < len haystack)}
-  in
+  Cannot match shape, unresolvable subtype:
+  'a' : {a|_v == needle} </: 'Int' : {Int|U17} from label 'checkE-subtype'
+  when checking needle :: Int in
   \needle . \haystack . 
       match haystack with
         Cons x xs -> 
@@ -80,7 +79,7 @@ List-Dict-Contains.sq:42: Error:
             Pair xa xb -> 
               if xa == needle
                 then True
-                else contains needle xs
+                else contains needle (?? :: [_])
 
 
 laurent-BCD: timeout
@@ -107,21 +106,22 @@ find = \haystack . \needle .
 
 either/or:
 find :: (arg2:List Pair Int b -> arg1:Int -> arg0:b -> b) ^ (arg2:{List Pair Int Int|len _v == 0} -> arg1:Int -> default:Int -> {Int|_v == default})
-find = \haystack . \needle .
-    \def . 
-      match haystack with
-        Nil -> def
-        Cons x xs -> 
-          match x with
-            Pair xa xb -> 
-              if xa == needle
-                then xb
-                else find xs needle def
+List-Dict-Find.sq:33: Error:
+  Cannot match shape, unresolvable subtype:
+  'Int' : {Int|_v == x5} </: 'b' : b from label 'checkE-subtype'
+  when checking
+  find :: x7:_ -> x6:_ -> x5:_ -> b
+  in
+  \haystack . \needle . \def . 
+        match haystack with
+          Cons x xs -> 
+            match x with
+              Pair xa xb -> 
+                if xa == needle
+                  then xb
+                  else find (?? :: [_])
+                         (?? :: [_]) (?? :: [_])
 
-(Goals: 5)
-(Measures: 4)
-(Spec size: 10)
-(Solution size: 59)
 
 laurent-BCD:
 find :: (arg2:List Pair Int b -> arg1:Int -> arg0:b -> b) ^ (arg2:{List Pair Int Int|len _v == 0} -> arg1:Int -> default:Int -> {Int|_v == default})
@@ -178,7 +178,7 @@ laurent-BCD: timeout
 List-Fold:
 ---------------------------------------------------------------
 guarded powerset:
-foldl :: (xs:List a -> f:(acc:b -> x:a -> b) -> seed:b -> b) ^ (xs:List Int -> f:(acc:Int -> x:Int -> {Int|_v == acc + 1}) -> seed:Int -> {Int|_v == len xs + seed})
+foldl :: (xs:List a -> f:(acc:b -> x:a -> b) -> seed:b -> b) ^ ((xs:List a -> f:(acc:Int -> arg0:a -> {Int|_v == acc + 1}) -> seed:Int -> {Int|_v == len xs + seed}) ^ (xs:List Int -> f:(acc:Int -> x:Int -> {Int|_v == acc + 1}) -> seed:Int -> {Int|_v == len xs + seed}))
 foldl = \xs . \f . \seed . 
       match xs with
         Nil -> seed
@@ -187,16 +187,16 @@ foldl = \xs . \f . \seed .
 
 (Goals: 2)
 (Measures: 1)
-(Spec size: 14)
+(Spec size: 25)
 (Solution size: 28)
 
 either/or:
-foldl :: (xs:List a -> f:(acc:b -> x:a -> b) -> seed:b -> b) ^ (xs:List Int -> f:(acc:Int -> x:Int -> {Int|_v == acc + 1}) -> seed:Int -> {Int|_v == len xs + seed})
-List-Fold.sq:17: Error:
+foldl :: (xs:List a -> f:(acc:b -> x:a -> b) -> seed:b -> b) ^ ((xs:List a -> f:(acc:Int -> arg0:a -> {Int|_v == acc + 1}) -> seed:Int -> {Int|_v == len xs + seed}) ^ (xs:List Int -> f:(acc:Int -> x:Int -> {Int|_v == acc + 1}) -> seed:Int -> {Int|_v == len xs + seed}))
+List-Fold.sq:16: Error:
   Cannot match shape, unresolvable subtype:
-  'Int' : {Int|_v == len x5 + x3} </: 'b' : b from label 'checkE-subtype'
+  'Int' : {Int|_v == len x6 + x4} </: 'b' : b from label 'checkE-subtype'
   when checking
-  foldl :: x5:_ -> x4:_ -> x3:_ -> b
+  foldl :: x6:_ -> x5:_ -> x4:_ -> b
   in
   \xs . \f . \seed . 
         match xs with
@@ -297,20 +297,7 @@ list_last = \xs .
 (Spec size: 19)
 (Solution size: 39)
 
-laurent-BCD:
-list_last :: (xs:List Int -> Maybe Int) ^ ((xs:{List Int|len _v == 0} -> {Maybe Int|isNothing _v}) ^ (xs:{List Int|len _v > 0} -> {Maybe Int|!isNothing _v}))
-list_last = \xs . 
-  match xs with
-    Nil -> Nothing
-    Cons x rest -> 
-      match rest with
-        Nil -> Just x
-        Cons y ys -> list_last rest
-
-(Goals: 4)
-(Measures: 3)
-(Spec size: 19)
-(Solution size: 39)
+laurent-BCD: timeout
 ---------------------------------------------------------------
 List-Length:
 ---------------------------------------------------------------
@@ -343,7 +330,7 @@ laurent-BCD: timeout
 List-Snoc:
 ---------------------------------------------------------------
 guarded powerset:
-snoc :: (xs:List a -> x:a -> {List a|len _v == len xs + 1}) ^ ((xs:{List a|_v == (Nil)} -> x:a -> {List a|_v == (Cons x (Nil))}) ^ (xs:{List Int|_v == (Cons 2 (Nil))} -> x:{Int|_v == 1} -> {List Int|_v == (Cons 2 ((Cons 1 (Nil))))}))
+snoc :: (xs:List a -> x:a -> {List a|len _v == len xs + 1}) ^ ((xs:{List Int|_v == (Nil)} -> x:{Int|_v == 1} -> {List Int|_v == (Cons 1 (Nil))}) ^ (xs:{List Int|_v == (Cons 2 (Nil))} -> x:{Int|_v == 1} -> {List Int|_v == (Cons 2 ((Cons 1 (Nil))))}))
 snoc = \xs . \x . 
     match xs with
       Nil -> Cons x Nil
@@ -351,32 +338,24 @@ snoc = \xs . \x .
 
 (Goals: 2)
 (Measures: 1)
-(Spec size: 33)
+(Spec size: 36)
 (Solution size: 29)
 
 either/or:
-snoc :: (xs:List a -> x:a -> {List a|len _v == len xs + 1}) ^ ((xs:{List a|_v == (Nil)} -> x:a -> {List a|_v == (Cons x (Nil))}) ^ (xs:{List Int|_v == (Cons 2 (Nil))} -> x:{Int|_v == 1} -> {List Int|_v == (Cons 2 ((Cons 1 (Nil))))}))
-snoc = \xs . \x . 
-    match xs with
-      Nil -> Cons x Nil
-      Cons y ys -> Cons y (snoc ys x)
+snoc :: (xs:List a -> x:a -> {List a|len _v == len xs + 1}) ^ ((xs:{List Int|_v == (Nil)} -> x:{Int|_v == 1} -> {List Int|_v == (Cons 1 (Nil))}) ^ (xs:{List Int|_v == (Cons 2 (Nil))} -> x:{Int|_v == 1} -> {List Int|_v == (Cons 2 ((Cons 1 (Nil))))}))
+List-Snoc.sq:25: Error:
+  Cannot match shape, unresolvable subtype:
+  'Int' : Int </: 'a' : {a|U10} from label 'checkE-subtype'
+  when checking
+  snoc :: x9:_ -> x8:_ -> List a
+  in
+  \xs . \x . 
+      match xs with
+        Cons y ys -> Cons y (snoc
+                               (?? :: [_]) (?? :: [_]))
 
-(Goals: 2)
-(Measures: 1)
-(Spec size: 33)
-(Solution size: 29)
 
-laurent-BCD:
-snoc :: (xs:List a -> x:a -> {List a|len _v == len xs + 1}) ^ ((xs:{List a|_v == (Nil)} -> x:a -> {List a|_v == (Cons x (Nil))}) ^ (xs:{List Int|_v == (Cons 2 (Nil))} -> x:{Int|_v == 1} -> {List Int|_v == (Cons 2 ((Cons 1 (Nil))))}))
-snoc = \xs . \x . 
-    match xs with
-      Nil -> Cons x Nil
-      Cons y ys -> Cons y (snoc ys x)
-
-(Goals: 2)
-(Measures: 1)
-(Spec size: 33)
-(Solution size: 29)
+laurent-BCD: timeout
 ---------------------------------------------------------------
 List-Sum:
 ---------------------------------------------------------------
