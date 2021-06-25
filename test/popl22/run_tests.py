@@ -204,6 +204,27 @@ def write_results(statuses, resfile):
                 logfile.write('\n')
                 logfile.write(output_str(v, vres.status, vres.output))
 
+def write_csv(statuses, csvfile):
+    with open(csvfile, 'w') as out:
+        for(filename, res) in statuses:
+            line = []
+            line.append(filename)
+            line.append(res.stats.goal_count)
+            line.append(res.stats.code_size)
+            line.append(res.stats.spec_size)
+            if res.time > 0:
+                line.append(f"{res.time:.2}")
+            else:
+                line.append('-')
+            for v in VARIANTS.keys():
+                t = res.variant_results[v].time
+                if t > 0:
+                    line.append(f"{t:.2}")
+                else:
+                    line.append('-')
+            line.append("\n")
+            out.write(",".join(line))
+
 
 def main():
     extra_args = sys.argv[1:]
@@ -225,6 +246,7 @@ def main():
 
     statuses = sorted(return_dict.items())
     write_results(statuses, LOGFILE)
+    write_csv(statuses, CSVFILE)
     print_results(statuses)
     # TODO: write csv
     # TODO: write latex
