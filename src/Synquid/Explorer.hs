@@ -421,7 +421,7 @@ checkE ws p@(Program pTerm pTyps) = do
 
   let idxdws = zip ws' ([1..(length ws')]::[Int])
 
-  let checker = \((env, typ, pTyp), idx) -> inWorld idx $ do
+  let checker ((env, typ, pTyp), idx) = inWorld idx $ do
                     logItFrom "checkE" $ pretty (void p) <+> text "chk" <+> pretty typ <+> text "str" <+> pretty pTyp <+> text "in world" <+> pretty idx
                     when (incremental || arity typ == 0) (addConstraint $ Subtype env pTyp typ False "checkE-subtype") -- Add subtyping check, unless it's a function type and incremental checking is diasbled
                     when (consistency && arity typ > 0) (addConstraint $ Subtype env pTyp typ True "checkE-consistency") -- Add consistency constraint for function types
@@ -441,7 +441,7 @@ checkE ws p@(Program pTerm pTyps) = do
 checkSymbol :: MonadHorn s => [World] -> Id -> Explorer s RWProgram
 checkSymbol ws name = do
   intersectionStrat <- asks . view $ _1 . intersectStrategy
-  ts <- forM (zip ws [1..]) $ \((env, typ), widx) -> inWorld widx $ do
+  ts <- forM (zip ws [1..]) $ \((env, typ), widx) -> inWorld widx $
     case lookupSymbol name (arity typ) (hasSet typ) env of
       Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
       Just sch -> do
@@ -630,7 +630,8 @@ throwError :: MonadHorn s => ErrorMessage -> Explorer s a
 throwError e = do
   worlds <- use $ typingState . topLevelGoals
   currentIdx <- use $ typingState . currentWorldNumOneIdx
-  writeLog 2 $ text "TYPE ERROR:" </> text "from world:" <+> pretty (worlds !! (currentIdx -1)) </> text "with error:" <+> plain (emDescription e)
+  -- writeLog 2 $ text "TYPE ERROR:" </> text "from world:" <+> pretty (worlds !! (currentIdx -1)) </> text "with error:" <+> plain (emDescription e)
+  writeLog 2 $ text "TYPE ERROR:" <+> plain (emDescription e)
   lift . lift . lift $ typeErrors %= (e :)
   mzero
 

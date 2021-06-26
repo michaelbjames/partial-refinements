@@ -553,17 +553,10 @@ getAllMUSs' controlLitsAux mustHave cores = do
           debugOutput "found MUSes:" musStrs
 
           unsatFmls <- mapM litToFml (delete mustHave mus)
-          -- when (mustHave `elem` mus) (debug 2 (text "Original Synquid MUS") $ return ())
-          -- when (unsatFmls == [ffalse]) (debug 2 (text "MUS solution is vacuous") $ return ())
-          -- debugOutput "MUS" unsatFmls
-          -- getAllMUSs' controlLitsAux mustHave (unsatFmls : cores)
-          if mustHave `elem` mus || ffalse `elem` unsatFmls
-            then do
-                  debugOutput "MUS" unsatFmls
-                  getAllMUSs' controlLitsAux mustHave (unsatFmls : cores)
-            else do
-                  debugOutput "MUSeless" unsatFmls
-                  getAllMUSs' controlLitsAux mustHave cores
+          when (mustHave `elem` mus) (debug 2 (text "Original Synquid MUS") $ return ())
+          when (unsatFmls == [ffalse]) (debug 2 (text "MUS solution is vacuous") $ return ())
+          debugOutput "MUS" unsatFmls
+          getAllMUSs' controlLitsAux mustHave (unsatFmls : cores)
         Sat -> do
           mss <- maximize seed rest  -- Satisfiable: expand to MSS
           blockDown mss
@@ -571,7 +564,7 @@ getAllMUSs' controlLitsAux mustHave cores = do
           getAllMUSs' controlLitsAux mustHave cores
         _ -> do
           fmls <- mapM litToFml seed
-          error $ unwords $ ["getAllMUSs: Z3 returned Unknown (maybe consider SAT) for"] ++ map show fmls
+          error $ unwords ["getAllMUSs: Z3 returned Unknown (maybe consider SAT) for"] ++ map show fmls
 
   where
     -- | Get the formula mapped to a given control literal in the main solver

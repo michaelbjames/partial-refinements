@@ -9,14 +9,15 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Cons x xs -> 1 + len xs
 
 plus :: x:Int -> y:Int -> {Int | _v == (x+y)}
+zero :: {Int | _v == 0}
 
 qualifier { len _v < len x, len _v >= 0 }
 
 sum :: (xs: List Int -> Int) ^
 	   (xs: List {Int| _v == 3} -> {Int | _v == (3 * len xs)})
-sum = \xs.
+sum = ?? {- \xs.
 	match xs with
 		Nil -> 0
-		Cons y ys -> plus y (sum ys)
+		Cons y ys -> plus y (sum ys) -}
 
 

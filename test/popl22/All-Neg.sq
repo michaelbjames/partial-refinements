@@ -12,6 +12,7 @@ type Nat = {Int | _v >= 0}
 
 false :: {Bool | !_v}
 true :: {Bool | _v}
+zero :: {Int | _v == 0}
 
 -- This isn't strong enough to synthesize.
 -- It's missing cases for when the input list isn't entire negative or natural.

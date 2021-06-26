@@ -187,7 +187,7 @@ solveHornClauses = do
   qmap <- use qualifierMap
   cands <- use candidates
   env <- use initEnv
-  let consaxms = (instantiateConsAxioms env Nothing)
+  let consaxms = instantiateConsAxioms env Nothing
   writeLog 3 $ text "instantiated cons axioms"
   cands' <- lift . lift . lift $ refineCandidates clauses qmap consaxms cands
   writeLog 3 $ text "refinedCandidates"

@@ -71,14 +71,14 @@ class Benchmark:
 
 BENCHMARKS = [
     Benchmark("List-Inc", "increment list"),
-    Benchmark("List-Sum", "sum list"),
+    Benchmark("List-Sum", "sum list", "0, plus"),
     Benchmark("All-Neg", "all negative"),
     Benchmark("List-Dict-Contains", "dictionary contains"),
     Benchmark("List-Dict-Find", "dictionary find"),
     Benchmark("List-Even-Parity", "list length even", "not"),
     Benchmark("List-Fold", "foldl"),
     Benchmark("List-Last", "last list element"),
-    Benchmark("List-Length", "list length"),
+    Benchmark("List-Length", "list length", "0, inc"),
     Benchmark("List-Snoc", "cons at end"),
     Benchmark("List-toFalse", "map const false"),
     Benchmark("TakeWhile", "take while")
