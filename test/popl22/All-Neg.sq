@@ -14,14 +14,10 @@ false :: {Bool | !_v}
 true :: {Bool | _v}
 zero :: {Int | _v == 0}
 
--- This isn't strong enough to synthesize.
--- It's missing cases for when the input list isn't entire negative or natural.
 allNeg :: (xs:{List {Int | _v < 0} | len _v >= 0} -> {Bool | _v == True}) ^
           (xs:{List {Int | _v < 0} | len _v > 0} -> {Bool | _v == True}) ^
           (xs:{List Nat | len _v > 0} -> {Bool | _v == False})
 allNeg = \xs.
   match xs with
     Nil -> True
-    Cons y ys -> if y >= 0
-      then False -- Cannot synthesize this expression.
-      else allNeg ys
+    Cons y ys -> True

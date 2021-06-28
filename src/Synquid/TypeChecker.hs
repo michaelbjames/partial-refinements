@@ -67,7 +67,9 @@ reconstructTopLevel (Goal _ env (Monotype t) impl depth _ _) = do
 -- | Add the fix rule, and split worlds if necessary.
 reconstructFix :: MonadHorn s => Goal -> Explorer s RWProgram
 reconstructFix (Goal funName env (Monotype typ) impl depth _ synth) = do
+  logItFrom "reconstructFix" $ text "typ" <+> pretty typ
   let typ' = renameAsImpl (isBound env) impl typ
+  logItFrom "reconstructFix" $ text "renamed typ" <+> pretty typ'
   recCalls <- runInSolver (currentAssignment typ') >>= recursiveCalls funName env synth
   polymorphic <- asks . view $ _1 . polyRecursion
   predPolymorphic <- asks . view $ _1 . predPolyRecursion
@@ -78,6 +80,7 @@ reconstructFix (Goal funName env (Monotype typ) impl depth _ synth) = do
   let env' = foldr (\(f, t) -> addPolyVariable f (typeGeneralized . predGeneralized . Monotype $ t) . (shapeConstraints %~ Map.insert f (shape typ'))) env recCalls
   -- $(todo "Should the number of worlds in the ctx be 1 or n?")
   let ws = makeWorlds env' typ'
+  logItFrom "reconstructFix" $ text "worlds" <+> pretty ws
   let impl' = convertToNWorlds impl (length ws)
   let ctx p = if null recCalls then p else Program (PFix (map fst recCalls) p) (replicate (length ws) typ')
   p <- inContext ctx $ reconstructI ws impl'
@@ -179,6 +182,7 @@ reconstructI ws (Program p ts)
       let envs = map fst ws
       let envStr = addListToZip ws ts
       t'' <- checkAnnotation envStr p
+      logItFrom "reconstructI" $ text "t''" <+> pretty t''
       reconstructI' (zip envs t'') p
 
 reconstructI' :: MonadHorn s => [World] -> BareProgram [RType] -> Explorer s RWProgram
@@ -241,14 +245,17 @@ reconstructI' ws@((_,ScalarT{}):_) impl = case impl of
         pBody <- inContext (\p -> Program (PLet x pDef p) ts) $ reconstructI ws'' iBody
         return $ Program (PLet x pDef pBody) ts
 
-    PIf (Program PHole (AnyT:_)) iThen iElse -> $(todo "reconstructI' if-with-hole-worlds")
---     cUnknown <- Unknown Map.empty <$> freshId "C"
---     addConstraint $ WellFormedCond env cUnknown
---     pThen <- inContext (\p -> Program (PIf (Program PHole boolAll) p (Program PHole t)) t) $ reconstructI (addAssumption cUnknown env) t iThen
---     cond <- conjunction <$> currentValuation cUnknown
---     pCond <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateCondition env cond
---     pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) $ reconstructI (addAssumption (fnot cond) env) t iElse
---     return $ Program (PIf pCond pThen pElse) t
+    PIf (Program PHole (AnyT:_)) iThen iElse -> do -- $(todo "reconstructI' if-with-hole-worlds")
+        cUnknown <- Unknown Map.empty <$> freshId "C"
+        forM_ envs $ \env -> addConstraint $ WellFormedCond env cUnknown
+        pThen <- inContext (\p -> Program (PIf (Program PHole (replicate (length ws) boolAll)) p (Program PHole ts)) ts) $
+            reconstructI (zip (map (addAssumption cUnknown) envs) ts) iThen
+        cond <- conjunction <$> currentValuation cUnknown
+        pCond <- inContext (\p -> Program (PIf p uHoleWorld uHoleWorld) ts) $
+            generateCondition envs cond
+        pElse <- optionalInPartial ts $ inContext (\p -> Program (PIf pCond pThen p) ts) $
+            reconstructI (zip (map (addAssumption (fnot cond)) envs) ts) iElse
+        return $ Program (PIf pCond pThen pElse) ts
 
     PIf iCond iThen iElse -> do
         pCond <- inContext (\p -> Program (PIf p (Program PHole ts) (Program PHole ts)) ts) $

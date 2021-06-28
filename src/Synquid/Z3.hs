@@ -564,7 +564,7 @@ getAllMUSs' controlLitsAux mustHave cores = do
           getAllMUSs' controlLitsAux mustHave cores
         _ -> do
           fmls <- mapM litToFml seed
-          error $ unwords ["getAllMUSs: Z3 returned Unknown (maybe consider SAT) for"] ++ map show fmls
+          error $ unwords $ ["getAllMUSs: Z3 returned Unknown (maybe consider SAT) for"] ++ map show fmls
 
   where
     -- | Get the formula mapped to a given control literal in the main solver
