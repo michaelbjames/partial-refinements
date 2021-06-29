@@ -16,4 +16,4 @@ foldl ::
 foldl =  \xs. \f. \seed.
   match xs with
     Nil -> seed
-    Cons y ys -> foldl ys f (f seed y)
+    Cons y ys -> ?? -- foldl ys f (f seed y)

@@ -112,7 +112,7 @@ generateMaybeIf ws = ifte generateThen (uncurry $ generateElse ws) (generateMatc
           c <- conjunction <$> currentValuation cUnknown
           runInSolver $ progressChecks .= [] -- TODO: is this necessary??
           return (p, c)
-        logItFrom "generateThen" $ text "then found:" <+> pretty pThen <+> text "under condition" <+> pretty cond
+        writeLog 2 $ text "then found:" <+> pretty pThen <+> text "under condition" <+> pretty cond
         return (cond, pThen)
 
 -- | Proceed after solution @pThen@ has been found under assumption @cond@
@@ -214,7 +214,7 @@ generateFirstCase envs scrVars pScrutinee ts consName =
         -- assignments for the constructor in each world.
         consTs' <- mapM (runInSolver . currentAssignment) consTs
         binders <- replicateM (arity $ head consTs') (freshVar (head envs) "x")
-        (symsPerWorld, assPerWorld) <- unzip <$> (sequence $ zipWith4 caseSymbols envs scrVars (replicate (length envs) binders) consTs')
+        (symsPerWorld, assPerWorld) <- unzip <$> sequence (zipWith4 caseSymbols envs scrVars (replicate (length envs) binders) consTs')
         let caseEnvs = zipWith3 (\ass env syms -> foldr (uncurry addVariable) (addAssumption ass env) syms) assPerWorld envs symsPerWorld
 
         ifte  (do -- Try to find a vacuousness condition:
@@ -224,17 +224,16 @@ generateFirstCase envs scrVars pScrutinee ts consName =
                 deadValuation <- conjunction <$> currentValuation deadUnknown
                 ifte (generateError (map (addAssumption deadValuation) envs)) (const mzero) (return ()) -- The error must be possible only in this case
                 return (err, deadValuation, unknownName deadUnknown))
-                (\(err, deadCond, deadUnknown) -> return $ (Case consName binders err, deadCond, deadUnknown))
+                (\(err, deadCond, deadUnknown) -> return (Case consName binders err, deadCond, deadUnknown))
                 (do
                     let caseWorlds = zip caseEnvs ts
                     pCaseExpr <- local (over (_1 . matchDepth) (-1 +))
                                     $ inContext (\p -> Program (PMatch pScrutinee [Case consName binders p]) ts)
                                     $ generateI caseWorlds
-                    return $ (Case consName binders pCaseExpr, ftrue, dontCare))
+                    return (Case consName binders pCaseExpr, ftrue, dontCare))
 
 -- | Generate the @consName@ case of a match term with scrutinee variable @scrName@ and scrutinee type @scrType@
 generateCase :: MonadHorn s => [Environment] -> [Formula] -> RWProgram -> TypeVector -> Id -> Explorer s (Case TypeVector, Explorer s ())
--- generateCase = $(todo "generateCase")
 generateCase envs scrVars pScrutinee scrTypes consName =
     case Map.lookup consName (allSymbols (head envs)) of
         Nothing -> error $ show $ text "Datatype constructor" <+> text consName <+> text "not found in the environment" <+> pretty (head envs)
@@ -245,11 +244,12 @@ generateCase envs scrVars pScrutinee scrTypes consName =
             binders <- replicateM (arity (head consTs')) (freshVar (head envs) "x")
             (symsPerWorld, assPerWorld) <- unzip <$> sequence (zipWith4 caseSymbols envs scrVars (replicate (length envs) binders) consTs')
             unfoldSyms <- asks . view $ _1 . unfoldLocals
-
-            cUnknown <- Unknown Map.empty <$> freshId "M"
-            forM_ assPerWorld $ \ass -> runInSolver $ addFixedUnknown (unknownName cUnknown) (Set.singleton ass) -- Create a fixed-valuation unknown to assume @ass@
-            let caseEnvs = zipWith (\env syms -> (if unfoldSyms then unfoldAllVariables else id) $
-                            foldr (uncurry addVariable) (addAssumption cUnknown env) syms) envs symsPerWorld
+            matchConditions <- forM envs $ \_ -> Unknown Map.empty <$> freshId "M"
+            let envs' = zipWith addAssumption matchConditions envs
+            let assignUnknown u a = runInSolver $ addFixedUnknown (unknownName u) (Set.singleton a)
+            zipWithM_ assignUnknown matchConditions assPerWorld
+            let caseEnvs = zipWith (\e syms -> (if unfoldSyms then unfoldAllVariables else id) $
+                            foldr (uncurry addVariable) e syms) envs' symsPerWorld
             pCaseExpr <-
                 optionalInPartial scrTypes $
                     local (over (_1 . matchDepth) (-1 +)) $
@@ -258,13 +258,14 @@ generateCase envs scrVars pScrutinee scrTypes consName =
 
             let recheck =
                     if disjoint (symbolsOf pCaseExpr) (Set.fromList binders)
-                        then runInSolver $ setUnknownRecheck (unknownName cUnknown) Set.empty Set.empty -- ToDo: provide duals here
+                        then forM_ matchConditions $ \u -> runInSolver $ setUnknownRecheck (unknownName u) Set.empty Set.empty
                         else mzero
 
             return (Case consName binders pCaseExpr, recheck)
 
 -- | 'caseSymbols' @scrutinee binders consT@: a pair that contains (1) a list of bindings of @binders@ to argument types of @consT@
 -- and (2) a formula that is the return type of @consT@ applied to @scrutinee@
+caseSymbols :: MonadHorn s => Environment -> Formula -> [Id] -> RType -> Explorer s ([(Id, RType)], Formula)
 caseSymbols env x [] (ScalarT _ fml) = let subst = substitute (Map.singleton valueVarName x) in
   return ([], subst fml)
 caseSymbols env x (name : names) (FunctionT y tArg tRes) = do
@@ -310,6 +311,7 @@ generateMaybeMatchIf ws = (generateOneBranch >>= generateOtherBranches) `mplus` 
         let (Binary Eq matchVar@(Var _ x) (Cons _ c _)) = matchCond
         scrTs <- forM envs (\env -> runInSolver $ currentAssignment (toMonotype $ symbolsOfArity 0 env Map.! x))
         let (ScalarT (DatatypeT scrDT _ _) _) = head scrTs
+        let matchVar' = map (\t -> Var (toSort $ baseTypeOf t) x) scrTs
         let pScrutinee = Program (PSymbol x) scrTs
         let ctors = ((head envs ^. datatypes) Map.! scrDT) ^. constructors
         let envs' = map (addScrutinee pScrutinee) envs
@@ -322,14 +324,14 @@ generateMaybeMatchIf ws = (generateOneBranch >>= generateOtherBranches) `mplus` 
                 case ctors of
                     [] -> return $ Program (PMatch pScrutinee previousCases) ts
                     (ctor : rest) -> do
-                        (c, recheck) <- cut $ generateCase envs' (replicate (length ws) matchVar) pScrutinee ts ctor
+                        (c, recheck) <- cut $ generateCase envs' matchVar' pScrutinee ts ctor
                         ifM
                             (tryEliminateBranching (expr c) recheck)
                             (return $ expr c)
                             (genOtherCases (previousCases ++ [c]) rest)
 
         genOtherCases [Case c [] pBaseCase] (delete c ctors)
-
+    
 -- | 'generateE' @env typ@ : explore all elimination terms of type @typ@ in environment @env@
 -- (bottom-up phase of bidirectional typechecking)
 generateE :: MonadHorn s => [World] -> Explorer s RWProgram
@@ -411,7 +413,6 @@ checkE ws p@(Program pTerm pTyps) = do
   ctx <- asks . view $ _1 . context
   writeLog 2 empty
   writeLog 2 $ brackets (text "checkE") <+> text "Checking" <+> pretty p <+> text "::" <+> pretty typs <+> text "in" $+$ pretty (ctx $ untypedWorld PHole)
-  writeLog 2 $ text "Worlds:" <+> pretty ws
   let ws' = addListToZip ws pTyps
 
   -- ifM (asks $ _symmetryReduction . fst) checkSymmetry (return ())

@@ -417,6 +417,7 @@ prune isSubsumed (x:xs) = prune' [] x xs
 isValidFml :: MonadSMT s => Formula -> FixPointSolver s Bool
 isValidFml fml = not <$> lift (isSat $ fnot fml)
 
+
 -- | 'isSat' @fml@: is @fml@ satisfiable (free variables are implicitly existentially quantified)?
 isSatFml :: MonadSMT s => Formula -> FixPointSolver s Bool
 isSatFml = lift . isSat
