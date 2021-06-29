@@ -27,12 +27,6 @@ measure insert :: x: a -> List a -> {List a|True} where
 
 qualifier { len _v < len x, len _v >= 0 }
 
-{-
-This hangs, but IDK where. VSCode won't tell me.
-It gets stuck in the call:
-solveHornClauses in TypeConstraintSolver:251
-`refine` in HornSolver:107
--}
 find :: (d:List (Pair Int b) -> k:Int -> default:b -> b) ^
         (d:{List (Pair Int Int) | len _v == 0} -> k:Int -> default: Int -> {Int | _v == default}) -- ^
         -- (d:(List (Pair Int Int)) -> k: Int -> default: Int -> {Int | })
