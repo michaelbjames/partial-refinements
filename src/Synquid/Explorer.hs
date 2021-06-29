@@ -175,7 +175,7 @@ generateMatch ws = do
         else do
         (Program p tScrs) <- local (over _1 (\params -> set eGuessDepth (view scrutineeDepth params) params))
                         $ inContext (\p -> Program (PMatch p []) ts)
-                        $ generateE (zip envs (replicate (length envs) anyDatatype)) -- Generate a scrutinee of an arbitrary type
+                        $ generateE (zip envs (replicate (length envs) AnyT)) -- Generate a scrutinee of an arbitrary type
         let (envs', tScrs') = unzip $ zipWith embedContext envs tScrs
         let pScrutinee = Program p tScrs'
 
@@ -331,7 +331,7 @@ generateMaybeMatchIf ws = (generateOneBranch >>= generateOtherBranches) `mplus` 
                             (genOtherCases (previousCases ++ [c]) rest)
 
         genOtherCases [Case c [] pBaseCase] (delete c ctors)
-    
+
 -- | 'generateE' @env typ@ : explore all elimination terms of type @typ@ in environment @env@
 -- (bottom-up phase of bidirectional typechecking)
 generateE :: MonadHorn s => [World] -> Explorer s RWProgram

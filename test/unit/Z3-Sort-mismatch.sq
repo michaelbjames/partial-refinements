@@ -1,0 +1,25 @@
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+-- qualifier { len _v < len x, len _v >= 0 }
+
+{-
+Current error
+synquid: Z3 error: Sort mismatch at argument #1 for function (declare-fun |Cons_DataS "List" [VarS "A15"]|
+             (List_VarS "A15" List_DataS "List" [VarS "A15"])
+             List_DataS "List" [VarS "A15"]) supplied sort is List_VarS "A13"
+-}
+foldl ::
+  (xs:List a -> f: (acc:b -> x:a -> b) -> seed:b -> b) ^
+  -- (xs: List a -> f: (acc:Int -> a -> {Int | _v == acc + 1}) -> seed: Int -> {Int | _v == (len xs + seed)}) ^
+  (xs: List Int -> f: (acc:Int -> x:Int -> {Int | _v == acc + 1}) -> seed: Int -> {Int | _v == (len xs + seed)})
+foldl = \xs. \f. \seed.
+  match ?? with
+    Nil -> ??
+    Cons y ys -> ??
+
