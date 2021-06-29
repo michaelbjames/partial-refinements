@@ -16,21 +16,15 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs
 
-measure elems :: List a -> Set a where
-  Nil -> []
-  Cons x xs -> [x] + elems xs
-
-
 measure insert :: x: a -> List a -> {List a|True} where
   Nil -> Cons x Nil
   Cons y ys -> Cons x (Cons y ys)
 
 qualifier { len _v < len x, len _v >= 0 }
 
-find :: (d:List (Pair Int b) -> k:Int -> default:b -> b) ^
-        (d:{List (Pair Int Int) | len _v == 0} -> k:Int -> default: Int -> {Int | _v == default}) -- ^
-        -- (d:(List (Pair Int Int)) -> k: Int -> default: Int -> {Int | })
-find = ?? {- \haystack. \needle. \def.
+find :: (List (Pair Int b) -> Int -> b -> b) ^
+        ({List (Pair Int Int) | len _v == 0} -> Int -> default: Int -> {Int | _v == default})
+find = \haystack. \needle. \def.
   match haystack with
     Nil -> def
     Cons x xs ->
@@ -38,4 +32,3 @@ find = ?? {- \haystack. \needle. \def.
         Pair xa xb -> if xa == needle
           then xb
           else find xs needle def
- -}

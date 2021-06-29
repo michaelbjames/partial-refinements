@@ -11,7 +11,9 @@ qualifier { len _v < len x, len _v >= 0 }
 -- This spec checks but is not strong enough to specify the _direction_ of the fold.
 foldl ::
   (xs:List a -> f: (acc:b -> x:a -> b) -> seed:b -> b) ^
-  -- (xs: List a -> f: (acc:Int -> a -> {Int | _v == acc + 1}) -> seed: Int -> {Int | _v == (len xs + seed)}) ^
+  (xs: List a -> f: (acc:Int -> a -> {Int | _v == acc + 1}) -> seed: Int -> {Int | _v == (len xs + seed)}) ^
   (xs: List Int -> f: (acc:Int -> x:Int -> {Int | _v == acc + 1}) -> seed: Int -> {Int | _v == (len xs + seed)})
-foldl = ??
-
+foldl =  \xs. \f. \seed.
+  match xs with
+    Nil -> seed
+    Cons y ys -> foldl ys f (f seed y)

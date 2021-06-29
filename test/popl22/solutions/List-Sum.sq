@@ -15,5 +15,9 @@ qualifier { len _v < len x, len _v >= 0 }
 
 sum :: (xs: List Int -> Int) ^
 	   (xs: List {Int| _v == 3} -> {Int | _v == (3 * len xs)})
-sum = ??
+sum = \xs.
+	match xs with
+		Nil -> 0
+		Cons y ys -> plus y (sum ys)
+
 

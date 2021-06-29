@@ -28,7 +28,7 @@ VARIANTS = {
 
 DEFAULT_VARIANT = 'guarded powerset'
 
-TIMEOUT = 15
+TIMEOUT = 45
 TIMEOUT_CMD = ['timeout', str(TIMEOUT)]
 
 BASE_TEST_PATH = "./test/intersection/intersection/"
@@ -65,7 +65,7 @@ class Benchmark:
         self.description = description
         self.components = components
         self.options = options
-    
+
     def str(self):
         return f"{self.name}: {self.description} {str(self.options)}"
 
@@ -117,7 +117,7 @@ def get_stats(output):
     return Stats(goals, ast_size, spec_size)
 
 def run_file(filename, args):
-    filepath = filename + '.sq' 
+    filepath = filename + '.sq'
     cmd = RUN_SYNQUID + args + [filepath]
     res = None
     try:
@@ -129,7 +129,7 @@ def run_file(filename, args):
     except subprocess.TimeoutExpired as e:
         res = Result(filename, TIMEOUT_STATUS, -1, nostats, '-')
     except subprocess.CalledProcessError as e:
-        res = Result(filename, FAILED_STATUS, -1, nostats, e.stdout) 
+        res = Result(filename, FAILED_STATUS, -1, nostats, e.stdout)
     for (vid, vopts) in VARIANTS.items():
         run_variant(filename, args, vid, vopts, res)
     return res
@@ -146,7 +146,7 @@ def run_variant(filename, args, variant_id, extra_args, res):
     except subprocess.TimeoutExpired as e:
         v = VariantResult(TIMEOUT_STATUS, -1, '-')
     except subprocess.CalledProcessError as e:
-        v = VariantResult(FAILED_STATUS, -1, e.stdout) 
+        v = VariantResult(FAILED_STATUS, -1, e.stdout)
     res.variant_results[variant_id] = v
 
 
@@ -248,7 +248,6 @@ def main():
     write_results(statuses, LOGFILE)
     write_csv(statuses, CSVFILE)
     print_results(statuses)
-    # TODO: write csv
     # TODO: write latex
 
 if __name__ == '__main__':

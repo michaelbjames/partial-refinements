@@ -1,0 +1,22 @@
+qualifier { len _v >= 0, len _v < len x }
+
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+type Nat = {Int | _v >= 0}
+
+false :: {Bool | !_v}
+true :: {Bool | _v}
+zero :: {Int | _v == 0}
+
+allNeg :: (xs:{List {Int | _v < 0} | len _v >= 0} -> {Bool | _v == True}) ^
+          (xs:{List Nat | len _v > 0} -> {Bool | _v == False})
+allNeg = \xs.
+  match xs with
+    Nil -> True
+    Cons y ys -> False
