@@ -15,8 +15,10 @@ true :: {Bool | _v}
 zero :: {Int | _v == 0}
 
 allNeg :: (xs:{List {Int | _v < 0} | len _v >= 0} -> {Bool | _v == True}) ^
-          (xs:{List Nat | len _v > 0} -> {Bool | _v == False})
+          (xs: List Int -> {Bool | ((xs == (Cons (-1) (Cons 1 Nil))) || (xs == ((Cons 1 Nil)))) ==> (_v == False)})
 allNeg = \xs.
   match xs with
     Nil -> True
-    Cons y ys -> False
+    Cons y ys -> if y >= 0
+      then False
+      else allNeg ys

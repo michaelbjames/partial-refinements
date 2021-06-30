@@ -110,7 +110,7 @@ generateMaybeIf ws = ifte generateThen (uncurry $ generateElse ws) (generateMatc
             return $ addAssumption cUnknown env
         let ws' = zip envs' ts
         logItFrom "generateThen" $ text "got constraint worlds, finding a then in:" </> pretty ws'
-        (pThen, cond) <- do
+        (pThen, cond) <- cut $ do
           p <- local (over (_1 . ifDepth) (-1 +)) $ generateE ws' -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
           c <- conjunction <$> currentValuation cUnknown
           runInSolver $ progressChecks .= [] -- TODO: is this necessary??
