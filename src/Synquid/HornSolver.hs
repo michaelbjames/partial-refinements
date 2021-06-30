@@ -114,7 +114,10 @@ refine :: MonadSMT s => [(Formula, String)] -> QMap -> ExtractAssumptions -> [Ca
 refine constraints quals extractAssumptions cands = do
     writeLog 3 (text "[refine]:" <+> vsep [nest 2 $ text "Constraints" $+$ vsep (map pretty constraints), nest 2 $ text "QMap" $+$ pretty quals])
     let constraints' = filter isNew $ map fst constraints
-    cands' <- mapM (addConstraints constraints') cands
+    cands' <- mapM (\cand -> do
+        logItFrom "refine" $ text "adding constraints" <+> pretty constraints' </> text "to candidate:" <+> pretty cand
+        addConstraints constraints' cand) cands
+    logItFrom "refine" $ text "added Candidates:" <+> pretty cands'
     case find (Set.null . invalidConstraints) cands' of
       Just c -> return $ c : delete c cands'
       Nothing -> ifM (asks isLeastFixpoint)
@@ -141,11 +144,11 @@ check callType fmls extractAssumptions cands = do
     return cands'
   where
     apply sol fml = let fml' = applySolution sol fml in fml' |&| conjunction (extractAssumptions fml')
-    checkCand (Candidate sol valids invalids label) = 
+    checkCand (Candidate sol valids invalids label) =
       case callType of
         Validity -> allM isValidFml (map (hornApplySolution extractAssumptions sol) fmls)
         _ -> allM isSatFml (map (apply sol) fmls)
-      
+
 
 -- | 'greatestFixPoint' @quals constraints@: weakest solution for a system of second-order constraints @constraints@ over qualifiers @quals@.
 greatestFixPoint :: MonadSMT s => QMap -> ExtractAssumptions -> [Candidate] -> FixPointSolver s [Candidate]
@@ -426,3 +429,4 @@ writeLog level msg = do
   maxLevel <- asks solverLogLevel
   when (level <= maxLevel) $ traceShow (plain msg) (return ())
 
+logItFrom fnName msg = writeLog 1 $ brackets (text fnName) <+> msg

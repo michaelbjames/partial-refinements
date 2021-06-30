@@ -867,5 +867,4 @@ writeLog level msg = do
   maxLevel <- asks _tcSolverLogLevel
   when (level <= maxLevel) $ traceShow (plain msg) (return ())
 
-logItFrom fnName msg = do
-  writeLog 1 $ brackets (text fnName) <+> msg
+logItFrom fnName msg = writeLog 1 $ brackets (text fnName) <+> msg

@@ -267,19 +267,25 @@ reconstructI' ws@((_,ScalarT{}):_) impl = case impl of
         let elseEnvs = zipWith (\env' cond -> addAssumption
                     (substitute (Map.singleton valueVarName ffalse) cond) env') envs' conds
         pThen <- inContext (\p -> Program (PIf pCond p (Program PHole ts)) ts) $
+            local (over (_1 . ifDepth) (-1 +)) $
             reconstructI (zip thenEnvs ts) iThen
         pElse <- inContext (\p -> Program (PIf pCond pThen p) ts) $
+            local (over (_1 . ifDepth) (-1 +)) $
             reconstructI (zip elseEnvs ts) iElse
         return $ Program (PIf pCond pThen pElse) ts
 
     PMatch iScr iCases -> do
         (consNames, consTypes) <- unzip <$> checkCases Nothing iCases
         let scrTs = zipWith refineTop envs (map (shape . lastType) (head consTypes))
+        logItFrom "reconstructI" $ brackets (text "PMatch") <+> pretty (Program (PMatch iScr []) ts)
         pScrutinee <- inContext (\p -> Program (PMatch p []) ts) $ reconstructETopLevel (zip envs scrTs) iScr
         let (envs', tScrs) = unzip $ zipWith embedContext envs (typeOf pScrutinee)
         let scrutineeSymbols = symbolList pScrutinee
         let isGoodScrutinee = (not $ head scrutineeSymbols `elem` consNames) &&                 -- Is not a value
                             (any (not . flip Set.member ((head envs) ^. constants)) scrutineeSymbols) -- Has variables (not just constants)
+        logItFrom "reconstructI" $ brackets (text "PMatch") <+> text "isGoodScrutinee?" <+> pretty isGoodScrutinee
+              <+> text "of" <+> pretty pScrutinee
+
         when (not isGoodScrutinee) $ throwErrorWithDescription $ text "Match scrutinee" </> squotes (pretty pScrutinee) </> text "is constant"
 
         (envs'', xs) <- toVar (map (addScrutinee pScrutinee) envs') pScrutinee
@@ -328,7 +334,6 @@ reconstructCase envs scrVars pScrutinee ts (Case consName args iBody) consTs = d
 -- @env@ |- @impl@ :: @t@ where @impl@ is an elimination term
 -- (bottom-up phase of bidirectional reconstruction)
 reconstructETopLevel :: MonadHorn s => [World] -> RWProgram  -> Explorer s RWProgram
--- reconstructETopLevel = $(todo "reconstructETopLevel with worlds")
 reconstructETopLevel ws impl = do
   (Program pTerm pTyps) <- reconstructE ws impl
   generateAuxGoals
@@ -409,7 +414,6 @@ reconstructE' _ _ = $(todo "reconstructE' with worlds")
 -- return resolved @t'@, otherwise fail
 -- @p@ is expected to be untyped
 checkAnnotation :: MonadHorn s => [(Environment, RType, RType)] -> BareProgram TypeVector  -> Explorer s TypeVector
--- checkAnnotation ws p = $(todo "checkAnnotation with worlds")
 checkAnnotation ws p =
   flip (`zipWithM` ws) [1..(length ws)] $ \(env, t, t') idx -> inWorld idx $ do
     tass <- use (typingState . typeAssignment)
