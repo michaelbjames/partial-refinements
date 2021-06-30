@@ -114,9 +114,7 @@ refine :: MonadSMT s => [(Formula, String)] -> QMap -> ExtractAssumptions -> [Ca
 refine constraints quals extractAssumptions cands = do
     writeLog 3 (text "[refine]:" <+> vsep [nest 2 $ text "Constraints" $+$ vsep (map pretty constraints), nest 2 $ text "QMap" $+$ pretty quals])
     let constraints' = filter isNew $ map fst constraints
-    cands' <- mapM (\cand -> do
-        logItFrom "refine" $ text "adding constraints" <+> pretty constraints' </> text "to candidate:" <+> pretty cand
-        addConstraints constraints' cand) cands
+    cands' <- mapM (addConstraints constraints') cands
     logItFrom "refine" $ text "added Candidates:" <+> pretty cands'
     case find (Set.null . invalidConstraints) cands' of
       Just c -> return $ c : delete c cands'
