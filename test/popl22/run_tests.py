@@ -28,7 +28,7 @@ VARIANTS = {
 
 DEFAULT_VARIANT = 'guarded powerset'
 
-TIMEOUT = 45
+TIMEOUT = 60
 TIMEOUT_CMD = ['timeout', str(TIMEOUT)]
 
 BASE_TEST_PATH = "./test/intersection/intersection/"

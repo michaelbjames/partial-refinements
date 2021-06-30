@@ -16,7 +16,7 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs
 
-qualifier { len _v < len x, len _v >= 0 }
+qualifier { len _v < len x, len _v >= 0, x == y }
 
 false :: {Bool | _v == False}
 true :: {Bool | _v == True}

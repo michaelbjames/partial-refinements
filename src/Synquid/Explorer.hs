@@ -96,7 +96,7 @@ generateI ws = error $ "impossible world case: " ++ show (pretty ws)
 
 -- | Generate a possibly conditional term type @t@, depending on whether a condition is abduced
 generateMaybeIf :: MonadHorn s => [World] -> Explorer s RWProgram
-generateMaybeIf ws = ifte generateThen (uncurry $ generateElse ws) (generateMatch ws) -- If at least one solution without a match exists, go with it and continue with the else branch; otherwise try to match
+generateMaybeIf ws = ifte generateThen (uncurry3 $ generateElse ws) (generateMatch ws) -- If at least one solution without a match exists, go with it and continue with the else branch; otherwise try to match
   where
     (envs, ts) = unzip ws
     -- | Guess an E-term and abduce a condition for it
@@ -110,17 +110,18 @@ generateMaybeIf ws = ifte generateThen (uncurry $ generateElse ws) (generateMatc
             return $ addAssumption cUnknown env
         let ws' = zip envs' ts
         logItFrom "generateThen" $ text "got constraint worlds, finding a then in:" </> pretty ws'
-        (pThen, cond) <- cut $ do
+        (pThen, cond) <- do
+        -- (pThen, cond) <- cut $ do
           p <- local (over (_1 . ifDepth) (-1 +)) $ generateE ws' -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
           c <- conjunction <$> currentValuation cUnknown
           runInSolver $ progressChecks .= [] -- TODO: is this necessary??
           return (p, c)
-        writeLog 2 $ text "then found, not going to backtrack away:" <+> pretty pThen <+> text "under condition" <+> pretty cond
-        return (cond, pThen)
+        writeLog 2 $ text "then found:" <+> pretty pThen <+> text "under condition" <+> pretty cond
+        return (cond, unknownName cUnknown, pThen)
 
 -- | Proceed after solution @pThen@ has been found under assumption @cond@
-generateElse :: MonadHorn s => [World] -> Formula -> RWProgram -> Explorer s RWProgram
-generateElse ws cond pThen = if (== ftrue) cond
+generateElse :: MonadHorn s => [World] -> Formula -> Id -> RWProgram -> Explorer s RWProgram
+generateElse ws cond condUnknown pThen = if cond == ftrue
     then do
       logItFrom "generateElse" $ text "then conditions all True, no need for ite."
       return pThen -- @pThen@ is valid under no assumptions, in all worlds: return it
@@ -131,20 +132,17 @@ generateElse ws cond pThen = if (== ftrue) cond
             guard False
         logItFrom "generateElse" $ text "must find a conditional expression for:" <+> pretty cond
         pCond <- inContext (\p -> Program (PIf p uHoleWorld uHoleWorld ) ts) $ generateCondition envs cond
-
         cUnknown <- Unknown Map.empty <$> freshId "C"
         runInSolver $ addFixedUnknown (unknownName cUnknown) (Set.singleton $ fnot cond) -- Create a fixed-valuation unknown to assume @!cond@
         let envs' = map (addAssumption cUnknown) envs
         let ws' = zip envs' ts
-        pElse <- local (over (_1 . ifDepth) (-1 +)) $
-            optionalInPartial ts $
-            inContext (\p -> Program (PIf pCond pThen p) ts) $
+        pElse <- local (over (_1 . ifDepth) (-1 +)) $ 
+            optionalInPartial ts $ 
+            inContext (\p -> Program (PIf pCond pThen p) ts) $ 
             generateI ws'
-        return $ Program (PIf pCond pThen pElse) ts
-        {- ifM (tryEliminateBranching pElse (runInSolver $ setUnknownRecheck (unknownName cUnknown) Set.empty (Set.singleton condUnknown)))
-        (return pElse)
-        (return $ Program (PIf pCond pThen pElse) t)
-        -}
+        ifM (tryEliminateBranching pElse (runInSolver $ setUnknownRecheck (unknownName cUnknown) Set.empty (Set.singleton condUnknown)))
+          (return pElse)
+          (return $ Program (PIf pCond pThen pElse) ts)
     where
         (envs, ts) = unzip ws
 
@@ -165,7 +163,11 @@ generateCondition envs fml = do
         allConjuncts = Set.toList $ conjunctsOf fml
         genConjunct :: MonadHorn s => Formula -> Explorer s RWProgram
         genConjunct c = if isExecutable c
-            then return $ convertToNWorlds (fmlToProgram c) (length envs)
+            then do
+              let c' = convertToNWorlds (eraseTypes (fmlToProgram c)) (length envs) -- erase types to avoid unnecessary error checking
+              let ws = zip envs (replicate (length envs) (ScalarT BoolT $ valBool |=| c)) 
+              (Reconstructor reconstruct) <- asks . view $ _3
+              reconstruct $ AuxGoal Nothing ws c' 0 noPos
             else do
               let worlds =  zip envs (replicate (length envs) $ ScalarT BoolT $ valBool |=| c)
               cut (generateE worlds)
@@ -207,7 +209,7 @@ generateMatch ws = do
                 let envsWithAssumption = map (addAssumption cond) envs''
                 pCases <- map fst <$> mapM (cut . generateCase envsWithAssumption xs pScrutinee ts) (tail ctors)  -- Generate a case for each of the remaining constructors under the assumption
                 let pThen = Program (PMatch pScrutinee (pCase : pCases)) ts
-                generateElse ws cond pThen    -- Generate the else branch
+                generateElse ws cond condUnknown pThen    -- Generate the else branch
             _ -> error "impossible"
     where
         (envs, ts) = unzip ws
@@ -295,7 +297,8 @@ generateMaybeMatchIf ws = (generateOneBranch >>= generateOtherBranches) `mplus` 
         condUnknown <- Unknown Map.empty <$> freshId "C"
         addConstraint $ ProductiveCond (map fst ws) condUnknown
         forM_ envs $ \env -> addConstraint $ WellFormedCond env condUnknown
-        cut $ do
+        do
+        -- cut $ do
             p0 <- generateEOrError (zip (map (addAssumption matchUnknown . addAssumption condUnknown) envs) ts)
             matchValuation <- Set.toList <$> currentValuation matchUnknown
             let matchVars = Set.toList $ Set.unions (map varsOf matchValuation)
@@ -306,14 +309,15 @@ generateMaybeMatchIf ws = (generateOneBranch >>= generateOtherBranches) `mplus` 
             let matchConds = map (conjunction . Set.fromList . (\var -> filter (Set.member var . varsOf) matchValuation)) matchVars -- group by vars
             d <- asks . view $ _1 . matchDepth -- Backtrack if too many matches, maybe we can find a solution with fewer
             guard $ length matchConds <= d
-            return (matchConds, conjunction condValuation, p0)
+            return (matchConds, conjunction condValuation, unknownName condUnknown, p0)
 
     generateEOrError ws = generateError (map fst ws) `mplus` generateE ws
 
-    generateOtherBranches :: MonadHorn s => ([Formula], Formula, RWProgram) -> Explorer s RWProgram
-    generateOtherBranches (matchConds, conds, p0) = do
-        pThen <- cut $ generateMatchesFor (map (addAssumption conds) envs) matchConds p0 ts
-        generateElse ws conds pThen
+    generateOtherBranches :: MonadHorn s => ([Formula], Formula, Id, RWProgram) -> Explorer s RWProgram
+    generateOtherBranches (matchConds, cond, condUnknown, p0) = do
+        -- pThen <- cut $ generateMatchesFor (map (addAssumption cond) envs) matchConds p0 ts
+        pThen <- generateMatchesFor (map (addAssumption cond) envs) matchConds p0 ts
+        generateElse ws cond condUnknown pThen
 
     generateMatchesFor :: MonadHorn s => [Environment] -> [Formula] -> RWProgram -> TypeVector -> Explorer s RWProgram
     generateMatchesFor envs [] pBaseCase t = return pBaseCase
@@ -352,7 +356,7 @@ generateE ws = do
   logItFrom "generateE" $ text "got program to check:" <+> pretty (Program pTerm pTyps)
   runInSolver $ isFinal .= True >> solveTypeConstraints >> isFinal .= False  -- Final type checking pass that eliminates all free type variables
   logItFrom "generateE" $ text "all FV gone in type"
-  newGoals <- uses auxGoals (map aName)                                      -- Remember unsolved auxiliary goals
+  newGoals <- uses auxGoals (map (fromJust . aName))                                      -- Remember unsolved auxiliary goals
   generateAuxGoals                                                           -- Solve auxiliary goals
   logItFrom "generateE" $ text "solved all aux goals"
   pTyps' <- mapM (runInSolver . currentAssignment) pTyps                     -- Finalize the type of the synthesized term
@@ -610,7 +614,7 @@ isPolyConstructor (Program (PSymbol name) t) = isTypeName name && (not . Set.nul
 
 enqueueGoal ws impl depth = do
   name <- freshVar (fst $ head ws) "f"
-  auxGoals %= (AuxGoal name ws impl depth noPos :)
+  auxGoals %= (AuxGoal (Just name) ws impl depth noPos :)
   return $ Program (PSymbol name) (map snd ws)
 
 {- Utility -}
@@ -799,7 +803,7 @@ generateAuxGoals = do
         writeLog 2 $ text "PICK AUXILIARY GOAL" <+> pretty g
         Reconstructor reconstructWorlds <- asks . view $ _3
         p <- reconstructWorlds g
-        solvedAuxGoals %= Map.insert (aName g) (etaContract p)
+        solvedAuxGoals %= Map.insert (fromJust (aName g)) (etaContract p)
         generateAuxGoals
   where
     etaContract p = case etaContract' [] (content p) of

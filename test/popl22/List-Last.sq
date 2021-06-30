@@ -22,7 +22,7 @@ measure isNothing :: Maybe a -> Bool where
   Nothing -> True
   Just x -> False
 
-qualifier { len _v < len x }
+qualifier { len _v < len x, len _v >= 0 }
 
 list_last ::
   (xs:List Int -> Maybe Int) ^
