@@ -38,8 +38,7 @@ module Synquid.TypeConstraintSolver (
   topLevelGoals,
   addQuals,
   progressChecks,
-  checkProgress,
-  addQuals
+  checkProgress
 ) where
 
 import Synquid.Logic
@@ -612,7 +611,8 @@ allScalars env = mapMaybe toFormula $ Map.toList $ symbolsOfArity 0 env
     toFormula (_, ForallT _ _) = Nothing
     toFormula (x, _) | x `Set.member` (env ^. letBound) = Nothing
     toFormula (x, Monotype t) = case t of
-      ScalarT IntT  (Binary Eq _ (IntLit n)) -> Just $ IntLit n
+      -- ScalarT IntT  (Binary Eq _ (IntLit n)) -> Just $ IntLit n
+      ScalarT IntT  (Binary Eq _ (IntLit n)) -> Just $ Var IntS x
       ScalarT BoolT (Var _ _) -> Just $ BoolLit True
       ScalarT BoolT (Unary Not (Var _ _)) -> Just $ BoolLit False
       ScalarT (DatatypeT dt [] []) (Binary Eq _ cons@(Cons _ name [])) | x == name -> Just cons

@@ -110,7 +110,7 @@ data Goal = Goal
     deriving (Show, Eq, Ord)
 
 data AuxGoal = AuxGoal {
-    aName :: Id
+    aName :: Maybe Id
   , aWorlds :: [World]
   , aImpl :: RWProgram
   , aDepth :: Int

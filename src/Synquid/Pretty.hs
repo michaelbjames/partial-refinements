@@ -384,7 +384,8 @@ prettySpec g@(Goal name _ _ _ _ _ _) = text name <+> operator "::" <+> pretty (u
 prettySolution (Goal name _ _ _ _ _ _) prog = text name <+> operator "=" </> pretty prog
 
 instance Pretty AuxGoal where
-  pretty (AuxGoal name ws impl depth _) = text name <+> text "=" <+> pretty impl -- </> text "of depth:" <+> pretty depth <+> text "in worlds" <+> pretty ws
+  pretty (AuxGoal (Just name) ws impl depth _) = text name <+> text "=" <+> pretty impl -- </> text "of depth:" <+> pretty depth <+> text "in worlds" <+> pretty ws
+  pretty (AuxGoal Nothing ws impl depth _) = pretty impl -- </> text "of depth:" <+> pretty depth <+> text "in worlds" <+> pretty ws
 
 
 

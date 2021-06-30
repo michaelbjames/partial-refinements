@@ -22,7 +22,7 @@ measure isNothing :: Maybe a -> Bool where
   Nothing -> True
   Just x -> False
 
-qualifier { len _v < len x }
+qualifier { len _v < len x, len _v >= 0 }
 
 list_last ::
   (xs:List Int -> Maybe Int) ^
@@ -30,10 +30,11 @@ list_last ::
   (xs: {List Int | len _v > 0} -> {Maybe Int | !(isNothing _v)}) ^
   (xs:{List Int | _v == (Cons 1 Nil)} -> {Maybe Int | _v == Just 1}) ^
   (xs:{List Int | _v == (Cons 3 (Cons 1 Nil))} -> {Maybe Int | _v == Just 1}) -- ^
-list_last = \xs .
+list_last = ?? {- \xs .
   match xs with
     Nil -> Nothing
     Cons x rest ->
       match rest with
         Nil -> Just x
         Cons y ys -> list_last rest
+  -}

@@ -88,7 +88,9 @@ reconstructFix (Goal funName env (Monotype typ) impl depth _ synth) = do
 
 reconstructWorldsTopLevel :: MonadHorn s => AuxGoal -> Explorer s RWProgram
 reconstructWorldsTopLevel (AuxGoal funName [] impl _ _) = error "reconstructWorldsTopLevel: no worlds"
-reconstructWorldsTopLevel (AuxGoal funName ws impl depth _) = do
+reconstructWorldsTopLevel (AuxGoal Nothing ws impl depth _) = -- Not recursive goal
+  local (set (_1 . auxDepth) depth) $ reconstructI ws impl
+reconstructWorldsTopLevel (AuxGoal (Just funName) ws impl depth _) = do -- Recursive goal
   ws' <- mapM adjustWorld ws
   let placeholderWorld = head ws
   recCallsPlaceholder <- runInSolver (currentAssignment (snd placeholderWorld)) >>= recursiveCalls funName (fst placeholderWorld) True
@@ -396,7 +398,7 @@ reconstructE' ws (PApp iFun iArg) = do
                                 return ()
                     Just (envs', defW) -> do
                         let goalWorld = zip envs' tArg
-                        auxGoals %= (AuxGoal f goalWorld defW d noPos :) -- This is a locally defined function: add an aux goal with its body
+                        auxGoals %= (AuxGoal (Just f) goalWorld defW d noPos :) -- This is a locally defined function: add an aux goal with its body
                 return iArg
             _ -> enqueueGoal (zip envs tArg) iArg d -- HO argument is an abstraction: enqueue a fresh goal
 
