@@ -24,6 +24,7 @@ data ExplorerParams = ExplorerParams {
   _eGuessDepth :: Int,                    -- ^ Maximum depth of application trees
   _scrutineeDepth :: Int,                 -- ^ Maximum depth of application trees inside match scrutinees
   _matchDepth :: Int,                     -- ^ Maximum nesting level of matches
+  _ifDepth :: Int,                        -- ^ Maximum number of ifs
   _auxDepth :: Int,                       -- ^ Maximum nesting level of auxiliary functions (lambdas used as arguments)
   _fixStrategy :: FixpointStrategy,       -- ^ How to generate terminating fixpoints
   _polyRecursion :: Bool,                 -- ^ Enable polymorphic recursion?
@@ -49,6 +50,7 @@ defaultExplorerParams = ExplorerParams {
   _eGuessDepth = 3,
   _scrutineeDepth = 1,
   _matchDepth = 2,
+  _ifDepth = 2,
   _auxDepth = 1,
   _fixStrategy = AllArguments,
   _polyRecursion = True,

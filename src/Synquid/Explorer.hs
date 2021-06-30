@@ -85,10 +85,13 @@ generateI ws@((env, ScalarT{}):_) = do
     let ts = map snd ws
     unless (all isScalarType ts) (error "generateI, not scalars")
     maEnabled <- asks . view $ _1 . abduceScrutinees -- Is match abduction enabled?
-    d <- asks . view $ _1 . matchDepth
+    md <- asks . view $ _1 . matchDepth
+    ifdepth <- asks . view $ _1 . ifDepth
     maPossible <- runInSolver $ hasPotentialScrutinees env -- Are there any potential scrutinees in scope?
     logItFrom "generateI-ScalarT" $ text "are there scrutinees?" <+> pretty maPossible
-    if maEnabled && d > 0 && maPossible then generateMaybeMatchIf ws else generateMaybeIf ws
+    if maEnabled && md > 0 && maPossible
+        then generateMaybeMatchIf ws
+        else generateMaybeIf ws <|> noMore
 generateI ws = error $ "impossible world case: " ++ show (pretty ws)
 
 -- | Generate a possibly conditional term type @t@, depending on whether a condition is abduced
@@ -109,7 +112,7 @@ generateMaybeIf ws = ifte generateThen (uncurry3 $ generateElse ws) (generateMat
         logItFrom "generateThen" $ text "got constraint worlds, finding a then in:" </> pretty ws'
         (pThen, cond) <- do
         -- (pThen, cond) <- cut $ do
-          p <- generateE ws' -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
+          p <- local (over (_1 . ifDepth) (-1 +)) $ generateE ws' -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
           c <- conjunction <$> currentValuation cUnknown
           runInSolver $ progressChecks .= [] -- TODO: is this necessary??
           return (p, c)
@@ -123,13 +126,20 @@ generateElse ws cond condUnknown pThen = if cond == ftrue
       logItFrom "generateElse" $ text "then conditions all True, no need for ite."
       return pThen -- @pThen@ is valid under no assumptions, in all worlds: return it
     else do -- @pThen@ is valid under a nontrivial assumption, proceed to look for the solution for the rest of the inputs
-        logItFrom "generateElse" $ text "must find a conditional expression."
+        d <- ask . view $ _1 . ifDepth
+        when (d <= 0) $ do
+            logItFrom "generateElse" $ text "if-depth reached, no more Ifs here."
+            guard False
+        logItFrom "generateElse" $ text "must find a conditional expression for:" <+> pretty cond
         pCond <- inContext (\p -> Program (PIf p uHoleWorld uHoleWorld ) ts) $ generateCondition envs cond
         cUnknown <- Unknown Map.empty <$> freshId "C"
         runInSolver $ addFixedUnknown (unknownName cUnknown) (Set.singleton $ fnot cond) -- Create a fixed-valuation unknown to assume @!cond@
         let envs' = map (addAssumption cUnknown) envs
         let ws' = zip envs' ts
-        pElse <- optionalInPartial ts $ inContext (\p -> Program (PIf pCond pThen p) ts) $ generateI ws'
+        pElse <- local (over (_1 . ifDepth) (-1 +)) $ 
+            optionalInPartial ts $ 
+            inContext (\p -> Program (PIf pCond pThen p) ts) $ 
+            generateI ws'
         ifM (tryEliminateBranching pElse (runInSolver $ setUnknownRecheck (unknownName cUnknown) Set.empty (Set.singleton condUnknown)))
           (return pElse)
           (return $ Program (PIf pCond pThen pElse) ts)
@@ -177,7 +187,7 @@ generateMatch ws = do
         else do
         (Program p tScrs) <- local (over _1 (\params -> set eGuessDepth (view scrutineeDepth params) params))
                         $ inContext (\p -> Program (PMatch p []) ts)
-                        $ generateE (zip envs (replicate (length envs) anyDatatype)) -- Generate a scrutinee of an arbitrary type
+                        $ generateE (zip envs (replicate (length envs) AnyT)) -- Generate a scrutinee of an arbitrary type
         let (envs', tScrs') = unzip $ zipWith embedContext envs tScrs
         let pScrutinee = Program p tScrs'
 
@@ -335,7 +345,7 @@ generateMaybeMatchIf ws = (generateOneBranch >>= generateOtherBranches) `mplus` 
                             (genOtherCases (previousCases ++ [c]) rest)
 
         genOtherCases [Case c [] pBaseCase] (delete c ctors)
-    
+
 -- | 'generateE' @env typ@ : explore all elimination terms of type @typ@ in environment @env@
 -- (bottom-up phase of bidirectional typechecking)
 generateE :: MonadHorn s => [World] -> Explorer s RWProgram
@@ -363,9 +373,7 @@ generateE ws = do
 
 -- | 'generateEUpTo' @env typ d@ : explore all applications of type shape @shape typ@ in environment @env@ of depth up to @d@
 generateEUpTo :: MonadHorn s => [World] -> Int -> Explorer s RWProgram
-generateEUpTo ws d =
-  mplus (msum $ map (generateEAt ws) [0..d]) $
-        (throwErrorWithDescription (text "no more programs."))
+generateEUpTo ws d = mplus (msum $ map (generateEAt ws) [0..d]) $ noMore
 
 -- | 'generateEAt' @env typ d@ : explore all applications of type shape @shape typ@ in environment @env@ of depth exactly to @d@
 generateEAt :: MonadHorn s => [World] -> Int -> Explorer s RWProgram
@@ -775,6 +783,9 @@ symbolType env _ sch = freshInstance sch
     freshInstance sch = if arity (toMonotype sch) == 0
       then instantiate env sch False [] -- Nullary polymorphic function: it is safe to instantiate it with bottom refinements, since nothing can force the refinements to be weaker
       else instantiate env sch True []
+
+noMore :: MonadHorn s => Explorer s a
+noMore = throwErrorWithDescription (text "no more programs.")
 
 -- | Perform an exploration, and once it succeeds, do not backtrack it
 cut :: MonadHorn s => Explorer s a -> Explorer s a

@@ -1,0 +1,7 @@
+data Maybe a where
+    Nothing :: Maybe a
+    Just :: a -> Maybe a
+
+maybeFmap :: (ma:(Maybe a) -> f:(x:a -> b) -> Maybe b) ^
+              (ma:({Maybe Int | _v == Just 5}) -> f:(x:Int -> {Int | _v == (x + 1)}) -> {Maybe Int | _v == Just 6})
+maybeFmap = ??

@@ -1,4 +1,4 @@
-qualifier { len _v >= 0, len _v < len x, x == y }
+qualifier { len _v >= 0, len _v < len x }
 
 data List a where
 	Nil :: List a
@@ -12,14 +12,13 @@ type Nat = {Int | _v >= 0}
 
 false :: {Bool | !_v}
 true :: {Bool | _v}
-qualifier { x >= 0 }
+zero :: {Int | _v == 0}
 
 allNeg :: (xs:{List {Int | _v < 0} | len _v >= 0} -> {Bool | _v == True}) ^
-          (xs: List Int -> {Bool |
-              ((xs == (Cons (-1) (Cons 1 Nil))) || (xs == ((Cons 1 Nil)))) ==> (_v == False)})
-allNeg = ?? {- \xs.
+          (xs: List Int -> {Bool | ((xs == (Cons (-1) (Cons 1 Nil))) || (xs == ((Cons 1 Nil)))) ==> (_v == False)})
+allNeg = \xs.
   match xs with
     Nil -> True
     Cons y ys -> if y >= 0
-      then False -- Cannot synthesize this expression.
-      else allNeg ys -}
+      then False
+      else allNeg ys

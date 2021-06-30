@@ -1,0 +1,23 @@
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+{-
+We can check the solution, but not synthesize the whole thing.
+-}
+takeWhile :: <p :: a -> Bool> . (
+    (pred: (x: a -> {Bool | _v == p x}) -> xs: List a -> List {a | p _v})
+    ^
+    (pred: (x: a -> {Bool | _v == p x}) -> xs: List {a | p _v} -> {List a | _v == xs})
+    )
+-- Solution
+takeWhile = \pred. \xs.
+  match xs with
+    Nil -> Nil
+    Cons y ys -> if pred y
+      then Cons y (takeWhile pred ys)
+      else Nil

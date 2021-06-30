@@ -16,7 +16,7 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs
 
-qualifier { len _v < len x, len _v >= 0, x == y }
+qualifier { len _v < len x, len _v >= 0 }
 
 false :: {Bool | _v == False}
 true :: {Bool | _v == True}
@@ -43,4 +43,11 @@ contains :: (xs:List (Pair Int b) -> x:Int -> Bool) ^
               (xs == (Cons (Pair 2 0) Nil) ==> (_v == False)) &&
               (xs == (Cons (Pair 2 0) (Cons (Pair 1 0) Nil)) ==> (_v == True)) &&
               (xs == (Cons (Pair 2 0) (Cons (Pair 2 0) Nil)) ==> (_v == False)) })
-contains = ??
+contains = \haystack. \needle.
+  match haystack with
+    Nil -> False
+    Cons x xs ->
+      match x with
+        Pair xa xb -> if xa == needle
+          then True
+          else contains xs needle

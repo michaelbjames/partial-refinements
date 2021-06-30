@@ -2,46 +2,34 @@
 All-Neg:
 ---------------------------------------------------------------
 guarded powerset:
-allNeg :: (xs:List {Int|_v < 0} -> {Bool|_v == True}) ^ ((xs:{List Nat|len _v > 0} -> {Bool|_v == False}) ^ (xs:{List Int|_v == (Cons (-1) ((Cons 1 (Nil))))} -> {Bool|_v == False}))
+allNeg :: (xs:{List {Int|_v < 0}|len _v >= 0} -> {Bool|_v == True}) ^ (xs:List Int -> {Bool|xs == (Cons (-1) ((Cons 1 (Nil)))) || xs == (Cons 1 (Nil)) ==> _v == False})
 allNeg = \xs . 
   match xs with
     Nil -> true
-    Cons x4 x5 -> 
-      if x4 >= 0
+    Cons x3 x4 -> 
+      if x3 >= 0
         then false
-        else 
-          match x5 with
-            Nil -> true
-            Cons x8 x9 -> 
-              if x8 >= 0
-                then false
-                else true
+        else allNeg x4
 
 (Goals: 2)
 (Measures: 1)
-(Spec size: 27)
-(Solution size: 33)
+(Spec size: 31)
+(Solution size: 25)
 
 either/or:
-allNeg :: (xs:List {Int|_v < 0} -> {Bool|_v == True}) ^ ((xs:{List Nat|len _v > 0} -> {Bool|_v == False}) ^ (xs:{List Int|_v == (Cons (-1) ((Cons 1 (Nil))))} -> {Bool|_v == False}))
+allNeg :: (xs:{List {Int|_v < 0}|len _v >= 0} -> {Bool|_v == True}) ^ (xs:List Int -> {Bool|xs == (Cons (-1) ((Cons 1 (Nil)))) || xs == (Cons 1 (Nil)) ==> _v == False})
 allNeg = \xs . 
   match xs with
     Nil -> true
-    Cons x4 x5 -> 
-      if x4 >= 0
+    Cons x3 x4 -> 
+      if x3 >= 0
         then false
-        else 
-          match x5 with
-            Nil -> true
-            Cons x8 x9 -> 
-              if x8 >= 0
-                then false
-                else true
+        else allNeg x4
 
 (Goals: 2)
 (Measures: 1)
-(Spec size: 27)
-(Solution size: 33)
+(Spec size: 31)
+(Solution size: 25)
 
 laurent-BCD: timeout
 ---------------------------------------------------------------
@@ -65,7 +53,9 @@ contains = \xs . \x .
 (Solution size: 38)
 
 either/or:
-contains :: (xs:List Pair Int b -> x:Int -> Bool) ^ ((xs:{List Pair a b|len _v == 0} -> x:a -> {Bool|_v == False}) ^ (xs:List Pair Int Int -> x:{Int|_v == 1} -> {Bool|((((xs == (Nil) ==> _v == False) && (xs == (Cons ((Pair 1 0)) (Nil)) ==> _v == True)) && (xs == (Cons ((Pair 2 0)) (Nil)) ==> _v == False)) && (xs == (Cons ((Pair 2 0)) ((Cons ((Pair 1 0)) (Nil)))) ==> _v == True)) && (xs == (Cons ((Pair 2 0)) ((Cons ((Pair 2 0)) (Nil)))) ==> _v == False)}))
+synquid: lookupQuals: missing qualifiers for unknown U8
+CallStack (from HasCallStack):
+  error, called at src/Synquid/Logic.hs:362:14 in main:Synquid.Logic
 
 laurent-BCD: timeout
 ---------------------------------------------------------------
@@ -103,18 +93,7 @@ find = \d . \k . \default .
 ---------------------------------------------------------------
 List-Even-Parity:
 ---------------------------------------------------------------
-guarded powerset:
-list_even_parity :: (xs:List Bool -> Bool) ^ ((xs:{List {Bool|_v == True}|len _v == 2 || len _v == 0} -> {Bool|_v == True}) ^ (xs:{List {Bool|_v == True}|len _v == 3 || len _v == 1} -> {Bool|_v == False}))
-list_even_parity = \xs . 
-  match xs with
-    Nil -> true
-    Cons x4 x5 -> not
-                    (list_even_parity x5)
-
-(Goals: 2)
-(Measures: 1)
-(Spec size: 33)
-(Solution size: 20)
+guarded powerset: timeout
 
 either/or:
 list_even_parity :: (xs:List Bool -> Bool) ^ ((xs:{List {Bool|_v == True}|len _v == 2 || len _v == 0} -> {Bool|_v == True}) ^ (xs:{List {Bool|_v == True}|len _v == 3 || len _v == 1} -> {Bool|_v == False}))
@@ -138,15 +117,7 @@ guarded powerset: timeout
 either/or:
 foldl :: (xs:List a -> f:(acc:b -> x:a -> b) -> seed:b -> b) ^ (xs:List Int -> f:(acc:Int -> x:Int -> {Int|_v == acc + 1}) -> seed:Int -> {Int|_v == len xs + seed})
 List-Fold.sq:16: Error:
-  Cannot match shape, unresolvable subtype:
-  'Int' : {Int|_v == len x5 + x3} </: 'b' : b from label 'checkE-subtype'
-  when checking
-  foldl :: x5:_ -> x4:_ -> x3:_ -> b
-  in
-  \xs . \f . \seed . 
-        match xs with
-          Cons y ys -> foldl (?? :: [_])
-                         (?? :: [_]) (?? :: [_])
+  no more programs.
 
 
 laurent-BCD: timeout
@@ -288,33 +259,43 @@ sum = \xs .
 
 laurent-BCD: timeout
 ---------------------------------------------------------------
-List-toFalse:
+Maybe-fmap:
 ---------------------------------------------------------------
 guarded powerset:
-listToFalse :: (zs:{List Int|len _v == 0} -> {Bool|_v == False}) ^ (zs:{List Int|len _v > 0} -> {Bool|_v == False})
-listToFalse = \zs . 
-  match zs with
-    Nil -> False
-    Cons y ys -> listToFalse ys
+maybeFmap :: (ma:Maybe a -> f:(x:a -> b) -> Maybe b) ^ (ma:{Maybe Int|_v == (Just 5)} -> f:(x:Int -> {Int|_v == x + 1}) -> {Maybe Int|_v == (Just 6)})
+maybeFmap = \ma . \f . 
+    match ma with
+      Nothing -> Nothing
+      Just x1 -> Just (f x1)
 
-(Goals: 2)
-(Measures: 1)
-(Spec size: 17)
-(Solution size: 18)
+(Goals: 1)
+(Measures: 0)
+(Spec size: 13)
+(Solution size: 10)
 
 either/or:
-listToFalse :: (zs:{List Int|len _v == 0} -> {Bool|_v == False}) ^ (zs:{List Int|len _v > 0} -> {Bool|_v == False})
-List-toFalse.sq:17: Error:
-  Cannot find sufficiently strong refinements
-  when checking
-  ys :: {List Int|len _v > 0 && (len _v >= 0 && len _v < len zs)}
-  in
-  \zs . 
-    match zs with
-      Cons y ys -> listToFalse ys
+maybeFmap :: (ma:Maybe a -> f:(x:a -> b) -> Maybe b) ^ (ma:{Maybe Int|_v == (Just 5)} -> f:(x:Int -> {Int|_v == x + 1}) -> {Maybe Int|_v == (Just 6)})
+maybeFmap = \ma . \f . 
+    match ma with
+      Nothing -> Nothing
+      Just x1 -> Just (f x1)
 
+(Goals: 1)
+(Measures: 0)
+(Spec size: 13)
+(Solution size: 10)
 
-laurent-BCD: timeout
+laurent-BCD:
+maybeFmap :: (ma:Maybe a -> f:(x:a -> b) -> Maybe b) ^ (ma:{Maybe Int|_v == (Just 5)} -> f:(x:Int -> {Int|_v == x + 1}) -> {Maybe Int|_v == (Just 6)})
+maybeFmap = \ma . \f . 
+    match ma with
+      Nothing -> Nothing
+      Just x1 -> Just (f x1)
+
+(Goals: 1)
+(Measures: 0)
+(Spec size: 13)
+(Solution size: 10)
 ---------------------------------------------------------------
 TakeWhile:
 ---------------------------------------------------------------

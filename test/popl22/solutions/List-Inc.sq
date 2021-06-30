@@ -30,6 +30,6 @@ Checks, and can fill the hole. Synthesis not yet enabled.
 list_inc_intersect :: (xs: List Int -> List Int) ^
                       (xs: List {Int | _v == 1} -> List {Int | _v == 2}) ^
                       (xs: {List Int | len _v == 1} -> {List Int | len _v == 1})
-list_inc_intersect = ?? {- \x.
+list_inc_intersect = \x. 
   let f = \y. inc y
-   in map f x -}
+   in map f x

@@ -49,7 +49,7 @@ main = do
   res <- cmdArgsRun $ mode
   case res of
     (Synthesis file libs onlyGoals
-               appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency memoize symmetry isect
+               appMax scrutineeMax matchMax ifMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency memoize symmetry isect
                lfp bfs
                out_file out_module outFormat resolve
                print_spec print_stats log_) -> do
@@ -57,6 +57,7 @@ main = do
                     _eGuessDepth = appMax,
                     _scrutineeDepth = scrutineeMax,
                     _matchDepth = matchMax,
+                    _ifDepth = ifMax,
                     _auxDepth = auxMax,
                     _fixStrategy = fix,
                     _predPolyRecursion = genPreds,
@@ -105,6 +106,7 @@ data CommandLineArgs
         app_max :: Int,
         scrutinee_max :: Int,
         match_max :: Int,
+        if_max :: Int,
         aux_max :: Int,
         fix :: FixpointStrategy,
         generalize_preds :: Bool,
@@ -130,8 +132,7 @@ data CommandLineArgs
       }
   deriving (Data, Typeable, Show, Eq)
 
--- TODO:
--- Turn back on: incremental, consistency
+
 synt = Synthesis {
   file                = ""              &= typFile &= argPos 0,
   libs                = []              &= args &= typ "FILES",
@@ -139,6 +140,7 @@ synt = Synthesis {
   app_max             = 3               &= help ("Maximum depth of an application term (default: 3)") &= groupname "Explorer parameters",
   scrutinee_max       = 1               &= help ("Maximum depth of a match scrutinee (default: 1)"),
   match_max           = 2               &= help ("Maximum depth of matches (default: 2)"),
+  if_max              = 2               &= help ("Maximum depth of nested if (default: 2)"),
   aux_max             = 1               &= help ("Maximum depth of auxiliary functions (default: 1)") &= name "x",
   fix                 = FirstArgument   &= help (unwords ["What should termination metric for fixpoints be derived from?", show AllArguments, show FirstArgument, show DisableFixpoint, show Nonterminating, "(default: " ++ show FirstArgument ++ ")"]),
   generalize_preds    = True            &= help ("Make recursion polymorphic in abstract refinements (default: False)"),
@@ -146,7 +148,7 @@ synt = Synthesis {
   unfold_locals       = False           &= help ("Use all variables, as opposed to top-level function arguments only, in match scrutinee abduction (default: False)"),
   partial             = False           &= help ("Generate best-effort partial solutions (default: False)") &= name "p",
   incremental         = True            &= help ("Subtyping checks during bottom-up phase (default: True)"),
-  consistency         = False           &= help ("Check incomplete application types for consistency (default: False)"),
+  consistency         = False            &= help ("Check incomplete application types for consistency (default: False)"),
   memoize             = False           &= help ("Use memoization (default: False)") &= name "z",
   symmetry            = False           &= help ("Use symmetry reductions (default: False)") &= name "s",
   lfp                 = False           &= help ("Use least fixpoint solver (only works for type checking, default: False)") &= groupname "Solver parameters",
