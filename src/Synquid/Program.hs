@@ -8,6 +8,13 @@ import Synquid.Type as Type
 import Synquid.Types.Logic
 import Synquid.Types.Program
 import Synquid.Types.Type
+    ( BaseType(..),
+      RSchema,
+      RType,
+      SType,
+      SchemaSkeleton(..),
+      TypeSkeleton(ScalarT, LetT, AndT, AnyT, FunctionT),
+      TypeSubstitution )
 import Synquid.Types.Rest
 import Synquid.Tokens
 import Synquid.Util
@@ -193,13 +200,6 @@ renameAsImpl isBound = renameAsImpl' Map.empty
     renameAsImpl' subst  p (AndT l r) = AndT (renameAsImpl' subst p l) (renameAsImpl' subst p r)
     renameAsImpl' subst  _ t = substituteInType isBound subst t
 
-
--- | 'symbolsOfArity' @n env@: all symbols of arity @n@ in @env@
-symbolsOfArity n env = Map.findWithDefault Map.empty n (env ^. symbols)
-
--- | All symbols in an environment
-allSymbols :: Environment -> Map Id RSchema
-allSymbols env = Map.unions $ Map.elems (env ^. symbols)
 
 -- | 'lookupSymbol' @name env@ : type of symbol @name@ in @env@, including built-in constants
 lookupSymbol :: Id -> Int -> Bool -> Environment -> Maybe RSchema
@@ -426,8 +426,6 @@ refineBot env (AndT l r) = AndT (refineBot env l) (refineBot env r)
 {- Input language declarations -}
 
 
-unresolvedType env ident = (env ^. unresolvedConstants) Map.! ident
-unresolvedSpec goal = unresolvedType (gEnvironment goal) (gName goal)
 
 -- Remove measure being typechecked from environment
 filterEnv :: Environment -> Id -> Environment

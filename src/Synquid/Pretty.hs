@@ -53,8 +53,7 @@ module Synquid.Pretty (
   programNodeCount
 ) where
 
-import Synquid.Logic
-import Synquid.Type
+
 import Synquid.Types.Logic
 import Synquid.Types.Program
 import Synquid.Types.Type
@@ -62,7 +61,6 @@ import Synquid.Types.Rest
 import Synquid.Types.Explorer
 import Synquid.Types.Solver
 import Synquid.Types.Error
-import Synquid.Program
 import Synquid.Tokens
 import Synquid.Util
 

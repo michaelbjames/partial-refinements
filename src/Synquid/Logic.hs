@@ -1,9 +1,11 @@
 {-# LANGUAGE TemplateHaskell, Rank2Types #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 -- | Formulas of the refinement logic
 module Synquid.Logic where
 
 import Synquid.Util
+import Synquid.Pretty
 import Synquid.Types.Logic
 
 import Data.Tuple
@@ -16,6 +18,7 @@ import Data.Map (Map)
 import Control.Lens hiding (both)
 import Control.Monad
 import Data.List.Extra (nubOrd)
+import GHC.Stack
 
 {- Sorts -}
 
@@ -82,8 +85,6 @@ unifySorts boundTvs = unifySorts' Map.empty
 
 
 
-dontCare = "_"
-valueVarName = "_v"
 unknownName (Unknown _ name) = name
 varName (Var _ name) = name
 varType (Var t _) = t
@@ -92,32 +93,6 @@ isVar (Var _ _) = True
 isVar _ = False
 isCons (Cons _ _ _) = True
 isCons _ = False
-
-ftrue = BoolLit True
-ffalse = BoolLit False
-boolVar = Var BoolS
-valBool = boolVar valueVarName
-intVar = Var IntS
-valInt = intVar valueVarName
-vartVar n = Var (VarS n)
-valVart n = vartVar n valueVarName
-setVar s = Var (SetS (VarS s))
-valSet s = setVar s valueVarName
-fneg = Unary Neg
-fnot = Unary Not
-(|*|) = Binary Times
-(|+|) = Binary Plus
-(|-|) = Binary Minus
-(|=|) = Binary Eq
-(|/=|) = Binary Neq
-(|<|) = Binary Lt
-(|<=|) = Binary Le
-(|>|) = Binary Gt
-(|>=|) = Binary Ge
-(|&|) = Binary And
-(|||) = Binary Or
-(|=>|) = Binary Implies
-(|<=>|) = Binary Iff
 
 andClean l r = if l == ftrue then r else (if r == ftrue then l else (if l == ffalse || r == ffalse then ffalse else l |&| r))
 orClean l r = if l == ffalse then r else (if r == ffalse then l else (if l == ftrue || r == ftrue then ftrue else l ||| r))
@@ -128,18 +103,6 @@ conjunction fmls = foldr andClean ftrue fmls
 disjunction :: Foldable t => t Formula -> Formula
 disjunction fmls = foldr orClean ffalse fmls
 
-(/+/) = Binary Union
-(/*/) = Binary Intersect
-(/-/) = Binary Diff
-fin = Binary Member
-(/<=/) = Binary Subset
-
-infixl 9 |*|
-infixl 8 |+|, |-|, /+/, /-/, /*/
-infixl 7 |=|, |/=|, |<|, |<=|, |>|, |>=|, /<=/
-infixl 6 |&|, |||
-infixr 5 |=>|
-infix 4 |<=>|
 
 -- | 'varsOf' @fml@ : set of all input variables of @fml@
 varsOf :: Formula -> Set Formula
@@ -356,12 +319,12 @@ setToPredicate x (Ite c t e) = Ite c (setToPredicate x t) (setToPredicate x e)
 setToPredicate x s = Binary Member x s
 
 -- | 'lookupQuals' @qmap g u@: get @g@ component of the search space for unknown @u@ in @qmap@
-lookupQuals :: QMap -> Getter QSpace a -> Formula -> a
+lookupQuals :: HasCallStack => QMap -> Getter QSpace a -> Formula -> a
 lookupQuals qmap g (Unknown _ u) = case Map.lookup u qmap of
   Just qs -> view g qs
-  Nothing -> error $ unwords ["lookupQuals: missing qualifiers for unknown", u]
+  Nothing -> error $ unwords ["lookupQuals: missing qualifiers for unknown", u, "in qmap:\n", show (pretty qmap)]
 
-lookupQualsSubst :: QMap -> Formula -> [Formula]
+lookupQualsSubst :: HasCallStack => QMap -> Formula -> [Formula]
 lookupQualsSubst qmap u@(Unknown s _) = concatMap go $ map (substitute s) (lookupQuals qmap qualifiers u)
   where
     go u@(Unknown _ _) = lookupQualsSubst qmap u

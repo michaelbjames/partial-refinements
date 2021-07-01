@@ -87,7 +87,7 @@ data Constraint
     | WellFormedCond Environment Formula
     | WellFormedMatchCond Environment Formula
     | WellFormedPredicate Environment [Sort] Id
-    | ProductiveCond [Environment] Formula 
+    | ProductiveCond [Environment] Formula
     deriving (Show, Eq, Ord)
 
 -- | Synthesis goal
@@ -125,3 +125,14 @@ instance Show SolverCallType where
   show Validity = "validity"
   show Consistency = "consistency"
   show Progress = "progress"
+
+
+unresolvedType env ident = (env ^. unresolvedConstants) Map.! ident
+unresolvedSpec goal = unresolvedType (gEnvironment goal) (gName goal)
+
+-- | 'symbolsOfArity' @n env@: all symbols of arity @n@ in @env@
+symbolsOfArity n env = Map.findWithDefault Map.empty n (env ^. symbols)
+
+-- | All symbols in an environment
+allSymbols :: Environment -> Map Id RSchema
+allSymbols env = Map.unions $ Map.elems (env ^. symbols)

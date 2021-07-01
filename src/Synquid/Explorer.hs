@@ -136,9 +136,9 @@ generateElse ws cond condUnknown pThen = if cond == ftrue
         runInSolver $ addFixedUnknown (unknownName cUnknown) (Set.singleton $ fnot cond) -- Create a fixed-valuation unknown to assume @!cond@
         let envs' = map (addAssumption cUnknown) envs
         let ws' = zip envs' ts
-        pElse <- local (over (_1 . ifDepth) (-1 +)) $ 
-            optionalInPartial ts $ 
-            inContext (\p -> Program (PIf pCond pThen p) ts) $ 
+        pElse <- local (over (_1 . ifDepth) (-1 +)) $
+            optionalInPartial ts $
+            inContext (\p -> Program (PIf pCond pThen p) ts) $
             generateI ws'
         ifM (tryEliminateBranching pElse (runInSolver $ setUnknownRecheck (unknownName cUnknown) Set.empty (Set.singleton condUnknown)))
           (return pElse)
@@ -165,7 +165,7 @@ generateCondition envs fml = do
         genConjunct c = if isExecutable c
             then do
               let c' = convertToNWorlds (eraseTypes (fmlToProgram c)) (length envs) -- erase types to avoid unnecessary error checking
-              let ws = zip envs (replicate (length envs) (ScalarT BoolT $ valBool |=| c)) 
+              let ws = zip envs (replicate (length envs) (ScalarT BoolT $ valBool |=| c))
               (Reconstructor reconstruct) <- asks . view $ _3
               reconstruct $ AuxGoal Nothing ws c' 0 noPos
             else do
@@ -470,7 +470,6 @@ checkSymbol ws name = do
             let nameShape = head . intersectionToList <$> Map.lookup name (env ^. shapeConstraints)
 
             -- t could be an intersection, loop over choices
-            symbolUseCount %= Map.insertWith (+) name 1
             let iterList = zip ts [1..]
             let choices = flip map iterList $ \(t, idx) -> do
                   logItFrom "reconstructE" $ brackets (text "PSymbol")
@@ -748,7 +747,6 @@ instantiate env sch top argNames = do
     -- Use a Laurent-presentation of BCD to infer a median type from some
     -- subset of the intersected types.
     go subst pSubst intersectionStrat@LaurentBCD argNames t@AndT{} = do
-      idx <- use $ typingState . currentWorldNumOneIdx
       let conjuncts = intersectionToList t
       let tpowerset = map Set.toList . Set.toList . Set.delete Set.empty . Set.powerSet . Set.fromList $ conjuncts
       let choices = flip map (zip tpowerset [1..]) $ \(ts, idx) -> do
@@ -766,7 +764,6 @@ instantiate env sch top argNames = do
       go subst pSubst intersectionStrat argNames choice
 
     go subst pSubst _ _ t = return $ typeSubstitutePred pSubst . typeSubstitute subst $ t
-
 
     isBoundTV subst a = (a `Map.member` subst) || (a `elem` (env ^. boundTypeVars))
 

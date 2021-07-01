@@ -124,6 +124,51 @@ type Valuation = Set Formula
 type Solution = Map Id Valuation
 
 
+dontCare = "_"
+valueVarName = "_v"
+
+
+ftrue = BoolLit True
+ffalse = BoolLit False
+boolVar = Var BoolS
+valBool = boolVar valueVarName
+intVar = Var IntS
+valInt = intVar valueVarName
+vartVar n = Var (VarS n)
+valVart n = vartVar n valueVarName
+setVar s = Var (SetS (VarS s))
+valSet s = setVar s valueVarName
+fneg = Unary Neg
+fnot = Unary Not
+(|*|) = Binary Times
+(|+|) = Binary Plus
+(|-|) = Binary Minus
+(|=|) = Binary Eq
+(|/=|) = Binary Neq
+(|<|) = Binary Lt
+(|<=|) = Binary Le
+(|>|) = Binary Gt
+(|>=|) = Binary Ge
+(|&|) = Binary And
+(|||) = Binary Or
+(|=>|) = Binary Implies
+(|<=>|) = Binary Iff
+
+(/+/) = Binary Union
+(/*/) = Binary Intersect
+(/-/) = Binary Diff
+fin = Binary Member
+(/<=/) = Binary Subset
+
+infixl 9 |*|
+infixl 8 |+|, |-|, /+/, /-/, /*/
+infixl 7 |=|, |/=|, |<|, |<=|, |>|, |>=|, /<=/
+infixl 6 |&|, |||
+infixr 5 |=>|
+infix 4 |<=>|
+
+
+
 {- Solution Candidates -}
 
 -- | Solution candidate
