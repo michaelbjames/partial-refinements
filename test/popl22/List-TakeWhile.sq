@@ -6,20 +6,13 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs
 
-{-
-We can check the solution, but not synthesize the whole thing.
--}
+
 takeWhile :: <p :: a -> Bool> . (
     (pred: (x: a -> {Bool | _v == p x}) -> xs: List a -> List {a | p _v})
     ^
     (pred: (x: a -> {Bool | _v == p x}) -> xs: List {a | p _v} -> {List a | _v == xs})
     )
 takeWhile = ??
--- This is what we can solve right now
--- takeWhile = \pred. \xs.
---   match xs with
---     Nil -> Nil
---     Cons y ys -> ??
 
 -- Solution
 -- takeWhile = \pred. \xs.

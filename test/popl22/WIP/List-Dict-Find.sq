@@ -1,0 +1,39 @@
+data Map a b where
+  Empty :: Map a b
+  Cons :: k: a -> v: b -> xs: Map a b -> Map a b
+
+termination measure len :: Map a b -> {Int | _v >= 0} where
+  Empty -> 0
+  Cons k v xs -> 1 + len xs
+
+measure keys :: Map a b -> Set a where
+  Empty -> []
+  Cons k v xs -> [k] + keys xs
+
+data Maybe a where
+  Nothing :: Maybe a
+  Just :: a -> Maybe a
+
+measure isNothing :: Maybe a -> Bool where
+  Nothing -> True
+  Just x -> False
+
+
+qualifier { len _v < len x, len _v >= 0 }
+
+
+find :: (m:Map a b -> k:a -> Maybe b) ^
+        -- (k:Int -> d:{List (Pair Int Int) | len _v == 0} -> {Maybe Int | _v == Nothing}) ^
+        (m:Map a b -> k:{a | !(_v in (keys m))} -> {Maybe b | _v == Nothing}) ^
+        (m:{Map a {Int | _v == 1}|len _v > 0} -> k:{a | (_v in (keys m))} -> {Maybe Int | _v == Just 1 })
+        -- (k:Int -> d:(List (Pair Int Bool)) -> {Maybe Bool |
+        --   (((k == 1) && (d == (Nil))) ==> (_v == Nothing))
+        --    && (((k == 1) && (d == (Cons (Pair 1 False) Nil))) ==> (_v == Just False))})
+find = ?? {-\haystack. \needle.
+  match haystack with
+    Empty -> Nothing
+    Cons k v xs ->
+        if k == needle
+          then Just v
+          else find xs needle-}
+

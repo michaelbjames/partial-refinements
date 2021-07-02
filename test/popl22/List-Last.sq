@@ -24,13 +24,13 @@ measure isNothing :: Maybe a -> Bool where
 
 qualifier { len _v < len x, len _v >= 0 }
 
+{- Synthesizes fine without the polymorphic spec, just examples -}
 list_last ::
   (xs:List Int -> {Maybe Int|
       (xs == (Cons 2 Nil) ||
        xs == (Cons 1 (Cons 2 Nil)) ||
        xs == (Cons 0 (Cons 1 (Cons 2 Nil)))
        ) ==> _v == Just 2}) ^
-  -- (xs: List a -> Maybe a)
   (xs: List a -> {Maybe a | (len xs > 0 ==> !(isNothing _v)) && (len xs == 0 ==> (isNothing _v))})
 list_last = ?? {-\xs .
   match xs with

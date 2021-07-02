@@ -28,3 +28,15 @@ let rec list_dict_find : (nat -> nat -> bool) -> nat -> list -> option |>
         [(1, 3); (0, 3)] -> Some 3
     )
 = ?
+
+
+(*
+let rec list_dict_find : (nat -> nat -> bool) -> nat -> nat -> list -> nat |>
+  /\(0 -> 0 -> True,
+     0 -> 1 -> False,
+     1 -> 0 -> False) ->
+  0 -> 2 ->
+  /\([] -> 2,
+     [(0,3)] -> 3,
+     [(1,3)] -> 2,
+     [(1,3); (0, 4)] -> 4) = ?*)

@@ -18,22 +18,27 @@ qualifier { x }
 
 
 -- {-
--- It will check WITHOUT the first, more general type.
+-- Does not check!
 -- -}
 list_even_parity :: -- (xs:List Bool -> Bool) ^
-  -- (xs: {List {Bool | _v == True}| len _v == 2 || len _v == 0} -> {Bool | _v == True}) ^
-  -- (xs: {List {Bool | _v == True}| len _v == 3 || len _v == 1} -> {Bool | _v == False}) ^
+  (xs: {List {Bool | _v == True}| len _v == 2 || len _v == 0} -> {Bool |
+    ((len xs == 0 || len xs == 2) ==> _v == True) &&
+    ((len xs == 1 || len xs == 3) ==> _v == False)}) ^
+  (xs: {List {Bool | _v == False}| len _v > 0} -> {Bool | _v == True}) ^
   (xs: List Bool -> {Bool |
-    ((xs == Cons True Nil ==> _v == False) &&
-     (xs == Cons False Nil ==> _v == True) &&
+    (
+    -- (xs == Nil ==> (_v == True)) &&
+    --  (xs == Cons True Nil ==> _v == False) &&
+    --  (xs == Cons False Nil ==> _v == True) &&
      (xs == Cons True (Cons False Nil) ==> _v == False) &&
+    --  (xs == Cons True (Cons True Nil) ==> _v == True) &&
      (xs == Cons False (Cons True Nil) ==> _v == False) &&
-     (xs == Cons False (Cons False Nil) ==> _v == True) &&
+    --  (xs == Cons False (Cons False Nil) ==> _v == True) &&
      True)})
-list_even_parity = ?? {- \xs.
+list_even_parity = \xs.
   match xs with
     Nil -> True
-    Cons y ys -> ?? {- if y
+    Cons y ys -> if y
       then not (list_even_parity ys)
       else list_even_parity ys
-      -}
+
