@@ -8,10 +8,10 @@ termination measure len :: List a -> {Int | _v >= 0} where
 
 
 takeWhile :: <p :: a -> Bool> . (
-    (pred: (x: a -> {Bool | _v == p x}) -> xs: List a -> List {a | p _v})
-    ^
-    (pred: (x: a -> {Bool | _v == p x}) -> xs: List {a | p _v} -> {List a | _v == xs})
-    )
+    (pred: (x: a -> {Bool | _v == p x}) -> (
+        (xs: List a -> List {a | p _v}) ^
+        (xs: List {a | p _v} -> {List a | _v == xs}))
+    ))
 takeWhile = ??
 
 -- Solution
