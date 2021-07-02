@@ -14,9 +14,10 @@ false :: {Bool | !_v}
 true :: {Bool | _v}
 qualifier { x >= 0 }
 
-allNeg :: (xs:{List {Int | _v < 0} | len _v >= 0} -> {Bool | _v == True}) ^
+allNeg :: (xs:List {Int | _v < 0} -> {Bool | _v == True}) ^
           (xs: List Int -> {Bool |
-              ((xs == (Cons (-1) (Cons 1 Nil))) || (xs == ((Cons 1 Nil)))) ==> (_v == False)})
+              ((xs == (Cons (-1) (Cons 1 Nil))) ||
+              (xs == ((Cons 1 Nil)))) ==> (_v == False)})
 allNeg = ?? {- \xs.
   match xs with
     Nil -> True

@@ -1,0 +1,30 @@
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+data Maybe a where
+  Nothing :: Maybe a
+  Just :: a -> Maybe a
+
+qualifier { len _v < len x, len _v >= 0 }
+
+{-
+Checks, cannot synthesize yet.
+-}
+list_last :: xs:List Int -> { Maybe Int |
+      (xs == (Cons 2 Nil) ||
+       xs == (Cons 1 (Cons 2 Nil)) ||
+       xs == (Cons 0 (Cons 1 (Cons 2 Nil)))
+       ) ==> _v == Just 2
+}
+list_last = ?? {-\xs .
+  match xs with
+    Nil -> Nothing
+    Cons x3 x4 ->
+      match x4 with
+        Nil -> Just x3
+        Cons x8 x9 -> list_last x4-}

@@ -9,20 +9,22 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Cons x xs -> 1 + len xs
 
 plus :: x:Int -> y:Int -> {Int | _v == (x + y)}
+zero :: {Int | _v == 0}
+
+qualifier {len _v <  len x, len _v >= 0}
 
 -- Checks, unclear if would synthesize
 -- sum :: (List Int -> Int) ^
 	--    (xs: List {Int| _v == 3} -> {Int | _v == (3 * len xs)})
 
--- Checks, does not synthesize
+-- synthesizes
 sum :: xs: List Int -> {Int |
-		(xs == Nil) ==> (_v == 0) &&
-		(xs == (Cons 1 Nil)) ==> (_v == 1) &&
-		(xs == (Cons 4 (Cons 1 Nil))) ==> (_v == 5)}
--- sum = ??
-sum = \xs.
+		((xs == Nil) ==> (_v == 0)) &&
+		((xs == (Cons 2 Nil)) ==> (_v == 2)) &&
+		((xs == (Cons 1 (Cons 2 Nil))) ==> (_v == 3))}
+sum = ?? {- \xs.
 	match xs with
 		Nil -> 0
-		Cons y ys -> y + sum ys
+		Cons y ys -> y + sum ys-}
 
 

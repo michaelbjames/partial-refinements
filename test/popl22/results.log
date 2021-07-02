@@ -36,28 +36,27 @@ laurent-BCD: timeout
 List-Dict-Contains:
 ---------------------------------------------------------------
 guarded powerset:
-contains :: (xs:List Pair Int b -> x:Int -> Bool) ^ ((xs:{List Pair a b|len _v == 0} -> x:a -> {Bool|_v == False}) ^ (xs:List Pair Int Int -> x:{Int|_v == 1} -> {Bool|((((xs == (Nil) ==> _v == False) && (xs == (Cons ((Pair 1 0)) (Nil)) ==> _v == True)) && (xs == (Cons ((Pair 2 0)) (Nil)) ==> _v == False)) && (xs == (Cons ((Pair 2 0)) ((Cons ((Pair 1 0)) (Nil)))) ==> _v == True)) && (xs == (Cons ((Pair 2 0)) ((Cons ((Pair 2 0)) (Nil)))) ==> _v == False)}))
-contains = \xs . \x . 
-    match xs with
+synquid: Z3 error: Sort mismatch between first argument and argument 2
+
+either/or:
+contains :: (needle:a -> haystack:{List Pair {a|_v != needle} a|len _v > 0} -> {Bool|_v == False}) ^ ((needle:a -> haystack:{List Pair {a|_v == needle} a|len _v > 0} -> {Bool|_v == True}) ^ (needle:a -> haystack:{List Pair a a|len _v == 0} -> {Bool|_v == False}))
+contains = \needle . \haystack .
+    
+    match haystack with
       Nil -> false
       Cons x4 x5 -> 
         match x4 with
           Pair x6 x7 -> 
-            if x == x6
+            if needle == x6
               then true
-              else contains x5 x
+              else false
 
 (Goals: 4)
 (Measures: 3)
-(Spec size: 76)
-(Solution size: 38)
+(Spec size: 30)
+(Solution size: 34)
 
-either/or:
-synquid: lookupQuals: missing qualifiers for unknown U8
-CallStack (from HasCallStack):
-  error, called at src/Synquid/Logic.hs:362:14 in main:Synquid.Logic
-
-laurent-BCD: timeout
+laurent-BCD:
 ---------------------------------------------------------------
 List-Dict-Find:
 ---------------------------------------------------------------
@@ -93,34 +92,76 @@ find = \d . \k . \default .
 ---------------------------------------------------------------
 List-Even-Parity:
 ---------------------------------------------------------------
-guarded powerset: timeout
-
-either/or:
-list_even_parity :: (xs:List Bool -> Bool) ^ ((xs:{List {Bool|_v == True}|len _v == 2 || len _v == 0} -> {Bool|_v == True}) ^ (xs:{List {Bool|_v == True}|len _v == 3 || len _v == 1} -> {Bool|_v == False}))
+guarded powerset:
+list_even_parity :: xs:List Bool -> {Bool|(((((xs == (Cons True (Nil)) ==> _v == False) && (xs == (Cons False (Nil)) ==> _v == True)) && (xs == (Cons True ((Cons False (Nil)))) ==> _v == False)) && (xs == (Cons False ((Cons True (Nil)))) ==> _v == False)) && (xs == (Cons False ((Cons False (Nil)))) ==> _v == True)) && True}
 list_even_parity = \xs . 
   match xs with
     Nil -> true
-    Cons x4 x5 -> not
-                    (list_even_parity x5)
+    Cons x2 x3 -> 
+      if x2
+        then not x2
+        else 
+          match x3 with
+            Nil -> true
+            Cons x5 x6 -> 
+              if x5
+                then x2
+                else true
 
 (Goals: 2)
 (Measures: 1)
-(Spec size: 33)
-(Solution size: 20)
+(Spec size: 60)
+(Solution size: 27)
 
-laurent-BCD: timeout
+either/or:
+list_even_parity :: xs:List Bool -> {Bool|(((((xs == (Cons True (Nil)) ==> _v == False) && (xs == (Cons False (Nil)) ==> _v == True)) && (xs == (Cons True ((Cons False (Nil)))) ==> _v == False)) && (xs == (Cons False ((Cons True (Nil)))) ==> _v == False)) && (xs == (Cons False ((Cons False (Nil)))) ==> _v == True)) && True}
+list_even_parity = \xs . 
+  match xs with
+    Nil -> true
+    Cons x2 x3 -> 
+      if x2
+        then not x2
+        else 
+          match x3 with
+            Nil -> true
+            Cons x5 x6 -> 
+              if x5
+                then x2
+                else true
+
+(Goals: 2)
+(Measures: 1)
+(Spec size: 60)
+(Solution size: 27)
+
+laurent-BCD:
+list_even_parity :: xs:List Bool -> {Bool|(((((xs == (Cons True (Nil)) ==> _v == False) && (xs == (Cons False (Nil)) ==> _v == True)) && (xs == (Cons True ((Cons False (Nil)))) ==> _v == False)) && (xs == (Cons False ((Cons True (Nil)))) ==> _v == False)) && (xs == (Cons False ((Cons False (Nil)))) ==> _v == True)) && True}
+list_even_parity = \xs . 
+  match xs with
+    Nil -> true
+    Cons x2 x3 -> 
+      if x2
+        then not x2
+        else 
+          match x3 with
+            Nil -> true
+            Cons x5 x6 -> 
+              if x5
+                then x2
+                else true
+
+(Goals: 2)
+(Measures: 1)
+(Spec size: 60)
+(Solution size: 27)
 ---------------------------------------------------------------
 List-Fold:
 ---------------------------------------------------------------
 guarded powerset: timeout
 
 either/or:
-foldl :: (xs:List a -> f:(acc:b -> x:a -> b) -> seed:b -> b) ^ (xs:List Int -> f:(acc:Int -> x:Int -> {Int|_v == acc + 1}) -> seed:Int -> {Int|_v == len xs + seed})
-List-Fold.sq:16: Error:
-  no more programs.
 
-
-laurent-BCD: timeout
+laurent-BCD:
 ---------------------------------------------------------------
 List-Inc:
 ---------------------------------------------------------------
@@ -164,9 +205,26 @@ laurent-BCD: timeout
 ---------------------------------------------------------------
 List-Last:
 ---------------------------------------------------------------
-guarded powerset: timeout
+guarded powerset:
+list_last :: (xs:List Int -> {Maybe Int|(xs == (Cons 2 (Nil)) || xs == (Cons 1 ((Cons 2 (Nil))))) || xs == (Cons 0 ((Cons 1 ((Cons 2 (Nil)))))) ==> _v == (Just 2)}) ^ (xs:List a -> Maybe a)
+list_last = \xs . 
+  match xs with
+    Nil -> Nothing
+    Cons x3 x4 -> 
+      match x4 with
+        Nil -> Just x3
+        Cons x6 x7 -> list_last x4
 
-either/or: timeout
+(Goals: 4)
+(Measures: 3)
+(Spec size: 34)
+(Solution size: 39)
+
+either/or:
+list_last :: (xs:List Int -> {Maybe Int|(xs == (Cons 2 (Nil)) || xs == (Cons 1 ((Cons 2 (Nil))))) || xs == (Cons 0 ((Cons 1 ((Cons 2 (Nil)))))) ==> _v == (Just 2)}) ^ (xs:List a -> Maybe a)
+List-Last.sq:35: Error:
+  no more programs.
+
 
 laurent-BCD: timeout
 ---------------------------------------------------------------
@@ -262,71 +320,15 @@ laurent-BCD: timeout
 Maybe-fmap:
 ---------------------------------------------------------------
 guarded powerset:
-maybeFmap :: (ma:Maybe a -> f:(x:a -> b) -> Maybe b) ^ (ma:{Maybe Int|_v == (Just 5)} -> f:(x:Int -> {Int|_v == x + 1}) -> {Maybe Int|_v == (Just 6)})
-maybeFmap = \ma . \f . 
-    match ma with
-      Nothing -> Nothing
-      Just x1 -> Just (f x1)
-
-(Goals: 1)
-(Measures: 0)
-(Spec size: 13)
-(Solution size: 10)
 
 either/or:
-maybeFmap :: (ma:Maybe a -> f:(x:a -> b) -> Maybe b) ^ (ma:{Maybe Int|_v == (Just 5)} -> f:(x:Int -> {Int|_v == x + 1}) -> {Maybe Int|_v == (Just 6)})
-maybeFmap = \ma . \f . 
-    match ma with
-      Nothing -> Nothing
-      Just x1 -> Just (f x1)
-
-(Goals: 1)
-(Measures: 0)
-(Spec size: 13)
-(Solution size: 10)
 
 laurent-BCD:
-maybeFmap :: (ma:Maybe a -> f:(x:a -> b) -> Maybe b) ^ (ma:{Maybe Int|_v == (Just 5)} -> f:(x:Int -> {Int|_v == x + 1}) -> {Maybe Int|_v == (Just 6)})
-maybeFmap = \ma . \f . 
-    match ma with
-      Nothing -> Nothing
-      Just x1 -> Just (f x1)
-
-(Goals: 1)
-(Measures: 0)
-(Spec size: 13)
-(Solution size: 10)
 ---------------------------------------------------------------
 TakeWhile:
 ---------------------------------------------------------------
 guarded powerset:
-takeWhile :: <p :: a -> Bool> . (pred:(x:a -> {Bool|_v == p x}) -> xs:List a -> List {a|p _v}) ^ (pred:(x:a -> {Bool|_v == p x}) -> xs:List {a|p _v} -> {List a|_v == xs})
-takeWhile = \pred . \xs . 
-    match xs with
-      Nil -> Nil
-      Cons y ys -> 
-        if pred y
-          then Cons y (takeWhile pred ys)
-          else Nil
-
-(Goals: 2)
-(Measures: 1)
-(Spec size: 18)
-(Solution size: 30)
 
 either/or:
-takeWhile :: <p :: a -> Bool> . (pred:(x:a -> {Bool|_v == p x}) -> xs:List a -> List {a|p _v}) ^ (pred:(x:a -> {Bool|_v == p x}) -> xs:List {a|p _v} -> {List a|_v == xs})
-takeWhile = \pred . \xs . 
-    match xs with
-      Nil -> Nil
-      Cons y ys -> 
-        if pred y
-          then Cons y (takeWhile pred ys)
-          else Nil
 
-(Goals: 2)
-(Measures: 1)
-(Spec size: 18)
-(Solution size: 30)
-
-laurent-BCD: timeout
+laurent-BCD:

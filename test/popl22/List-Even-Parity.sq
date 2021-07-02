@@ -20,10 +20,16 @@ qualifier { x }
 -- {-
 -- It will check WITHOUT the first, more general type.
 -- -}
-list_even_parity :: (xs:List Bool -> Bool) ^
-  (xs: {List {Bool | _v == True}| len _v == 2 || len _v == 0} -> {Bool | _v == True}) ^
-  (xs: {List {Bool | _v == True}| len _v == 3 || len _v == 1} -> {Bool | _v == False})
-  -- (xs: {List {Bool | _v == False} | len _v > 0} -> {Bool | _v == False})
+list_even_parity :: -- (xs:List Bool -> Bool) ^
+  -- (xs: {List {Bool | _v == True}| len _v == 2 || len _v == 0} -> {Bool | _v == True}) ^
+  -- (xs: {List {Bool | _v == True}| len _v == 3 || len _v == 1} -> {Bool | _v == False}) ^
+  (xs: List Bool -> {Bool |
+    ((xs == Cons True Nil ==> _v == False) &&
+     (xs == Cons False Nil ==> _v == True) &&
+     (xs == Cons True (Cons False Nil) ==> _v == False) &&
+     (xs == Cons False (Cons True Nil) ==> _v == False) &&
+     (xs == Cons False (Cons False Nil) ==> _v == True) &&
+     True)})
 list_even_parity = ?? {- \xs.
   match xs with
     Nil -> True

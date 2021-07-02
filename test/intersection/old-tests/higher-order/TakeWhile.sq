@@ -14,7 +14,7 @@ takeWhile :: <p :: a -> Bool> . (
     ^
     (pred: (x: a -> {Bool | _v == p x}) -> xs: List {a | p _v} -> {List a | _v == xs})
     )
--- takeWhile = ??
+takeWhile = ??
 -- This is what we can solve right now
 -- takeWhile = \pred. \xs.
 --   match xs with
@@ -22,9 +22,9 @@ takeWhile :: <p :: a -> Bool> . (
 --     Cons y ys -> ??
 
 -- Solution
-takeWhile = \pred. \xs.
-  match xs with
-    Nil -> Nil
-    Cons y ys -> if pred y
-      then Cons y (takeWhile pred ys)
-      else Nil
+-- takeWhile = \pred. \xs.
+--   match xs with
+--     Nil -> Nil
+--     Cons y ys -> if pred y
+--       then Cons y (takeWhile pred ys)
+--       else Nil

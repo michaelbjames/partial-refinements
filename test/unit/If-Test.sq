@@ -17,8 +17,8 @@ lte :: x:Int -> y:Int -> {Bool| _v == (x <= y)}
 --    then zero
 --    else one
 
-isNatural :: x:Int -> {Int | ((x < 0) ==> _v == 0) && (x >= 0 ==> _v == 1)}
-isNatural = ??
+-- isNatural :: x:Int -> {Int | ((x < 0) ==> _v == 0) && (x >= 0 ==> _v == 1)}
+-- isNatural = ??
 
 -- isNatural = \x.
 --     if (lte zero x)
@@ -60,9 +60,9 @@ boolAnd = \x. \y. \p. \q. if p
 
 
 -- myIf :: x:a -> y:a -> p:Bool -> {a | ((p == True) ==> (_v == x)) && ((p == False) ==> (_v == y))}
--- myIf :: (x:a -> y:a -> p:{Bool | _v == True} -> {a | _v == x}) ^
-        -- (x:a -> y:a -> p:{Bool | _v == False} -> {a | _v == y})
--- myIf = ??
+myIf :: (x:a -> y:a -> p:{Bool | _v == True} -> {a | _v == x}) ^
+        (x:a -> y:a -> p:{Bool | _v == False} -> {a | _v == y})
+myIf = ??
 
 
 --

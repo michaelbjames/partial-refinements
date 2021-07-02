@@ -27,6 +27,8 @@ measure insert :: x: a -> List a -> {List a|True} where
 
 qualifier { len _v < len x, len _v >= 0 }
 
+
+-- DOES NOT SYNTHESIZE CORRECTLY
 find :: (d:List (Pair Int b) -> k:Int -> default:b -> b) ^
         (d:{List (Pair Int Int) | len _v == 0} -> k:Int -> default: Int -> {Int | _v == default}) -- ^
         -- (d:(List (Pair Int Int)) -> k: Int -> default: Int -> {Int | })

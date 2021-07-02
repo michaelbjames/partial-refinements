@@ -20,6 +20,8 @@ measure insert :: x: a -> List a -> {List a|True} where
   Nil -> Cons x Nil
   Cons y ys -> Cons x (Cons y ys)
 
+qualifier { len _v < len x, len _v >= 0, x == y }
+
 
 {-
 Checks
@@ -30,11 +32,11 @@ find :: xs: List (Pair Int Int) -> x: Int -> def: Int -> {Int |
     ((x == 0 && xs == (Cons (Pair 1 5) (Cons (Pair 0 4) Nil))) ==> (_v == 4)) &&
     True
   }
-find = \haystack. \needle. \def.
+find = {- \haystack. \needle. \def.
   match haystack with
     Nil -> def
     Cons x xs ->
       match x with
         Pair xa xb -> if xa == needle
           then xb
-          else find xs needle def
+          else find xs needle def -}

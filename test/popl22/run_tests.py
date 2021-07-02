@@ -79,9 +79,9 @@ BENCHMARKS = [
     Benchmark("List-Fold", "foldl"),
     Benchmark("List-Last", "last list element"),
     Benchmark("List-Length", "list length", "0, inc"),
+    Benchmark("List-TakeWhile", "take while"),
     Benchmark("List-Snoc", "cons at end"),
     Benchmark("Maybe-fmap", "functor law as example"),
-    Benchmark("TakeWhile", "take while")
 ]
 
 class Result:

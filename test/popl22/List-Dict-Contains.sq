@@ -21,26 +21,42 @@ qualifier { len _v < len x, len _v >= 0, x == y }
 false :: {Bool | _v == False}
 true :: {Bool | _v == True}
 
-{-
-Intersection: Not strong enough. I'm not sure why.
-We can use an abstract `a`, but need a concrete value in the Pair so we can give
-an example.
-Note: use -f allarguments or -f nonterminating; since the List must come second
-but it's decreasing.
--}
-contains :: (xs:List (Pair Int b) -> x:Int -> Bool) ^
-            -- Empty list trivially doesn't contain anything
-            (xs:{List (Pair a b) | len _v == 0} -> x:a -> {Bool | _v == False}) ^
-            -- The list where x is in every element definitely contains x
-            -- (xs:{List (Pair {Int | _v == 1} b) | len _v > 0} -> x: {Int| _v == 1} -> {Bool | _v == True}) ^
-            -- (xs:{List (Pair a b) | len _v > 0} -> x: a -> {Bool | (fst (head xs) == x) ==> (_v == True)}) ^
-            -- The list where x is in no element definitely does not contains x
-            -- (List (Pair {Int | _v != x} b) -> x: Int -> {Bool | _v == False})
-            -- Lastly we need an example to force a recursive call
-            (xs:List (Pair Int Int) -> x:{Int|_v == 1} -> {Bool |
-              (xs == (Nil) ==> (_v == False)) &&
-              (xs == (Cons (Pair 1 0) Nil) ==> (_v == True)) &&
-              (xs == (Cons (Pair 2 0) Nil) ==> (_v == False)) &&
-              (xs == (Cons (Pair 2 0) (Cons (Pair 1 0) Nil)) ==> (_v == True)) &&
-              (xs == (Cons (Pair 2 0) (Cons (Pair 2 0) Nil)) ==> (_v == False)) })
+
+-- contains :: (xs:List (Pair Int b) -> x:Int -> Bool) ^
+--             -- Empty list trivially doesn't contain anything
+--             (xs:{List (Pair a b) | len _v == 0} -> x:a -> {Bool | _v == False}) ^
+--             -- The list where x is in every element definitely contains x
+--             -- (xs:{List (Pair {Int | _v == 1} b) | len _v > 0} -> x: {Int| _v == 1} -> {Bool | _v == True}) ^
+--             -- (xs:{List (Pair a b) | len _v > 0} -> x: a -> {Bool | (fst (head xs) == x) ==> (_v == True)}) ^
+--             -- The list where x is in no element definitely does not contains x
+--             -- (List (Pair {Int | _v != x} b) -> x: Int -> {Bool | _v == False})
+--             -- Lastly we need an example to force a recursive call
+--             (xs:List (Pair Int Int) -> x:{Int|_v == 1} -> {Bool |
+--               (xs == (Nil) ==> (_v == False)) &&
+--               (xs == (Cons (Pair 1 0) Nil) ==> (_v == True)) &&
+--               (xs == (Cons (Pair 2 0) Nil) ==> (_v == False)) &&
+--               (xs == (Cons (Pair 2 0) (Cons (Pair 1 0) Nil)) ==> (_v == True)) &&
+--               (xs == (Cons (Pair 2 0) (Cons (Pair 2 0) Nil)) ==> (_v == False)) })
+-- contains = ??
+
+
+contains ::
+  (needle: a -> haystack: {List (Pair {a | _v != needle} a)| len _v > 0} -> {Bool | _v == False}) ^
+  (needle: a -> haystack: {List (Pair {a | _v == needle} a) | len _v > 0} -> {Bool | _v == True}) ^
+  (needle: a -> haystack: {List (Pair a a) | len _v == 0} -> {Bool | _v == False})
+  -- (xs: List (Pair a b) -> needle:a -> (x:a -> y:a -> Bool) -> Bool) ^
+  -- (xs: {List (Pair a b) | len _v == 0} -> needle:a -> (x:a -> y:a -> Bool) -> {Bool | _v == False}) ^
+  -- (xs: List (Pair a b) -> needle:a -> (x:a -> y:a -> {Bool|_v == False}) -> {Bool | _v == False}) ^
+  -- (xs: List (Pair Int Int) -> needle:Int -> (p:(Pair Int Int) -> y:Int -> {Bool| _v == ((fst p) == y)}) -> {Bool |
+  --   ((xs == (Nil) && needle == 0) ==> (_v == False)) &&
+  --   ((xs == (Cons (Pair 0 2) Nil) && needle == 0) ==> (_v == True)) &&
+  --   ((xs == (Cons (Pair 1 2) Nil) && needle == 0) ==> (_v == False)) &&
+  --   ((xs == (Cons (Pair 1 2) (Cons (Pair 0 2) Nil)) && needle == 0) ==> (_v == True)) &&
+  --   True})
 contains = ??
+-- contains = \xs. \x. \f.
+--   match xs with
+--     Nil -> False
+--     Cons z zs -> if f z x
+--       then True
+      -- else contains zs x f

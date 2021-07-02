@@ -6,6 +6,8 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs
 
+qualifier { len _v < len x, len _v >= 0 }
+
 {-
 The core idea of this fold doesn't specify a direction. However,
 the left-fold would not prove under this spec. The left direction

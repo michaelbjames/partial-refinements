@@ -1,3 +1,7 @@
+qualifier { len _v >= 0, len _v < len x, x == y }
+qualifier { x >= 0 }
+
+
 data List a where
 	Nil :: List a
 	Cons :: x: a -> xs: List a -> List a
@@ -8,24 +12,21 @@ termination measure len :: List a -> {Int | _v >= 0} where
 
 type Nat = {Int | _v >= 0}
 
+false :: {Bool | !_v}
+true :: {Bool | _v}
 
 -- This isn't strong enough to synthesize.
 -- I'm not sure why.
 allNeg :: (xs:List Int -> {Bool |
   ((xs == Nil) ==> (_v == True)) &&
   ((xs == (Cons (-1) Nil)) ==> (_v == True)) &&
-  ((xs == (Cons (-2) (Cons (-1) Nil))) ==> (_v == True)) &&
-
   ((xs == (Cons (0) Nil)) ==> (_v == False)) &&
-  ((xs == (Cons 1 (Cons (0) Nil))) ==> (_v == False)) &&
-
-  ((xs == (Cons 1 (Cons (-1) Nil))) ==> (_v == False)) &&
   ((xs == (Cons (-1) (Cons (0) Nil))) ==> (_v == False)) &&
 
   True})
-allNeg = \xs.
+allNeg = ?? {-\xs.
   match xs with
     Nil -> True
     Cons y ys -> if y >= 0
       then False
-      else allNeg ys
+      else allNeg ys-}
