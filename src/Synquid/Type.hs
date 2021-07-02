@@ -87,8 +87,15 @@ isUnion _ = False
 
 containsIntersection (AndT _ _) = True
 containsIntersection (FunctionT _ arg res) = containsIntersection arg || containsIntersection res
-containsIntersection (LetT _ binding bound) = containsIntersection binding || containsIntersection bound
+-- containsIntersection (LetT _ binding bound) = containsIntersection binding || containsIntersection bound
+containsIntersection (LetT _ binding bound) = error "could not possibly contain an intersection, why are you caling this here"
 containsIntersection _ = False
+
+containsUnion (UnionT{}) = True
+containsUnion (FunctionT _ arg res) = containsUnion arg || containsUnion res
+containsUnion (LetT _ binding bound) = error "could not possibly contain a union, why are you caling this here"
+containsUnion _ = False
+
 
 intersectionToList (AndT lty rty) = intersectionToList lty ++ intersectionToList rty
 intersectionToList x = [x]
@@ -192,6 +199,11 @@ toMonotype :: SchemaSkeleton r -> TypeSkeleton r
 toMonotype (Monotype t) = t
 toMonotype (ForallT _ t) = toMonotype t
 toMonotype (ForallP _ t) = toMonotype t
+
+applyToType :: (TypeSkeleton r1 -> TypeSkeleton r2) -> SchemaSkeleton r1 -> SchemaSkeleton r2
+applyToType f (Monotype t) = Monotype $ f t
+applyToType f (ForallT n t) = ForallT n (applyToType f t)
+applyToType f (ForallP p t) = ForallP p (applyToType f t)
 
 boundVarsOf :: SchemaSkeleton r -> [Id]
 boundVarsOf (ForallT a sch) = a : boundVarsOf sch
@@ -363,9 +375,9 @@ substituteInType isBound subst (ScalarT baseT fml) = ScalarT (substituteBase bas
           -- else TypeVarT (oldSubst `composeSubstitutions` subst) a
     substituteBase (DatatypeT name tArgs pArgs) = DatatypeT name (map (substituteInType isBound subst) tArgs) (map (substitute subst) pArgs)
     substituteBase baseT = baseT
-substituteInType isBound subst (FunctionT x tArg tRes) =
+substituteInType isBound subst t@(FunctionT x tArg tRes) =
   if Map.member x subst
-    then error $ unwords ["Attempt to substitute variable", x, "bound in a function type"]
+    then error $ unwords ["Attempt to substitute variable", x, "bound in a function type: ", show t]
     else FunctionT x (substituteInType isBound subst tArg) (substituteInType isBound subst tRes)
 substituteInType isBound subst (LetT x tDef tBody) =
   if Map.member x subst
@@ -450,6 +462,34 @@ matchNames = matchNames' Map.empty
           FunctionT x (substituteInType (const False) subst arg') (matchNames' (Map.insert y (Var (toSort base) x) subst) resTemplate res)
         _ -> FunctionT x (substituteInType (const False) subst arg') (matchNames' subst resTemplate res)
     matchNames' subst _ t = substituteInType (const False) subst t
+
+
+-- | expandCompoundType @t@ removes all unions from the type by replacing it with
+-- intersections (and splitting type apart). When a union cannot be removed,
+-- we throw an error. We do not support such types.
+expandCompoundType :: RType -> RType
+expandCompoundType inpT = let
+  result = case inpT of
+      (FunctionT x t t') -> foldr1 AndT (expand inpT)
+      UnionT{} -> error $ unwords ["cannot expand a top level union:", show inpT]
+      AndT l r -> foldr1 AndT (concatMap expand [l, r])
+      t -> t
+  unionCheck = containsUnion result
+  topLevelCheck = any containsIntersection (intersectionToList result)
+  in if unionCheck || topLevelCheck
+    then error $ unwords [
+      "expandCompoundType invariant failed. This function has a bug while expanding\n",
+      show inpT, "\nproducing: ", show result]
+    else result
+  where
+    expand :: RType -> [RType]
+    expand (FunctionT x t (AndT l r)) = concatMap expand [FunctionT x t l, FunctionT x t r]
+    expand (FunctionT x (UnionT l r) t') = concatMap expand [FunctionT x l t', FunctionT x r t']
+    expand t@(FunctionT _ (AndT{}) _) = error $ unwords ["cannot expand a LHS intersection: ", show t, "\nin: ", show inpT]
+    expand t@(FunctionT _ _ (UnionT{})) = error $ unwords ["cannot expand a RHS union: ", show t, "\nin: ", show inpT]
+    expand (FunctionT x t t') = map (FunctionT x t) (expand t')
+    expand (AndT l r) = concatMap expand [l, r]
+    expand t = [t]
 
 -- Set strings: used for "fake" set type for typechecking measures
 emptySetCtor = "Emptyset"

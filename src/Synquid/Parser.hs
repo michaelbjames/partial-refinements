@@ -1,7 +1,7 @@
 {-# LANGUAGE TupleSections #-}
 
 -- | The parser for Synquid's program specification DSL.
-module Synquid.Parser (parseFromFile, parseProgram, toErrorMessage) where
+module Synquid.Parser  where
 
 import Synquid.Logic
 import Synquid.Type
@@ -32,6 +32,9 @@ import Debug.Trace
 {- Interface -}
 
 type Parser a = IndentParser String () a
+
+parseString :: Parser a -> String -> Either ParseError a
+parseString aParser = runIndentParser aParser () "input"
 
 parseProgram :: Parser [Declaration]
 parseProgram = whiteSpace *> option [] (block parseDeclaration) <* eof
@@ -205,6 +208,7 @@ parseForall = do
 parseType :: Parser RType
 parseType = withPos (choice
     [ try parseIntersectionType
+    , try parseUnionType
     , try parseFunctionTypeWithArg
     , parseFunctionTypeMb
     ] <?> "type")
@@ -240,6 +244,11 @@ parseIntersectionType = do
   t1 <- parseTypeNoIntersection
   reservedOp "^"
   AndT t1 <$> parseType
+
+parseUnionType = do
+  t1 <- parseTypeNoIntersection
+  reservedOp "\\/"
+  UnionT t1 <$> parseType
 
 parseTypeAtom :: Parser RType
 parseTypeAtom = choice [

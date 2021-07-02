@@ -120,8 +120,8 @@ assert' ast = do
                   _true
     s <- astToString ast
     -- debug 2 (text "[MonadSMT]: isSat:" </> text s) $
-    -- debug 3 (text "[MonadSMT]: Z3 query:" </> text str) $
-    assert ast
+    debug 3 (text "[MonadSMT]: Z3 query:" </> text str) $
+      assert ast
 
 convertDatatypes :: Map Id RSchema -> [(Id, DatatypeDef)] -> Z3State ()
 convertDatatypes _ [] = return ()

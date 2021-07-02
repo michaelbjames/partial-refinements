@@ -425,6 +425,9 @@ refineBot env (AndT l r) = AndT (refineBot env l) (refineBot env r)
 
 {- Input language declarations -}
 
+expandDecl :: Declaration -> Declaration
+expandDecl (Pos pos (FuncDecl name sch)) = (Pos pos (FuncDecl name (applyToType expandCompoundType sch))) -- FuncDecl name (expandCompoundType <$> sch)
+expandDecl d = d
 
 
 -- Remove measure being typechecked from environment

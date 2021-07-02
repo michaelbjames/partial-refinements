@@ -7,7 +7,7 @@ import Synquid.Type
 import Synquid.Program
 import Synquid.Types.Error
 import Synquid.Pretty
-import Synquid.Parser
+import Synquid.Parser hiding (parens)
 import Synquid.Resolver (resolveDecls)
 import Synquid.SolverMonad
 import Synquid.HornSolver
@@ -219,7 +219,7 @@ runOnFile :: SynquidParams -> ExplorerParams -> HornSolverParams
                            -> String -> [String] -> IO ()
 runOnFile synquidParams explorerParams solverParams file libs = do
   declsByFile <- parseFromFiles (libs ++ [file])
-  let decls = concat $ map snd declsByFile
+  let decls = concat $ map (map expandDecl . snd) declsByFile
   case resolveDecls decls of
     Left resolutionError -> (pdoc $ pretty resolutionError) >> pdoc empty >> exitFailure
     Right (goals, cquals, tquals) -> when (not $ resolveOnly synquidParams) $ do

@@ -1,4 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveTraversable #-}
 
 module Synquid.Types.Type where
 
@@ -17,7 +19,7 @@ import qualified Data.Set as Set
 {- Type skeletons -}
 
 data BaseType r = BoolT | IntT | DatatypeT Id [TypeSkeleton r] [r] | TypeVarT Substitution Id
-    deriving (Show, Eq, Ord)
+    deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
 -- | Type skeletons (parametrized by refinements)
 data TypeSkeleton r
@@ -27,14 +29,14 @@ data TypeSkeleton r
     | AndT (TypeSkeleton r) (TypeSkeleton r)
     | UnionT (TypeSkeleton r) (TypeSkeleton r)
     | AnyT
-    deriving (Show, Eq, Ord)
+    deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
 -- | Polymorphic type skeletons (parametrized by refinements)
 data SchemaSkeleton r
     = Monotype (TypeSkeleton r)
     | ForallT Id (SchemaSkeleton r) -- Type-polymorphic
     | ForallP PredSig (SchemaSkeleton r) -- Predicate-polymorphic
-    deriving (Show, Eq, Ord)
+    deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
 {- Refinement types -}
 
