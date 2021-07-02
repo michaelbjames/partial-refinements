@@ -13,10 +13,6 @@ zero :: {Int | _v == 0}
 
 qualifier {len _v <  len x, len _v >= 0}
 
--- Checks, unclear if would synthesize
--- sum :: (List Int -> Int) ^
-	--    (xs: List {Int| _v == 3} -> {Int | _v == (3 * len xs)})
-
 -- synthesizes
 sum :: xs: List Int -> {Int |
 		((xs == Nil) ==> (_v == 0)) &&

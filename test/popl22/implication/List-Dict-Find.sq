@@ -1,42 +1,37 @@
-data Pair a b where
-	Pair :: x: a -> y: b -> Pair a b
+data Map a b where
+  Empty :: Map a b
+  Cons :: k: a -> v: b -> xs: Map a b -> Map a b
 
-measure fst :: Pair a b -> a where
-  Pair x y -> x
+termination measure len :: Map a b -> {Int | _v >= 0} where
+  Empty -> 0
+  Cons k v xs -> 1 + len xs
 
-measure snd :: Pair a b -> b where
-  Pair x y -> y
+measure keys :: Map a b -> Set a where
+  Empty -> []
+  Cons k v xs -> [k] + keys xs
 
+data Maybe a where
+  Nothing :: Maybe a
+  Just :: a -> Maybe a
 
-data List a where
-	Nil :: List a
-	Cons :: x: a -> xs: List a -> List a
+measure isNothing :: Maybe a -> Bool where
+  Nothing -> True
+  Just x -> False
 
-termination measure len :: List a -> {Int | _v >= 0} where
-  Nil -> 0
-  Cons x xs -> 1 + len xs
-
-measure insert :: x: a -> List a -> {List a|True} where
-  Nil -> Cons x Nil
-  Cons y ys -> Cons x (Cons y ys)
 
 qualifier { len _v < len x, len _v >= 0, x == y }
 
 
-{-
-Checks
--}
-find :: xs: List (Pair Int Int) -> x: Int -> def: Int -> {Int |
-    ((x == 0 && xs == (Nil)) ==> (_v == def)) &&
-    ((x == 0 && xs == (Cons (Pair 0 4) Nil)) ==> (_v == 4)) &&
-    ((x == 0 && xs == (Cons (Pair 1 5) (Cons (Pair 0 4) Nil))) ==> (_v == 4)) &&
+find :: xs: Map Int Int -> x: Int -> {Maybe Int |
+    ((x == 0 && xs == (Empty)) ==> (_v == Nothing)) &&
+    ((x == 0 && xs == (Cons 0 4 Empty)) ==> (_v == Just 4)) &&
+    ((x == 0 && xs == (Cons 1 5 (Cons 0 4 Empty))) ==> (_v == Just 4)) &&
+    ((x == 0 && xs == (Cons 1 5 Empty)) ==> (_v == Nothing)) &&
     True
   }
-find = {- \haystack. \needle. \def.
+find = ?? {- \haystack. \needle.
   match haystack with
-    Nil -> def
-    Cons x xs ->
-      match x with
-        Pair xa xb -> if xa == needle
-          then xb
-          else find xs needle def -}
+    Empty -> Nothing
+    Cons k v xs -> if k == needle
+          then Just v
+          else find xs needle -}

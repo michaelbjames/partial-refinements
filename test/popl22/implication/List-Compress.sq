@@ -22,14 +22,7 @@ measure heads :: PList a -> Set a where
 type List a = PList a <{True}>
 type CList a = PList a <{!(_0 in heads _1)}>
 
--- compress_1 :: xs: List a -> {CList a | elems _v == elems xs}
--- compress_1 = ??
 
-
-{-
-Checks
-I think this is strong enough to synthesize. But it doesn't check against the old spec.
--}
 compress_int :: xs: List Int -> {List Int |
     (xs == Nil ==> (_v == Nil)) &&
     (xs == (Cons 1 Nil) ==> (_v == (Cons 1 Nil))) &&
@@ -46,12 +39,12 @@ compress_int :: xs: List Int -> {List Int |
     }
 compress_int = ??
 -- compress_int = \xs .
---   match xs with
---     Nil -> Nil
---     Cons x3 x4 ->
---       match compress_int x4 with
---         Nil -> Cons x3 Nil
---         Cons x10 x11 ->
---           if x3 == x10
---             then compress_int x4
---             else Cons x3 (Cons x10 x11)
+  -- match xs with
+  --   Nil -> xs
+  --   Cons x2 x3 ->
+  --     match x3 with
+  --       Nil -> xs
+  --       Cons x4 x5 ->
+  --         if x2 == x4
+  --           then compress_int x3
+  --           else Cons x2 (compress_int x3)

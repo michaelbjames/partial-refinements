@@ -12,9 +12,6 @@ data Maybe a where
 
 qualifier { len _v < len x, len _v >= 0 }
 
-{-
-Checks, cannot synthesize yet.
--}
 list_last :: xs:List Int -> { Maybe Int |
       (xs == (Cons 2 Nil) ||
        xs == (Cons 1 (Cons 2 Nil)) ||

@@ -15,8 +15,7 @@ type Nat = {Int | _v >= 0}
 false :: {Bool | !_v}
 true :: {Bool | _v}
 
--- This isn't strong enough to synthesize.
--- I'm not sure why.
+
 allNeg :: (xs:List Int -> {Bool |
   ((xs == Nil) ==> (_v == True)) &&
   ((xs == (Cons (-1) Nil)) ==> (_v == True)) &&
